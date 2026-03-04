@@ -266,6 +266,92 @@ If no entity is a good match, pick the closest one and explain why. Always retur
     }
   });
 
+  app.post("/api/entity-summary", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { entityName, categoryName } = req.body;
+
+      if (!entityName || !categoryName) {
+        return res.status(400).json({ message: "Missing entityName or categoryName" });
+      }
+
+      const allCaptures = await storage.getCapturesByUserId(userId);
+      const entityCaptures = allCaptures.filter(c => c.matchedEntity === entityName);
+
+      if (entityCaptures.length === 0) {
+        return res.json({ summary: `No intelligence has been captured for ${entityName} yet. Start by capturing relevant articles, notes, or documents from the Capture page.` });
+      }
+
+      const contentSnippets = entityCaptures
+        .slice(0, 10)
+        .map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
+        .join("\n\n");
+
+      const client = getAnthropicClient();
+
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a concise 2-3 sentence intelligence summary. Focus on what is known, key developments, and any notable patterns. Be direct and analytical — no filler.
+
+Captured intel:
+${contentSnippets}
+
+Return only the summary paragraph, no JSON, no formatting.`
+          }
+        ]
+      });
+
+      const textContent = message.content.find(block => block.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.status(500).json({ message: "No summary returned" });
+      }
+
+      return res.json({ summary: textContent.text.trim() });
+    } catch (error: any) {
+      console.error("Entity summary error:", error);
+      return res.status(500).json({ message: error.message || "Failed to generate summary" });
+    }
+  });
+
+  app.post("/api/add-entity", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { categoryName, entityName, entityType } = req.body;
+
+      if (!categoryName || !entityName) {
+        return res.status(400).json({ message: "Missing categoryName or entityName" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const exists = category.entities.some(e => e.name.toLowerCase() === entityName.toLowerCase());
+      if (exists) {
+        return res.status(400).json({ message: "Entity already exists in this category" });
+      }
+
+      category.entities.push({ name: entityName, type: entityType || "other" });
+
+      const updated = await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, workspace: updated });
+    } catch (error: any) {
+      console.error("Add entity error:", error);
+      return res.status(500).json({ message: error.message || "Failed to add entity" });
+    }
+  });
+
   app.post("/api/workspace", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;

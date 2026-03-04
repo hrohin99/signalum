@@ -12,6 +12,7 @@ export const db = drizzle(pool);
 export interface IStorage {
   getWorkspaceByUserId(userId: string): Promise<Workspace | undefined>;
   createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
+  updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined>;
   createCapture(capture: InsertCapture): Promise<Capture>;
   getCapturesByUserId(userId: string): Promise<Capture[]>;
 }
@@ -31,6 +32,15 @@ export class DatabaseStorage implements IStorage {
       .values(workspace)
       .returning();
     return created;
+  }
+
+  async updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined> {
+    const [updated] = await db
+      .update(workspaces)
+      .set({ categories })
+      .where(eq(workspaces.userId, userId))
+      .returning();
+    return updated;
   }
 
   async createCapture(capture: InsertCapture): Promise<Capture> {

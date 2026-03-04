@@ -28,6 +28,9 @@ AI-powered personal intelligence workspace.
 - `POST /api/classify` - Classify captured content and match to workspace entity (auth required)
 - `POST /api/transcribe` - Transcribe audio via Claude (auth required, multipart form)
 - `POST /api/captures` - Save a confirmed capture (auth required)
+- `GET /api/captures` - List all captures for authenticated user (auth required)
+- `POST /api/entity-summary` - AI-generated summary for an entity based on captured intel (auth required)
+- `POST /api/add-entity` - Add a new entity to an existing category (auth required)
 - `POST /api/workspace` - Create user workspace (auth required)
 - `GET /api/workspace/:userId` - Check if workspace exists (auth required)
 
