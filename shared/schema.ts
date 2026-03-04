@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, jsonb, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -15,6 +15,25 @@ export const insertWorkspaceSchema = createInsertSchema(workspaces).omit({
 
 export type InsertWorkspace = z.infer<typeof insertWorkspaceSchema>;
 export type Workspace = typeof workspaces.$inferSelect;
+
+export const captures = pgTable("captures", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  type: varchar("type", { length: 50 }).notNull(),
+  content: text("content").notNull(),
+  matchedEntity: text("matched_entity"),
+  matchedCategory: text("matched_category"),
+  matchReason: text("match_reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertCaptureSchema = createInsertSchema(captures).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCapture = z.infer<typeof insertCaptureSchema>;
+export type Capture = typeof captures.$inferSelect;
 
 export const onboardingInputSchema = z.object({
   description: z.string().min(10, "Please describe what you want to track in at least a few words"),

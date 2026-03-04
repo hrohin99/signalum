@@ -1,30 +1,227 @@
-import { PenLine, Mic, Link2, FileText } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import { supabase } from "@/lib/supabase";
+
+type CaptureType = "text" | "voice" | "url" | "document" | null;
+
+interface ClassificationResult {
+  matchedEntity: string;
+  matchedCategory: string;
+  reason: string;
+}
 
 const captureTypes = [
-  {
-    icon: PenLine,
-    title: "Text Note",
-    description: "Type or paste text to capture",
-  },
-  {
-    icon: Mic,
-    title: "Voice Note",
-    description: "Record audio to transcribe",
-  },
-  {
-    icon: Link2,
-    title: "URL",
-    description: "Save a link for analysis",
-  },
-  {
-    icon: FileText,
-    title: "Document",
-    description: "Upload a file to process",
-  },
+  { key: "text" as const, icon: PenLine, title: "Text Note", description: "Type or paste text to capture" },
+  { key: "voice" as const, icon: Mic, title: "Voice Note", description: "Record audio to transcribe" },
+  { key: "url" as const, icon: Link2, title: "URL", description: "Save a link for analysis" },
+  { key: "document" as const, icon: FileText, title: "Document", description: "Upload a file to process" },
 ];
 
 export default function CapturePage() {
+  const { toast } = useToast();
+  const [activeType, setActiveType] = useState<CaptureType>(null);
+  const [textContent, setTextContent] = useState("");
+  const [urlContent, setUrlContent] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [transcribedText, setTranscribedText] = useState("");
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isClassifying, setIsClassifying] = useState(false);
+  const [classification, setClassification] = useState<ClassificationResult | null>(null);
+  const [pendingContent, setPendingContent] = useState("");
+  const [pendingType, setPendingType] = useState<string>("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const resetState = useCallback(() => {
+    setTextContent("");
+    setUrlContent("");
+    setSelectedFile(null);
+    setTranscribedText("");
+    setIsTranscribing(false);
+    setClassification(null);
+    setPendingContent("");
+    setPendingType("");
+    setRecordingTime(0);
+  }, []);
+
+  const handleSelectType = (type: CaptureType) => {
+    if (activeType === type) {
+      setActiveType(null);
+      resetState();
+    } else {
+      setActiveType(type);
+      resetState();
+    }
+  };
+
+  const classifyContent = async (content: string, type: string) => {
+    setIsClassifying(true);
+    setPendingContent(content);
+    setPendingType(type);
+    setClassification(null);
+
+    try {
+      const res = await apiRequest("POST", "/api/classify", { content, type });
+      const data: ClassificationResult = await res.json();
+      setClassification(data);
+    } catch (err: any) {
+      toast({
+        title: "Classification failed",
+        description: err.message || "Could not classify this content.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClassifying(false);
+    }
+  };
+
+  const handleConfirmCapture = async () => {
+    if (!classification || !pendingContent) return;
+    setIsSaving(true);
+
+    try {
+      await apiRequest("POST", "/api/captures", {
+        type: pendingType,
+        content: pendingContent,
+        matchedEntity: classification.matchedEntity,
+        matchedCategory: classification.matchedCategory,
+        matchReason: classification.reason,
+      });
+
+      toast({
+        title: "Captured",
+        description: `Saved to ${classification.matchedEntity} in ${classification.matchedCategory}.`,
+      });
+
+      resetState();
+      setActiveType(null);
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err.message || "Could not save capture.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleTextSubmit = () => {
+    if (textContent.trim().length < 3) return;
+    classifyContent(textContent.trim(), "text");
+  };
+
+  const handleUrlSubmit = () => {
+    if (!urlContent.trim()) return;
+    classifyContent(urlContent.trim(), "url");
+  };
+
+  const handleDocumentSubmit = async () => {
+    if (!selectedFile) return;
+
+    const text = await selectedFile.text();
+    const content = `[File: ${selectedFile.name}]\n${text.slice(0, 5000)}`;
+    classifyContent(content, "document");
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          audioChunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        if (timerRef.current) clearInterval(timerRef.current);
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+
+        setIsTranscribing(true);
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData.session?.access_token;
+
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
+
+          const res = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            body: formData,
+          });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText);
+          }
+
+          const data = await res.json();
+          setTranscribedText(data.transcription);
+        } catch (err: any) {
+          toast({
+            title: "Transcription failed",
+            description: err.message || "Could not transcribe audio.",
+            variant: "destructive",
+          });
+        } finally {
+          setIsTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+      timerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch {
+      toast({
+        title: "Microphone access denied",
+        description: "Please allow microphone access to record voice notes.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  };
+
+  const handleVoiceSubmit = () => {
+    if (!transcribedText.trim()) return;
+    classifyContent(transcribedText.trim(), "voice");
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, "0");
+    const s = (seconds % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  };
+
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="mb-8">
@@ -37,13 +234,18 @@ export default function CapturePage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {captureTypes.map((type) => (
           <Card
-            key={type.title}
-            className="cursor-pointer hover-elevate active-elevate-2 transition-colors"
-            data-testid={`card-capture-${type.title.toLowerCase().replace(/\s+/g, "-")}`}
+            key={type.key}
+            className={`cursor-pointer hover-elevate active-elevate-2 transition-colors ${
+              activeType === type.key ? "ring-2 ring-[#1e3a5f]" : ""
+            }`}
+            onClick={() => handleSelectType(type.key)}
+            data-testid={`card-capture-${type.key}`}
           >
             <CardContent className="p-6 flex items-start gap-4">
-              <div className="w-10 h-10 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
-                <type.icon className="w-5 h-5 text-[#1e3a5f]" />
+              <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 ${
+                activeType === type.key ? "bg-[#1e3a5f] text-white" : "bg-[#1e3a5f]/10"
+              }`}>
+                <type.icon className={`w-5 h-5 ${activeType === type.key ? "text-white" : "text-[#1e3a5f]"}`} />
               </div>
               <div>
                 <h3 className="font-medium text-foreground">{type.title}</h3>
@@ -54,12 +256,256 @@ export default function CapturePage() {
         ))}
       </div>
 
-      <div className="mt-8 border border-dashed border-border rounded-md p-12 text-center">
-        <PenLine className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-        <p className="text-muted-foreground">
-          Select a capture type above or drag and drop files here.
-        </p>
-      </div>
+      {activeType && !classification && !isClassifying && (
+        <div className="mt-6 border border-border rounded-md p-6 space-y-4">
+          {activeType === "text" && (
+            <>
+              <Textarea
+                placeholder="Type or paste your text here..."
+                value={textContent}
+                onChange={(e) => setTextContent(e.target.value)}
+                className="min-h-[140px] text-base resize-none"
+                data-testid="input-capture-text"
+                autoFocus
+              />
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleTextSubmit}
+                  disabled={textContent.trim().length < 3}
+                  className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                  data-testid="button-submit-text"
+                >
+                  Submit
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </>
+          )}
+
+          {activeType === "voice" && (
+            <>
+              {!transcribedText && !isTranscribing && (
+                <div className="flex flex-col items-center py-8 space-y-4">
+                  {isRecording && (
+                    <div className="text-2xl font-mono text-foreground" data-testid="text-recording-time">
+                      {formatTime(recordingTime)}
+                    </div>
+                  )}
+                  <Button
+                    onClick={isRecording ? stopRecording : startRecording}
+                    size="lg"
+                    className={isRecording
+                      ? "bg-destructive text-destructive-foreground border-destructive"
+                      : "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                    }
+                    data-testid="button-record"
+                  >
+                    {isRecording ? (
+                      <>
+                        <Square className="w-4 h-4 mr-2" />
+                        Stop Recording
+                      </>
+                    ) : (
+                      <>
+                        <Circle className="w-4 h-4 mr-2 fill-current" />
+                        Start Recording
+                      </>
+                    )}
+                  </Button>
+                  {isRecording && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                      <span className="text-sm text-muted-foreground">Recording...</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {isTranscribing && (
+                <div className="flex flex-col items-center py-8 space-y-3">
+                  <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin" />
+                  <p className="text-sm text-muted-foreground">Transcribing your audio...</p>
+                </div>
+              )}
+
+              {transcribedText && !isTranscribing && (
+                <>
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">Transcription:</p>
+                    <div className="bg-muted/50 rounded-md p-4 text-foreground" data-testid="text-transcription">
+                      {transcribedText}
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => { setTranscribedText(""); setRecordingTime(0); }}
+                      data-testid="button-re-record"
+                    >
+                      Re-record
+                    </Button>
+                    <Button
+                      onClick={handleVoiceSubmit}
+                      className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                      data-testid="button-submit-voice"
+                    >
+                      Submit
+                      <ArrowRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {activeType === "url" && (
+            <>
+              <Input
+                type="url"
+                placeholder="https://example.com/article"
+                value={urlContent}
+                onChange={(e) => setUrlContent(e.target.value)}
+                className="h-11"
+                data-testid="input-capture-url"
+                autoFocus
+              />
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleUrlSubmit}
+                  disabled={!urlContent.trim()}
+                  className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                  data-testid="button-submit-url"
+                >
+                  Submit
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </>
+          )}
+
+          {activeType === "document" && (
+            <>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.md,.csv,.json,.pdf,.doc,.docx"
+                className="hidden"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                data-testid="input-capture-file"
+              />
+              <div
+                className="border-2 border-dashed border-border rounded-md p-8 text-center cursor-pointer transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                data-testid="area-file-upload"
+              >
+                {selectedFile ? (
+                  <div className="space-y-2">
+                    <FileText className="w-8 h-8 text-[#1e3a5f] mx-auto" />
+                    <p className="font-medium text-foreground">{selectedFile.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {(selectedFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Upload className="w-8 h-8 text-muted-foreground/50 mx-auto" />
+                    <p className="text-muted-foreground">Click to select a file</p>
+                    <p className="text-xs text-muted-foreground">.txt, .md, .csv, .json, .pdf, .doc, .docx</p>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleDocumentSubmit}
+                  disabled={!selectedFile}
+                  className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                  data-testid="button-submit-document"
+                >
+                  Submit
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {isClassifying && (
+        <div className="mt-6 border border-border rounded-md p-8">
+          <div className="flex flex-col items-center space-y-3">
+            <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin" />
+            <p className="text-muted-foreground">AI is classifying your capture...</p>
+          </div>
+        </div>
+      )}
+
+      {classification && !isClassifying && (
+        <div className="mt-6 border border-border rounded-md p-6 space-y-5">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground mb-3">AI Classification</p>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0 mt-0.5">
+                <FolderOpen className="w-5 h-5 text-[#1e3a5f]" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">
+                    <Tag className="w-3 h-3 mr-1" />
+                    {classification.matchedEntity}
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">in</span>
+                  <Badge variant="outline">{classification.matchedCategory}</Badge>
+                </div>
+                <p className="text-sm text-foreground" data-testid="text-classification-reason">
+                  {classification.reason}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setClassification(null);
+                setPendingContent("");
+                setPendingType("");
+              }}
+              data-testid="button-cancel-capture"
+            >
+              <X className="w-4 h-4 mr-1" />
+              Cancel
+            </Button>
+            <Button
+              onClick={handleConfirmCapture}
+              disabled={isSaving}
+              className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+              data-testid="button-confirm-capture"
+            >
+              {isSaving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Confirm
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!activeType && (
+        <div className="mt-8 border border-dashed border-border rounded-md p-12 text-center">
+          <PenLine className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
+          <p className="text-muted-foreground">
+            Select a capture type above to get started.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
