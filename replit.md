@@ -33,10 +33,13 @@ AI-powered personal intelligence workspace.
 - `POST /api/add-entity` - Add a new entity to an existing category (auth required)
 - `POST /api/workspace` - Create user workspace (auth required)
 - `GET /api/workspace/:userId` - Check if workspace exists (auth required)
+- `POST /api/briefs/generate` - Generate a daily brief using Claude from all captures + entity data (auth required)
+- `GET /api/briefs` - List all briefs for authenticated user (auth required)
 
 ## Database Tables
 - `workspaces` - User workspaces with categories/entities (jsonb)
 - `captures` - Captured content with entity/category match info
+- `briefs` - AI-generated daily intelligence briefs with content, capture/entity counts
 
 ## File Structure
 - `client/src/lib/supabase.ts` - Supabase client initialization

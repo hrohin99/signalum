@@ -379,6 +379,98 @@ Return only the summary paragraph, no JSON, no formatting.`
     }
   });
 
+  app.post("/api/briefs/generate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found. Complete onboarding first." });
+      }
+
+      const allCaptures = await storage.getCapturesByUserId(userId);
+      if (allCaptures.length === 0) {
+        return res.status(400).json({ message: "No captured intel yet. Capture some content first before generating a brief." });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const entities = flattenEntities(categories);
+
+      const entitySummaries = entities.map(e => {
+        const entityCaptures = allCaptures.filter(c => c.matchedEntity === e.entityName);
+        if (entityCaptures.length === 0) return null;
+        const snippets = entityCaptures
+          .slice(0, 5)
+          .map((c, i) => `  [${i + 1}] (${c.type}) ${c.content.slice(0, 300)}`)
+          .join("\n");
+        return `Entity: ${e.entityName} (${e.entityType}) — Category: ${e.categoryName}\nRecent intel (${entityCaptures.length} items):\n${snippets}`;
+      }).filter(Boolean);
+
+      const briefingContext = entitySummaries.length > 0
+        ? entitySummaries.join("\n\n---\n\n")
+        : allCaptures.slice(0, 20).map((c, i) => `[${i + 1}] (${c.type}, entity: ${c.matchedEntity || "unmatched"}) ${c.content.slice(0, 300)}`).join("\n\n");
+
+      const client = getAnthropicClient();
+
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        messages: [
+          {
+            role: "user",
+            content: `You are a senior intelligence analyst preparing a morning briefing for a decision-maker. Based on the intel items and entity data below, write a narrative daily intelligence brief.
+
+Structure the brief as follows:
+1. **Executive Summary** — A 2-3 sentence high-level overview of the most important developments.
+2. **Key Developments** — A section for each category/entity that has notable activity. Use clear headers. For each, provide a short analytical paragraph synthesizing the captured intel.
+3. **Watch Items** — Any emerging patterns, risks, or items that deserve continued attention.
+
+Be direct, analytical, and concise. Write in a professional intelligence briefing style. Do not include any JSON or metadata — write pure narrative prose with markdown formatting.
+
+Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+
+Categories being tracked:
+${categories.map(c => `- ${c.name}: ${c.description}`).join("\n")}
+
+Intel data:
+${briefingContext}
+
+Total captures: ${allCaptures.length}
+Total entities tracked: ${entities.length}`
+          }
+        ]
+      });
+
+      const textContent = message.content.find(block => block.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.status(500).json({ message: "No brief content returned from AI" });
+      }
+
+      const brief = await storage.createBrief({
+        userId,
+        content: textContent.text.trim(),
+        captureCount: allCaptures.length,
+        entityCount: entities.length,
+      });
+
+      return res.json(brief);
+    } catch (error: any) {
+      console.error("Generate brief error:", error);
+      return res.status(500).json({ message: error.message || "Failed to generate brief" });
+    }
+  });
+
+  app.get("/api/briefs", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const briefsList = await storage.getBriefsByUserId(userId);
+      return res.json(briefsList);
+    } catch (error: any) {
+      console.error("Get briefs error:", error);
+      return res.status(500).json({ message: error.message || "Failed to get briefs" });
+    }
+  });
+
   app.get("/api/workspace/:userId", requireAuth, async (req: Request, res: Response) => {
     const authenticatedUserId = (req as any).userId;
     const { userId } = req.params;

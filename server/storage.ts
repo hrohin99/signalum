@@ -1,7 +1,7 @@
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { workspaces, captures, type InsertWorkspace, type Workspace, type InsertCapture, type Capture } from "@shared/schema";
+import { workspaces, captures, briefs, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -15,6 +15,8 @@ export interface IStorage {
   updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined>;
   createCapture(capture: InsertCapture): Promise<Capture>;
   getCapturesByUserId(userId: string): Promise<Capture[]>;
+  createBrief(brief: InsertBrief): Promise<Brief>;
+  getBriefsByUserId(userId: string): Promise<Brief[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -57,6 +59,22 @@ export class DatabaseStorage implements IStorage {
       .from(captures)
       .where(eq(captures.userId, userId))
       .orderBy(desc(captures.createdAt));
+  }
+
+  async createBrief(brief: InsertBrief): Promise<Brief> {
+    const [created] = await db
+      .insert(briefs)
+      .values(brief)
+      .returning();
+    return created;
+  }
+
+  async getBriefsByUserId(userId: string): Promise<Brief[]> {
+    return db
+      .select()
+      .from(briefs)
+      .where(eq(briefs.userId, userId))
+      .orderBy(desc(briefs.createdAt));
   }
 }
 

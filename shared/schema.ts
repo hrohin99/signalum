@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, jsonb, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, serial, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -56,3 +56,20 @@ export interface ExtractionResult {
   categories: ExtractedCategory[];
   summary: string;
 }
+
+export const briefs = pgTable("briefs", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  content: text("content").notNull(),
+  captureCount: integer("capture_count").notNull(),
+  entityCount: integer("entity_count").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertBriefSchema = createInsertSchema(briefs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertBrief = z.infer<typeof insertBriefSchema>;
+export type Brief = typeof briefs.$inferSelect;
