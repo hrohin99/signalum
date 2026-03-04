@@ -3,6 +3,9 @@ import react from "@vitejs/plugin-react";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
+process.env.VITE_SUPABASE_URL = process.env.SUPABASE_URL;
+process.env.VITE_SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+
 export default defineConfig({
   plugins: [
     react(),
