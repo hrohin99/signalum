@@ -255,6 +255,17 @@ If no entity is a good match, pick the closest one and explain why. Always retur
     }
   });
 
+  app.get("/api/captures", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const captures = await storage.getCapturesByUserId(userId);
+      return res.json(captures);
+    } catch (error: any) {
+      console.error("Get captures error:", error);
+      return res.status(500).json({ message: error.message || "Failed to get captures" });
+    }
+  });
+
   app.post("/api/workspace", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
