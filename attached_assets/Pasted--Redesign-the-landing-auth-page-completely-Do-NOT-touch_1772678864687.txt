@@ -1,0 +1,48 @@
+"Redesign the landing/auth page completely. Do NOT touch any other screens — the dashboard, capture, inbox, intelligence map, daily brief, and all backend logic must remain 100% unchanged. Only the pre-auth landing and signup experience changes.
+The new experience has two parts: a landing page and a 3-step sign up flow.
+
+PART 1 — LANDING PAGE
+This is the first thing unauthenticated visitors see. Full-page layout, clean and premium.
+HERO SECTION — full width, generous padding:
+- Large headline: "Your AI-powered intelligence workspace"
+- Subheadline: "Capture anything — voice, text, URLs, documents. AI routes it to the right place and delivers a daily briefing every morning."
+- Two CTA buttons side by side: "Get Started Free" (solid navy #1e3a5f, white text) and "Sign In" (white background, navy border, navy text)
+- Below the buttons: a static screenshot mockup of the Intelligence Map or Daily Brief screen — use a framed browser window div styled with a subtle shadow and rounded corners, with placeholder content inside that looks like real intelligence data (company names, categories, AI-written summaries). This mockup is purely decorative HTML/CSS — no real data needed.
+FEATURES SECTION — three columns, below the hero:
+- "Capture anything" — icon, headline, two-sentence description. Voice notes, text, URLs, documents all go to one place.
+- "AI routes everything" — icon, headline, description. AI reads your input and finds exactly where it belongs in your workspace.
+- "Briefed every morning" — icon, headline, description. A daily AI-generated narrative summarises what changed across your tracked topics.
+SOCIAL PROOF STRIP — single line between features and footer:
+- Text: "Built for intelligence professionals who need to stay ahead"
+- Style: centred, light grey, small caps
+FOOTER — minimal: product name on the left, "Sign In" link on the right.
+Typography: Use DM Sans from Google Fonts for all text. Load it in the HTML head.
+Colours: White background, #1e3a5f navy for headings and buttons, #64748b slate for body text, #f8fafc very light grey for section backgrounds.
+No gradients, no drop shadows on text. Clean and confident.
+
+PART 2 — 3-STEP SIGN UP FLOW
+When the user clicks "Get Started Free", instead of going straight to a sign up form, they go through 3 steps. Each step is a clean centred card (max-width 480px, white background, subtle border, generous padding) on a light grey background. Show a progress indicator at the top — "Step 1 of 3", "Step 2 of 3", "Step 3 of 3".
+STEP 1 — Role
+Headline: "What's your role?"
+Four clickable cards arranged in a 2x2 grid. Each card has a small icon and a label. The options are: Product Manager, Analyst, Sales & BD, Executive. Clicking a card selects it (navy border, slight navy tint background). One card must be selected to continue. "Continue" button below.
+STEP 2 — What to track
+Headline: "What do you most need to stay on top of?"
+Subtext: "Be specific — mention competitors, regulations, topics, or anything else you track at work."
+Large free text area (4 rows minimum). Placeholder text: "e.g. I track competitors in identity verification — iProov, Thales, Idemia — plus EU and UK digital identity regulations like eIDAS 2.0 and UK DIATF."
+"Continue" button below. Requires at least 10 characters to continue.
+STEP 3 — Create account
+Headline: "Create your account"
+Subtext: "Your workspace is being prepared based on what you told us."
+Fields: Full name, Email address, Password. Then a "Create Account" button (solid navy, full width).
+Below the button: "Or sign in with Google" button (white background, Google icon, grey border).
+At the very bottom in small grey text: "Already have an account? Sign in"
+IMPORTANT: When the user completes Step 3 and creates their account, pass their Step 2 answer (the "what to track" text) and their Step 1 role selection into the existing onboarding flow. The onboarding AI extraction must use BOTH the role and the what-to-track text as context. Store the role in the users table onboarding_context field alongside their tracking answer. Do not show the existing onboarding question screen to users who came through this new signup flow — they've already answered it. Take them straight to the workspace creation confirmation screen.
+If the user clicks "Sign In" anywhere, take them to a simple clean sign in page — just email, password, Sign In button, and a "Sign up" link. No landing page on sign in, just the form.
+
+PRESERVATION RULES — critical:
+- Do not change any route, component, or logic for authenticated users
+- Do not change the dashboard, capture, inbox, intelligence map, daily brief, or settings screens
+- Do not change the existing Supabase auth integration
+- Do not change the onboarding AI extraction logic — only route to it differently
+- Do not change any backend routes or database schema
+- Only add or replace: the landing page, the 3-step signup component, and the sign-in page"
