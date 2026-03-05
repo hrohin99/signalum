@@ -42,6 +42,8 @@ AI-powered personal intelligence workspace.
 - `POST /api/add-entity` - Add a new entity to an existing category (auth required)
 - `POST /api/add-category` - Create a new category with optional initial entity (auth required)
 - `PATCH /api/entity` - Update entity topic_type and/or priority (auth required). Accepts categoryName, entityName, and optional topic_type/priority fields
+- `POST /api/ai-insights` - Generate 3 AI insight bullet points for a topic from its captures (auth required). Returns `{ insights: string[] | null }`
+- `POST /api/link-topic` - Link a related topic to an entity (auth required). Accepts categoryName, entityName, linkedEntityName
 - `GET /api/topic-types` - Get all system topic type configs (auth required)
 - `GET /api/workspace/current` - Get workspace for authenticated user (auth required)
 - `POST /api/workspace` - Create user workspace (auth required)
@@ -71,7 +73,8 @@ AI-powered personal intelligence workspace.
 - `client/src/pages/dashboard.tsx` - Main dashboard layout with sidebar
 - `client/src/pages/capture.tsx` - Full capture page with 4 input types + AI classification
 - `client/src/pages/inbox.tsx` - Inbox page (empty state)
-- `client/src/pages/map.tsx` - My Workspace page (category/topic view with empty category nudge and welcome modal)
+- `client/src/pages/map.tsx` - My Workspace page (category/topic list view with empty category nudge and welcome modal). Clicking a topic navigates to full-screen topic view
+- `client/src/pages/topic-view.tsx` - Full-screen topic view with two-column layout: left (AI summary, widgets, updates feed) and right (topic details, inline capture, AI insights). Supports type/priority editing, related topic linking, battlecard/quick_stats widgets for competitor type, placeholder widgets for unbuilt types
 - `client/src/pages/brief.tsx` - Daily Brief page (empty state)
 - `client/src/pages/settings.tsx` - Settings/account page
 - `client/src/components/app-sidebar.tsx` - Sidebar navigation component
@@ -107,6 +110,7 @@ AI-powered personal intelligence workspace.
 - `/brief` → Daily Brief page
 - `/settings` → Settings page
 - `/map` → Also renders My Workspace (legacy alias)
+- `/topic/:category/:entity` → Full-screen Topic View (URL-encoded params)
 
 ## Visual Style
 - White background, deep navy blue #1e3a5f accent

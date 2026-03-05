@@ -1052,6 +1052,103 @@ Total entities tracked: ${entities.length}`
     }
   });
 
+  app.post("/api/ai-insights", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { entityName, categoryName } = req.body;
+
+      if (!entityName || !categoryName) {
+        return res.status(400).json({ message: "Missing entityName or categoryName" });
+      }
+
+      const allCaptures = await storage.getCapturesByUserId(userId);
+      const entityCaptures = allCaptures.filter(c => c.matchedEntity === entityName);
+
+      if (entityCaptures.length === 0) {
+        return res.json({ insights: null });
+      }
+
+      const contentSnippets = entityCaptures
+        .slice(0, 15)
+        .map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
+        .join("\n\n");
+
+      const client = getAnthropicClient();
+
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 512,
+        messages: [
+          {
+            role: "user",
+            content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), generate exactly 3 short, actionable insight bullet points. Each should be one sentence, direct and analytical. Focus on patterns, risks, opportunities, or notable developments.
+
+Captured intel:
+${contentSnippets}
+
+Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 3"]. No other text.`
+          }
+        ]
+      });
+
+      const textContent = message.content.find(block => block.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.status(500).json({ message: "No insights returned" });
+      }
+
+      try {
+        const insights = JSON.parse(textContent.text.trim());
+        return res.json({ insights });
+      } catch {
+        return res.json({ insights: [textContent.text.trim()] });
+      }
+    } catch (error: any) {
+      console.error("AI insights error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/link-topic", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { categoryName, entityName, linkedEntityName } = req.body;
+
+      if (!categoryName || !entityName || !linkedEntityName) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const entity = category.entities.find(e => e.name === entityName);
+      if (!entity) {
+        return res.status(404).json({ message: "Entity not found" });
+      }
+
+      if (!entity.related_topic_ids) {
+        entity.related_topic_ids = [];
+      }
+
+      if (!entity.related_topic_ids.includes(linkedEntityName)) {
+        entity.related_topic_ids.push(linkedEntityName);
+      }
+
+      const updated = await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, workspace: updated });
+    } catch (error: any) {
+      console.error("Link topic error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/workspace/current", requireAuth, async (req: Request, res: Response) => {
     const userId = (req as any).userId;
     const workspace = await storage.getWorkspaceByUserId(userId);

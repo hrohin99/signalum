@@ -1,36 +1,22 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import {
   FolderOpen,
   Tag,
   ChevronRight,
   Network,
-  FileText,
-  PenLine,
-  Mic,
-  Link2,
-  ArrowLeft,
   Plus,
   Loader2,
-  Calendar,
-  BarChart3,
-  Activity,
-  Sparkles,
   Shield,
   Check,
-  Send,
-  Pencil,
-  ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import type { ExtractedCategory, Capture } from "@shared/schema";
 
 const topicTypeMap: Record<string, { icon: string; displayName: string }> = {
@@ -47,13 +33,6 @@ const topicTypeMap: Record<string, { icon: string; displayName: string }> = {
   general: { icon: "📌", displayName: "General" },
 };
 
-const priorityConfig: Record<string, { color: string; label: string; dotClass: string }> = {
-  high: { color: "bg-red-500", label: "High", dotClass: "bg-red-500" },
-  medium: { color: "bg-amber-500", label: "Medium", dotClass: "bg-amber-500" },
-  low: { color: "bg-gray-400", label: "Low", dotClass: "bg-gray-400" },
-  watch: { color: "bg-blue-500", label: "Watch", dotClass: "bg-blue-500" },
-};
-
 const entityTypeLabels: Record<string, string> = {
   person: "Person",
   company: "Company",
@@ -63,13 +42,6 @@ const entityTypeLabels: Record<string, string> = {
   event: "Event",
   location: "Location",
   other: "Other",
-};
-
-const captureTypeIcons: Record<string, typeof PenLine> = {
-  text: PenLine,
-  voice: Mic,
-  url: Link2,
-  document: FileText,
 };
 
 function WelcomeModal({ onDismiss }: { onDismiss: () => void }) {
@@ -265,8 +237,8 @@ function InlineAddTopic({
 export default function MapPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
 
   const { data: wsData, isLoading: wsLoading } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
@@ -313,21 +285,6 @@ export default function MapPage() {
   }, [categories, selectedCategory]);
 
   const activeCategory = categories.find((c) => c.name === effectiveCategory);
-  const activeEntity = activeCategory?.entities.find((e) => e.name === selectedEntity);
-  const entityCaptures = captures.filter((c) => c.matchedEntity === selectedEntity);
-
-  const { data: summaryData, isLoading: summaryLoading, isError: summaryError } = useQuery<{ summary: string }>({
-    queryKey: ["/api/entity-summary", selectedEntity, effectiveCategory],
-    queryFn: async () => {
-      const res = await apiRequest("POST", "/api/entity-summary", {
-        entityName: selectedEntity,
-        categoryName: effectiveCategory,
-      });
-      return res.json();
-    },
-    enabled: !!selectedEntity && !!effectiveCategory && !!activeEntity,
-    retry: false,
-  });
 
   const addEntityMutation = useMutation({
     mutationFn: async (data: { categoryName: string; entityName: string; entityType: string }) => {
@@ -425,7 +382,6 @@ export default function MapPage() {
                 key={cat.name}
                 onClick={() => {
                   setSelectedCategory(cat.name);
-                  setSelectedEntity(null);
                 }}
                 className={`w-full text-left rounded-lg p-4 transition-all flex flex-col gap-2 group border ${
                   isActive
@@ -480,17 +436,7 @@ export default function MapPage() {
         </div>
 
         <div className="md:col-span-2">
-          {selectedEntity && activeEntity ? (
-            <EntityDetail
-              entity={activeEntity}
-              categoryName={effectiveCategory!}
-              captures={entityCaptures}
-              summary={summaryData?.summary}
-              summaryLoading={summaryLoading}
-              summaryError={summaryError}
-              onBack={() => setSelectedEntity(null)}
-            />
-          ) : activeCategory ? (
+          {activeCategory ? (
             <div className="space-y-4">
               <div className="mb-2">
                 <h2 className="text-lg font-semibold text-foreground">{activeCategory.name}</h2>
@@ -515,7 +461,7 @@ export default function MapPage() {
                       return (
                         <button
                           key={entity.name}
-                          onClick={() => setSelectedEntity(entity.name)}
+                          onClick={() => navigate(`/topic/${encodeURIComponent(effectiveCategory!)}/${encodeURIComponent(entity.name)}`)}
                           className="w-full text-left rounded-lg bg-card border border-border/50 p-4 flex items-center gap-3 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm transition-all group"
                           data-testid={`button-entity-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
                         >
@@ -554,329 +500,3 @@ export default function MapPage() {
   );
 }
 
-function EntityDetail({
-  entity,
-  categoryName,
-  captures,
-  summary,
-  summaryLoading,
-  summaryError,
-  onBack,
-}: {
-  entity: { name: string; type: string; topic_type?: string; priority?: 'high' | 'medium' | 'low' | 'watch' };
-  categoryName: string;
-  captures: Capture[];
-  summary?: string;
-  summaryLoading: boolean;
-  summaryError: boolean;
-  onBack: () => void;
-}) {
-  const { user } = useAuth();
-  const lastDate = captures.length > 0 ? new Date(captures[0].createdAt) : null;
-  const status = captures.length > 0 ? "Active" : "New";
-  const [inlineText, setInlineText] = useState("");
-  const [showConfirmation, setShowConfirmation] = useState(false);
-  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
-  const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
-  const confirmTimerRef = useRef<number | null>(null);
-  const typeDropdownRef = useRef<HTMLDivElement>(null);
-  const priorityDropdownRef = useRef<HTMLDivElement>(null);
-  const { toast } = useToast();
-
-  const currentTopicType = entity.topic_type || "general";
-  const currentPriority = entity.priority || "medium";
-  const typeInfo = topicTypeMap[currentTopicType] || topicTypeMap.general;
-  const priInfo = priorityConfig[currentPriority] || priorityConfig.medium;
-
-  useEffect(() => {
-    return () => {
-      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) {
-        setShowTypeDropdown(false);
-      }
-      if (priorityDropdownRef.current && !priorityDropdownRef.current.contains(e.target as Node)) {
-        setShowPriorityDropdown(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const updateEntityMutation = useMutation({
-    mutationFn: async (data: { topic_type?: string; priority?: string }) => {
-      const res = await apiRequest("PATCH", "/api/entity", {
-        categoryName,
-        entityName: entity.name,
-        ...data,
-      });
-      return res.json();
-    },
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
-      if (variables.topic_type) {
-        toast({ title: "Topic type updated." });
-      }
-      if (variables.priority) {
-        toast({ title: "Priority updated." });
-      }
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const inlineMutation = useMutation({
-    mutationFn: async (content: string) => {
-      const res = await apiRequest("POST", "/api/captures", {
-        type: "text",
-        content,
-        matchedEntity: entity.name,
-        matchedCategory: categoryName,
-        matchReason: "Direct update from topic view",
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      setInlineText("");
-      setShowConfirmation(true);
-      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
-      confirmTimerRef.current = window.setTimeout(() => setShowConfirmation(false), 3000);
-      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const handleSubmit = () => {
-    if (inlineMutation.isPending) return;
-    const trimmed = inlineText.trim();
-    if (!trimmed) return;
-    inlineMutation.mutate(trimmed);
-  };
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onBack}
-          data-testid="button-back-to-topics"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-semibold text-foreground" data-testid="text-entity-name">{entity.name}</h2>
-
-            <div className="relative" ref={typeDropdownRef}>
-              <button
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] text-xs font-medium hover:bg-[#1e3a5f]/20 transition-colors"
-                onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-                data-testid="button-edit-topic-type"
-              >
-                <span>{typeInfo.icon}</span>
-                <span>{typeInfo.displayName}</span>
-                <Pencil className="w-3 h-3 ml-0.5 opacity-60" />
-              </button>
-              {showTypeDropdown && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[200px] max-h-[280px] overflow-y-auto" data-testid="dropdown-topic-type">
-                  {Object.entries(topicTypeMap).map(([key, val]) => (
-                    <button
-                      key={key}
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentTopicType ? "bg-muted font-medium" : ""}`}
-                      onClick={() => {
-                        if (key !== currentTopicType) {
-                          updateEntityMutation.mutate({ topic_type: key });
-                        }
-                        setShowTypeDropdown(false);
-                      }}
-                      data-testid={`option-type-${key}`}
-                    >
-                      <span>{val.icon}</span>
-                      <span>{val.displayName}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative" ref={priorityDropdownRef}>
-              <button
-                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border text-xs font-medium hover:bg-muted transition-colors"
-                onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
-                data-testid="button-edit-priority"
-              >
-                <span className={`w-2 h-2 rounded-full ${priInfo.dotClass}`} />
-                <span className="text-foreground">{priInfo.label}</span>
-                <ChevronDownIcon className="w-3 h-3 opacity-60" />
-              </button>
-              {showPriorityDropdown && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]" data-testid="dropdown-priority">
-                  {Object.entries(priorityConfig).map(([key, val]) => (
-                    <button
-                      key={key}
-                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentPriority ? "bg-muted font-medium" : ""}`}
-                      onClick={() => {
-                        if (key !== currentPriority) {
-                          updateEntityMutation.mutate({ priority: key });
-                        }
-                        setShowPriorityDropdown(false);
-                      }}
-                      data-testid={`option-priority-${key}`}
-                    >
-                      <span className={`w-2 h-2 rounded-full ${val.dotClass}`} />
-                      <span>{val.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            in {categoryName}
-          </p>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4 px-4 py-3 bg-muted/50 rounded-lg border border-border/50" data-testid="entity-stats-bar">
-        <div className="flex items-center gap-1.5 text-sm">
-          <BarChart3 className="w-3.5 h-3.5 text-[#1e3a5f]" />
-          <span className="font-medium text-foreground">{captures.length}</span>
-          <span className="text-muted-foreground">update{captures.length !== 1 ? "s" : ""}</span>
-        </div>
-        <div className="w-px h-4 bg-border" />
-        <div className="flex items-center gap-1.5 text-sm">
-          <Calendar className="w-3.5 h-3.5 text-[#1e3a5f]" />
-          <span className="text-muted-foreground">
-            {lastDate
-              ? lastDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-              : "No data"}
-          </span>
-        </div>
-        <div className="w-px h-4 bg-border" />
-        <div className="flex items-center gap-1.5 text-sm">
-          <Activity className="w-3.5 h-3.5 text-[#1e3a5f]" />
-          <span className={`font-medium ${status === "Active" ? "text-emerald-600" : "text-muted-foreground"}`}>{status}</span>
-        </div>
-      </div>
-
-      <div className="rounded-lg border border-[#1e3a5f]/15 bg-[#1e3a5f]/[0.02] p-4" data-testid="entity-ai-summary">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-[#1e3a5f]" />
-          <span className="text-xs font-medium uppercase tracking-wider text-[#1e3a5f]">AI Summary</span>
-        </div>
-        {summaryLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-        ) : summaryError ? (
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Unable to generate summary at this time. Try again later.
-          </p>
-        ) : (
-          <p className="text-sm text-foreground leading-relaxed">{summary || `No updates available for ${entity.name} yet.`}</p>
-        )}
-      </div>
-
-      {captures.length > 0 ? (
-        <div className="space-y-3">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">
-            Updates ({captures.length})
-          </p>
-          <ScrollArea className="max-h-[400px]">
-            <div className="space-y-3 pr-3">
-              {captures.map((cap) => {
-                const Icon = captureTypeIcons[cap.type] || FileText;
-                return (
-                  <Card key={cap.id} className="border-border/60" data-testid={`card-capture-item-${cap.id}`}>
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="w-8 h-8 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0 mt-1">
-                          <Icon className="w-4 h-4 text-[#1e3a5f]" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[15px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
-                            {cap.content}
-                          </p>
-                          {cap.matchReason && (
-                            <p className="text-xs text-muted-foreground mt-2.5 italic leading-relaxed">
-                              {cap.matchReason}
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0 ml-2">
-                          <Badge variant="outline" className="text-[10px] mb-1">{cap.type}</Badge>
-                          <p className="text-[11px] text-muted-foreground whitespace-nowrap">
-                            {new Date(cap.createdAt).toLocaleDateString("en-US", {
-                              month: "short",
-                              day: "numeric",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          </ScrollArea>
-        </div>
-      ) : (
-        <div className="border border-dashed border-border rounded-lg p-10 text-center">
-          <FileText className="w-7 h-7 text-muted-foreground/40 mx-auto mb-2" />
-          <p className="text-sm text-muted-foreground mb-1">
-            No updates captured for this topic yet.
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Use the Capture page to add articles, notes, or documents about {entity.name}.
-          </p>
-        </div>
-      )}
-
-      <div className="space-y-2" data-testid="inline-capture-form">
-        <div className="flex items-end gap-2">
-          <textarea
-            className="flex-1 min-h-[80px] rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]/50 resize-none"
-            placeholder={`Add an update to ${entity.name}...`}
-            value={inlineText}
-            onChange={(e) => setInlineText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                handleSubmit();
-              }
-            }}
-            disabled={inlineMutation.isPending}
-            data-testid="input-inline-capture"
-          />
-          <Button
-            onClick={handleSubmit}
-            disabled={!inlineText.trim() || inlineMutation.isPending}
-            className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-10 px-4"
-            data-testid="button-inline-capture-submit"
-          >
-            {inlineMutation.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </Button>
-        </div>
-        {showConfirmation && (
-          <p className="text-sm text-emerald-600 font-medium flex items-center gap-1.5" data-testid="text-update-confirmation">
-            <Check className="w-3.5 h-3.5" />
-            Update added.
-          </p>
-        )}
-      </div>
-    </div>
-  );
-}

@@ -6,6 +6,7 @@ import InboxPage from "./inbox";
 import MapPage from "./map";
 import BriefPage from "./brief";
 import SettingsPage from "./settings";
+import TopicViewPage from "./topic-view";
 
 export default function Dashboard() {
   const style = {
@@ -29,6 +30,7 @@ export default function Dashboard() {
               <Route path="/map" component={MapPage} />
               <Route path="/brief" component={BriefPage} />
               <Route path="/settings" component={SettingsPage} />
+              <Route path="/topic/:category/:entity">{(params) => <TopicViewPage params={params} />}</Route>
             </Switch>
           </main>
         </div>
