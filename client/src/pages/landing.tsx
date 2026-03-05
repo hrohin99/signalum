@@ -1,6 +1,8 @@
 import { Link } from "wouter";
 import { useState } from "react";
 
+const TYPING_TEXT = "Acme Corp just announced a new enterprise pricing tier targeting mid-market customers.";
+
 const SCROLLING_TAGS = [
   "Competitors", "Industry Trends", "News Articles", "Meeting Notes",
   "Market Shifts", "Company Updates", "Product Launches", "Policy Changes",
@@ -37,17 +39,6 @@ const TRACK_CARDS = [
 ];
 
 function ProductMockup() {
-  const categories = [
-    { label: "Competitors", count: 3, active: true },
-    { label: "Regulations", count: 2, active: false },
-    { label: "Industry News", count: 4, active: false },
-  ];
-
-  const intelItems = [
-    { date: "Mar 4, 2026", text: "Pricing page updated, new enterprise tier added." },
-    { date: "Mar 4, 2026", text: "Homepage messaging shifted toward enterprise buyers." },
-  ];
-
   return (
     <div
       className="mx-auto"
@@ -62,6 +53,83 @@ function ProductMockup() {
       }}
       data-testid="mockup-product-frame"
     >
+      <style>{`
+        @keyframes mockupStage1 {
+          0% { opacity: 1; }
+          30.33% { opacity: 1; }
+          33.33% { opacity: 0; }
+          96% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+        @keyframes mockupStage2 {
+          0% { opacity: 0; }
+          30% { opacity: 0; }
+          33.33% { opacity: 1; }
+          63.66% { opacity: 1; }
+          66.66% { opacity: 0; }
+          100% { opacity: 0; }
+        }
+        @keyframes mockupStage3 {
+          0% { opacity: 0; }
+          63% { opacity: 0; }
+          66.66% { opacity: 1; }
+          96.33% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes typingWidth {
+          0% { max-width: 0; }
+          11.11% { max-width: 0; }
+          33.33% { max-width: 100%; }
+          100% { max-width: 100%; }
+        }
+        @keyframes blinkCaret {
+          0%, 100% { border-right-color: #1e3a5f; }
+          50% { border-right-color: transparent; }
+        }
+        @keyframes spinnerRotate {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes spinnerFade {
+          0% { opacity: 1; }
+          50% { opacity: 1; }
+          55% { opacity: 0; }
+          100% { opacity: 0; }
+        }
+        @keyframes resultReveal {
+          0% { opacity: 0; }
+          50% { opacity: 0; }
+          55% { opacity: 1; }
+          100% { opacity: 1; }
+        }
+        @keyframes countBadge {
+          0% { content: "3"; }
+          50% { content: "3"; }
+          60% { content: "4"; }
+          100% { content: "4"; }
+        }
+        @keyframes badgeCount3 {
+          0% { opacity: 1; }
+          50% { opacity: 1; }
+          55% { opacity: 0; }
+          100% { opacity: 0; }
+        }
+        @keyframes badgeCount4 {
+          0% { opacity: 0; }
+          50% { opacity: 0; }
+          55% { opacity: 1; }
+          100% { opacity: 1; }
+        }
+        @keyframes summaryFlash {
+          0% { opacity: 0.4; }
+          40% { opacity: 0.4; }
+          55% { opacity: 1; }
+          70% { opacity: 0.6; }
+          85% { opacity: 1; }
+          100% { opacity: 1; }
+        }
+      `}</style>
+
       <div
         className="flex items-center gap-2 px-4"
         style={{ backgroundColor: "#f1f5f9", height: 36, borderBottom: "1px solid #e2e8f0" }}
@@ -71,75 +139,225 @@ function ProductMockup() {
         <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#22c55e", display: "inline-block" }} />
       </div>
 
-      <div className="flex" style={{ minHeight: 320 }}>
+      <div style={{ position: "relative", minHeight: 320, backgroundColor: "#ffffff" }}>
+
         <div
+          data-testid="mockup-stage-capture"
           style={{
-            width: 280,
-            minWidth: 280,
-            backgroundColor: "#f8fafc",
-            borderRight: "1px solid #e2e8f0",
-            padding: "20px 0",
+            position: "absolute",
+            inset: 0,
+            padding: 40,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            animation: "mockupStage1 9s infinite",
+          }}
+        >
+          <div style={{ width: "100%", maxWidth: 480 }}>
+            <div className="text-sm font-semibold mb-3" style={{ color: "#1e3a5f" }}>
+              Capture
+            </div>
+            <div
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "14px 16px",
+                minHeight: 80,
+                backgroundColor: "#f8fafc",
+                marginBottom: 16,
+              }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  fontFamily: "'DM Mono', 'Courier New', monospace",
+                  fontSize: 12,
+                  color: "#334155",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  borderRight: "2px solid #1e3a5f",
+                  animation: `typingWidth 9s steps(${TYPING_TEXT.length}, end) infinite, blinkCaret 0.7s step-end infinite`,
+                  maxWidth: `${TYPING_TEXT.length}ch`,
+                  lineHeight: 1.6,
+                }}
+              >
+                {TYPING_TEXT}
+              </span>
+            </div>
+            <button
+              style={{
+                backgroundColor: "#1e3a5f",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: 6,
+                padding: "10px 28px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: "default",
+              }}
+            >
+              Submit
+            </button>
+          </div>
+        </div>
+
+        <div
+          data-testid="mockup-stage-routing"
+          style={{
+            position: "absolute",
+            inset: 0,
+            padding: 40,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            animation: "mockupStage2 9s infinite",
+          }}
+        >
+          <div style={{ width: "100%", maxWidth: 480 }}>
+            <div className="text-sm font-semibold mb-4" style={{ color: "#1e3a5f" }}>
+              AI Routing
+            </div>
+            <div
+              style={{
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: 20,
+                backgroundColor: "#f8fafc",
+                position: "relative",
+              }}
+            >
+              <div style={{ animation: "spinnerFade 3s infinite", position: "absolute", top: 20, left: "50%", transform: "translateX(-50%)" }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ animation: "spinnerRotate 0.8s linear infinite" }}>
+                  <circle cx="12" cy="12" r="10" stroke="#e2e8f0" strokeWidth="2.5" />
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke="#1e3a5f" strokeWidth="2.5" strokeLinecap="round" />
+                </svg>
+              </div>
+
+              <div style={{ animation: "resultReveal 3s infinite" }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold" style={{ color: "#334155" }}>Matched to:</span>
+                    <span
+                      className="text-xs font-medium rounded-full px-2.5 py-0.5"
+                      style={{ backgroundColor: "#1e3a5f", color: "#ffffff" }}
+                    >
+                      Acme Corp
+                    </span>
+                  </div>
+                  <span
+                    className="text-xs font-medium rounded-full px-2.5 py-0.5"
+                    style={{ backgroundColor: "#dcfce7", color: "#16a34a" }}
+                  >
+                    Confirmed
+                  </span>
+                </div>
+                <p className="text-xs leading-relaxed" style={{ color: "#64748b", fontStyle: "italic" }}>
+                  Pricing strategy update — filed under Competitors.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          data-testid="mockup-stage-map"
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            animation: "mockupStage3 9s infinite",
           }}
         >
           <div
-            className="text-xs font-bold uppercase tracking-wider px-5 mb-4"
-            style={{ color: "#1e3a5f" }}
+            style={{
+              width: 240,
+              minWidth: 240,
+              backgroundColor: "#f8fafc",
+              borderRight: "1px solid #e2e8f0",
+              padding: "20px 0",
+            }}
           >
-            Intelligence Map
-          </div>
-
-          {categories.map((cat) => (
             <div
-              key={cat.label}
+              className="text-xs font-bold uppercase tracking-wider px-5 mb-4"
+              style={{ color: "#1e3a5f" }}
+            >
+              Intelligence Map
+            </div>
+
+            <div
               className="flex items-center justify-between px-5 py-2.5 text-sm"
               style={{
                 color: "#1e3a5f",
-                backgroundColor: cat.active ? "#eef2f7" : "transparent",
-                borderLeft: cat.active ? "3px solid #1e3a5f" : "3px solid transparent",
-                fontWeight: cat.active ? 600 : 400,
+                backgroundColor: "#eef2f7",
+                borderLeft: "3px solid #1e3a5f",
+                fontWeight: 600,
               }}
             >
-              <span>{cat.label}</span>
+              <span>Competitors</span>
               <span
                 className="text-xs font-medium rounded-full px-2 py-0.5"
-                style={{
-                  backgroundColor: cat.active ? "#1e3a5f" : "#e2e8f0",
-                  color: cat.active ? "#ffffff" : "#64748b",
-                }}
+                style={{ backgroundColor: "#1e3a5f", color: "#ffffff", position: "relative" }}
               >
-                {cat.count}
+                <span style={{ animation: "badgeCount3 3s infinite" }}>3</span>
+                <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: "badgeCount4 3s infinite" }}>4</span>
               </span>
             </div>
-          ))}
-        </div>
 
-        <div className="flex-1 p-6" style={{ backgroundColor: "#ffffff" }}>
-          <div className="mb-1">
-            <span className="text-xl font-bold" style={{ color: "#1e3a5f" }}>Acme Technologies</span>
-          </div>
-          <span
-            className="inline-block text-xs rounded-full px-2.5 py-0.5 mb-5"
-            style={{ backgroundColor: "#f1f5f9", color: "#64748b" }}
-          >
-            Competitors
-          </span>
-
-          <div className="mb-5">
-            <div className="flex items-center gap-1.5 mb-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-              </svg>
-              <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>AI Summary</span>
-            </div>
-            <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>
-              Acme Technologies launched a redesigned product page this week and quietly updated their enterprise pricing. Early signals suggest they are moving upmarket toward larger customers.
-            </p>
-          </div>
-
-          <div className="flex flex-col gap-2.5">
-            {intelItems.map((item, i) => (
+            {[
+              { label: "Regulations", count: 2 },
+              { label: "Industry News", count: 4 },
+            ].map((cat) => (
               <div
-                key={i}
+                key={cat.label}
+                className="flex items-center justify-between px-5 py-2.5 text-sm"
+                style={{
+                  color: "#1e3a5f",
+                  backgroundColor: "transparent",
+                  borderLeft: "3px solid transparent",
+                  fontWeight: 400,
+                }}
+              >
+                <span>{cat.label}</span>
+                <span
+                  className="text-xs font-medium rounded-full px-2 py-0.5"
+                  style={{ backgroundColor: "#e2e8f0", color: "#64748b" }}
+                >
+                  {cat.count}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex-1 p-6" style={{ backgroundColor: "#ffffff" }}>
+            <div className="mb-1">
+              <span className="text-xl font-bold" style={{ color: "#1e3a5f" }}>Acme Corp</span>
+            </div>
+            <span
+              className="inline-block text-xs rounded-full px-2.5 py-0.5 mb-5"
+              style={{ backgroundColor: "#f1f5f9", color: "#64748b" }}
+            >
+              Competitors
+            </span>
+
+            <div className="mb-5">
+              <div className="flex items-center gap-1.5 mb-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>AI Summary</span>
+              </div>
+              <p
+                className="text-xs leading-relaxed"
+                style={{ color: "#64748b", animation: "summaryFlash 3s infinite" }}
+              >
+                Acme Corp announced a new enterprise pricing tier targeting mid-market customers. This signals a strategic shift upmarket and may impact competitive positioning.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <div
                 className="flex items-center gap-3 rounded-lg px-3 py-2.5"
                 style={{ backgroundColor: "#f8fafc", border: "1px solid #f1f5f9" }}
               >
@@ -149,8 +367,8 @@ function ProductMockup() {
                   <line x1="8" y1="2" x2="8" y2="6" />
                   <line x1="3" y1="10" x2="21" y2="10" />
                 </svg>
-                <span className="text-xs flex-shrink-0" style={{ color: "#94a3b8" }}>{item.date}</span>
-                <span className="text-xs flex-1" style={{ color: "#334155" }}>{item.text}</span>
+                <span className="text-xs flex-shrink-0" style={{ color: "#94a3b8" }}>Mar 5, 2026</span>
+                <span className="text-xs flex-1" style={{ color: "#334155" }}>New enterprise pricing tier announced.</span>
                 <span
                   className="text-xs font-medium rounded-full px-2 py-0.5 flex-shrink-0"
                   style={{ backgroundColor: "#dcfce7", color: "#16a34a" }}
@@ -158,7 +376,26 @@ function ProductMockup() {
                   Confirmed
                 </span>
               </div>
-            ))}
+              <div
+                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+                style={{ backgroundColor: "#f8fafc", border: "1px solid #f1f5f9" }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span className="text-xs flex-shrink-0" style={{ color: "#94a3b8" }}>Mar 4, 2026</span>
+                <span className="text-xs flex-1" style={{ color: "#334155" }}>Homepage messaging shifted toward enterprise buyers.</span>
+                <span
+                  className="text-xs font-medium rounded-full px-2 py-0.5 flex-shrink-0"
+                  style={{ backgroundColor: "#dcfce7", color: "#16a34a" }}
+                >
+                  Confirmed
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
