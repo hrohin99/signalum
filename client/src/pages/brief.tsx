@@ -10,18 +10,22 @@ function MarkdownRenderer({ content }: { content: string }) {
   const lines = content.split("\n");
   const elements: JSX.Element[] = [];
   let listItems: string[] = [];
+  let listType: "ul" | "ol" = "ul";
   let key = 0;
 
   function flushList() {
     if (listItems.length > 0) {
+      const ListTag = listType === "ol" ? "ol" : "ul";
+      const listClass = listType === "ol" ? "list-decimal pl-5 mb-3 space-y-1" : "list-disc pl-5 mb-3 space-y-1";
       elements.push(
-        <ul key={key++} className="list-disc pl-5 mb-3 space-y-1">
+        <ListTag key={key++} className={listClass}>
           {listItems.map((item, i) => (
             <li key={i} className="text-sm text-foreground">{renderInline(item)}</li>
           ))}
-        </ul>
+        </ListTag>
       );
       listItems = [];
+      listType = "ul";
     }
   }
 
@@ -58,6 +62,11 @@ function MarkdownRenderer({ content }: { content: string }) {
       continue;
     }
 
+    if (/^\s*([-*_])\1{2,}\s*$/.test(trimmed)) {
+      flushList();
+      continue;
+    }
+
     if (trimmed.startsWith("### ")) {
       flushList();
       elements.push(
@@ -81,6 +90,9 @@ function MarkdownRenderer({ content }: { content: string }) {
       );
     } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
       listItems.push(trimmed.slice(2));
+    } else if (/^\d+\.\s/.test(trimmed)) {
+      if (listItems.length === 0) listType = "ol";
+      listItems.push(trimmed.replace(/^\d+\.\s/, ""));
     } else {
       flushList();
       elements.push(

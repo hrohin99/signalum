@@ -414,7 +414,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       }).filter(Boolean);
 
       const briefingContext = entitySummaries.length > 0
-        ? entitySummaries.join("\n\n---\n\n")
+        ? entitySummaries.join("\n\n")
         : allCaptures.slice(0, 20).map((c, i) => `[${i + 1}] (${c.type}, entity: ${c.matchedEntity || "unmatched"}) ${c.content.slice(0, 300)}`).join("\n\n");
 
       const client = getAnthropicClient();
@@ -432,7 +432,7 @@ Structure the brief as follows:
 2. **Key Developments** — A section for each category/entity that has notable activity. Use clear headers. For each, provide a short analytical paragraph synthesizing the captured intel.
 3. **Watch Items** — Any emerging patterns, risks, or items that deserve continued attention.
 
-Be direct, analytical, and concise. Write in a professional intelligence briefing style. Do not include any JSON or metadata — write pure narrative prose with markdown formatting.
+Be direct, analytical, and concise. Write in a professional intelligence briefing style. Do not include any JSON or metadata — write pure narrative prose with markdown formatting. Do NOT use horizontal rules or separator lines (---) anywhere in the output. Use headings and spacing to separate sections instead.
 
 Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 
