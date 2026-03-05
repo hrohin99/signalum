@@ -227,7 +227,8 @@ export async function registerRoutes(
       const { token } = req.query;
 
       if (!token || typeof token !== "string") {
-        return res.status(400).send(verificationResultPage("Invalid verification link.", false));
+        const baseUrl = process.env.APP_BASE_URL || getAppUrl();
+        return res.redirect(`${baseUrl}/login?error=invalid-token`);
       }
 
       const decoded = jwt.verify(token, JWT_SECRET) as {
@@ -238,7 +239,8 @@ export async function registerRoutes(
       };
 
       if (decoded.purpose !== "email-verification") {
-        return res.status(400).send(verificationResultPage("Invalid verification link.", false));
+        const baseUrl = process.env.APP_BASE_URL || getAppUrl();
+        return res.redirect(`${baseUrl}/login?error=invalid-token`);
       }
 
       if (decoded.userId) {
@@ -247,18 +249,19 @@ export async function registerRoutes(
         });
         if (error) {
           console.error("Failed to confirm email in Supabase:", error);
-          return res.status(500).send(verificationResultPage("Something went wrong confirming your email. Please try again.", false));
+          const baseUrl = process.env.APP_BASE_URL || getAppUrl();
+          return res.redirect(`${baseUrl}/login?error=invalid-token`);
         }
       }
 
-      const appUrl = decoded.redirectTo || getAppUrl();
+      const baseUrl = process.env.APP_BASE_URL || getAppUrl();
 
       try {
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
           type: "magiclink",
           email: decoded.email,
           options: {
-            redirectTo: appUrl,
+            redirectTo: `${baseUrl}/workspace`,
           },
         });
 
@@ -269,12 +272,13 @@ export async function registerRoutes(
         console.error("Failed to generate magic link for auto-sign-in:", linkErr);
       }
 
-      return res.send(verificationResultPage("Your email has been verified! You can now sign in.", true));
+      return res.redirect(`${baseUrl}/workspace`);
     } catch (error: any) {
+      const baseUrl = process.env.APP_BASE_URL || getAppUrl();
       if (error.name === "TokenExpiredError") {
-        return res.status(400).send(verificationResultPage("This verification link has expired. Please sign up again.", false));
+        return res.redirect(`${baseUrl}/login?error=invalid-token`);
       }
-      return res.status(400).send(verificationResultPage("Invalid verification link.", false));
+      return res.redirect(`${baseUrl}/login?error=invalid-token`);
     }
   });
 

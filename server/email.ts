@@ -12,7 +12,7 @@ export function getAppUrl(): string {
   if (devDomain) {
     return `https://${devDomain}`;
   }
-  return `http://localhost:${process.env.PORT || 5000}`;
+  return process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
 }
 
 export async function sendVerificationEmail(
