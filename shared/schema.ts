@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, jsonb, timestamp, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, serial, integer, uuid, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -67,6 +67,9 @@ export interface ExtractedCategory {
 export interface ExtractedEntity {
   name: string;
   type: string;
+  topic_type?: string;
+  related_topic_ids?: string[];
+  priority?: 'high' | 'medium' | 'low' | 'watch';
 }
 
 export interface ExtractionResult {
@@ -90,3 +93,44 @@ export const insertBriefSchema = createInsertSchema(briefs).omit({
 
 export type InsertBrief = z.infer<typeof insertBriefSchema>;
 export type Brief = typeof briefs.$inferSelect;
+
+export const topicTypeConfigs = pgTable("topic_type_configs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  typeKey: text("type_key").notNull(),
+  displayName: text("display_name").notNull(),
+  icon: text("icon").notNull(),
+  description: text("description").notNull(),
+  aiPromptHint: text("ai_prompt_hint").notNull(),
+  widgetConfig: jsonb("widget_config").notNull().$type<{ widgets: string[] }>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("topic_type_configs_tenant_type_key").on(table.tenantId, table.typeKey),
+]);
+
+export const insertTopicTypeConfigSchema = createInsertSchema(topicTypeConfigs).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertTopicTypeConfig = z.infer<typeof insertTopicTypeConfigSchema>;
+export type TopicTypeConfig = typeof topicTypeConfigs.$inferSelect;
+
+export const productContext = pgTable("product_context", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  productName: text("product_name").notNull(),
+  description: text("description"),
+  targetCustomer: text("target_customer"),
+  strengths: text("strengths"),
+  weaknesses: text("weaknesses"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertProductContextSchema = createInsertSchema(productContext).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertProductContext = z.infer<typeof insertProductContextSchema>;
+export type ProductContext = typeof productContext.$inferSelect;

@@ -1,0 +1,1 @@
+ALTER TABLE "topic_type_configs" ADD CONSTRAINT "topic_type_configs_tenant_type_key" UNIQUE("tenant_id","type_key");

@@ -709,7 +709,7 @@ Return only the summary paragraph, no JSON, no formatting.`
         return res.status(400).json({ message: "Entity already exists in this category" });
       }
 
-      category.entities.push({ name: entityName, type: safeEntityType });
+      category.entities.push({ name: entityName, type: safeEntityType, topic_type: 'general', related_topic_ids: [], priority: 'medium' });
 
       const updated = await storage.updateWorkspaceCategories(userId, categories);
       return res.json({ success: true, workspace: updated });
@@ -745,7 +745,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       const newCategory: ExtractedCategory = {
         name: categoryName,
         description: typeof categoryDescription === "string" ? categoryDescription : "",
-        entities: entityName ? [{ name: entityName, type: safeEntityType }] : [],
+        entities: entityName ? [{ name: entityName, type: safeEntityType, topic_type: 'general', related_topic_ids: [], priority: 'medium' as const }] : [],
       };
 
       categories.push(newCategory);
@@ -771,10 +771,20 @@ Return only the summary paragraph, no JSON, no formatting.`
         return res.json({ success: true, workspace: existing });
       }
 
+      const categoriesWithDefaults = categories.map((cat: any) => ({
+        ...cat,
+        entities: (cat.entities || []).map((entity: any) => ({
+          ...entity,
+          topic_type: entity.topic_type || 'general',
+          related_topic_ids: entity.related_topic_ids || [],
+          priority: entity.priority || 'medium',
+        })),
+      }));
+
       const workspace = await storage.createWorkspace({
         id: randomUUID(),
         userId,
-        categories,
+        categories: categoriesWithDefaults,
       });
 
       return res.json({ success: true, workspace });
