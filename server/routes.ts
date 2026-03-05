@@ -7,7 +7,7 @@ import multer from "multer";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
-import type { ExtractionResult, ExtractedCategory } from "@shared/schema";
+import type { ExtractionResult, ExtractedCategory, ExtractedEntity } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -787,6 +787,73 @@ Return only the summary paragraph, no JSON, no formatting.`
       return res.json({ success: true, workspace: updated, newCategory });
     } catch (error: any) {
       console.error("Add category error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/split-topic", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { categoryName, originalEntityName, newNames, topicType } = req.body;
+
+      if (!categoryName || !originalEntityName || !Array.isArray(newNames) || newNames.length < 2) {
+        return res.status(400).json({ message: "Missing required fields or need at least 2 names" });
+      }
+
+      const trimmedNames = newNames.map((n: string) => (typeof n === "string" ? n.trim() : "")).filter(Boolean);
+      if (trimmedNames.length < 2) {
+        return res.status(400).json({ message: "Need at least 2 valid topic names" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const originalIndex = category.entities.findIndex(e => e.name === originalEntityName);
+      if (originalIndex === -1) {
+        return res.status(404).json({ message: "Original entity not found" });
+      }
+
+      const originalEntity = category.entities[originalIndex];
+      const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
+      const safeTopicType = (typeof topicType === "string" && validTopicTypes.includes(topicType.toLowerCase())) ? topicType.toLowerCase() : (originalEntity.topic_type || "general");
+
+      const existingNames = category.entities
+        .filter(e => e.name !== originalEntityName)
+        .map(e => e.name.toLowerCase());
+      const newEntities: ExtractedEntity[] = [];
+      for (const name of trimmedNames) {
+        if (existingNames.includes(name.toLowerCase())) {
+          continue;
+        }
+        newEntities.push({
+          name,
+          type: originalEntity.type,
+          topic_type: safeTopicType,
+          related_topic_ids: [],
+          priority: originalEntity.priority || "medium",
+        });
+        existingNames.push(name.toLowerCase());
+      }
+
+      if (newEntities.length === 0) {
+        return res.status(400).json({ message: "All specified topic names already exist in this category" });
+      }
+
+      category.entities.splice(originalIndex, 1);
+      category.entities.push(...newEntities);
+
+      const updated = await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, workspace: updated, created: newEntities.length });
+    } catch (error: any) {
+      console.error("Split topic error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

@@ -8,6 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
   ArrowLeft,
   Sparkles,
   Pencil,
@@ -26,11 +33,22 @@ import {
   Plus,
   Search,
   X,
+  AlertTriangle,
+  Scissors,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard } from "@shared/schema";
+
+function detectMultipleEntities(name: string): string[] | null {
+  if (!name.includes(",")) return null;
+  const parts = name.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+  const looksLikeSuffix = parts.length === 2 && /^(inc|llc|ltd|co|corp|plc|gmbh|sa|ag|jr|sr|ii|iii)\.?$/i.test(parts[1]);
+  if (looksLikeSuffix) return null;
+  return parts;
+}
 
 const topicTypeMap: Record<string, { icon: string; displayName: string }> = {
   competitor: { icon: "🎯", displayName: "Competitor" },
@@ -223,6 +241,15 @@ function TopicViewContent({
         updateEntityMutation={updateEntityMutation}
         onBack={onBack}
       />
+
+      {detectMultipleEntities(entity.name) && (
+        <div className="flex items-start gap-2 mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200" data-testid="banner-multiple-entities">
+          <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+          <p className="text-sm text-amber-800">
+            This topic appears to contain multiple entries. Consider splitting them into individual topics for better tracking.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
@@ -900,6 +927,8 @@ function TopicDetailsCard({
   const [linkSearch, setLinkSearch] = useState("");
   const linkDropdownRef = useRef<HTMLDivElement>(null);
   const [, navigate] = useLocation();
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  const detectedNames = detectMultipleEntities(entity.name);
 
   const currentTopicType = entity.topic_type || "general";
   const typeInfo = topicTypeMap[currentTopicType] || topicTypeMap.general;
@@ -1061,9 +1090,165 @@ function TopicDetailsCard({
               )}
             </div>
           </div>
+
+          {detectedNames && (
+            <div className="pt-3 border-t border-border/50">
+              <button
+                className="inline-flex items-center gap-1.5 text-xs text-amber-700 hover:text-amber-900 font-medium hover:underline"
+                onClick={() => setShowSplitModal(true)}
+                data-testid="button-split-topic"
+              >
+                <Scissors className="w-3.5 h-3.5" />
+                Split into separate topics
+              </button>
+            </div>
+          )}
         </div>
+
+        {detectedNames && (
+          <SplitTopicModal
+            open={showSplitModal}
+            onOpenChange={setShowSplitModal}
+            detectedNames={detectedNames}
+            originalEntity={entity}
+            categoryName={categoryName}
+          />
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function SplitTopicModal({
+  open,
+  onOpenChange,
+  detectedNames,
+  originalEntity,
+  categoryName,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  detectedNames: string[];
+  originalEntity: ExtractedEntity;
+  categoryName: string;
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const [names, setNames] = useState<string[]>(detectedNames);
+
+  useEffect(() => {
+    if (open) setNames(detectedNames);
+  }, [open, detectedNames]);
+
+  const splitMutation = useMutation({
+    mutationFn: async () => {
+      const trimmedNames = names.map((n) => n.trim()).filter(Boolean);
+      if (trimmedNames.length < 2) throw new Error("Need at least two topic names");
+      const res = await apiRequest("POST", "/api/split-topic", {
+        categoryName,
+        originalEntityName: originalEntity.name,
+        newNames: trimmedNames,
+        topicType: originalEntity.topic_type || "general",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      toast({ title: "Topic split successfully. Individual topics created." });
+      onOpenChange(false);
+      navigate("/");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Split failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateName = (index: number, value: string) => {
+    const updated = [...names];
+    updated[index] = value;
+    setNames(updated);
+  };
+
+  const removeName = (index: number) => {
+    if (names.length <= 2) return;
+    setNames(names.filter((_, i) => i !== index));
+  };
+
+  const addName = () => {
+    setNames([...names, ""]);
+  };
+
+  const validNames = names.map((n) => n.trim()).filter(Boolean);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md" data-testid="modal-split-topic">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Scissors className="w-4 h-4" />
+            Split into separate topics
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <p className="text-sm text-muted-foreground">
+            This will create individual topics for each name below under <span className="font-medium text-foreground">{categoryName}</span>, and remove the combined topic.
+          </p>
+          <div className="space-y-2">
+            {names.map((name, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={name}
+                  onChange={(e) => updateName(i, e.target.value)}
+                  placeholder="Topic name..."
+                  className="h-9 text-sm"
+                  data-testid={`input-split-name-${i}`}
+                />
+                {names.length > 2 && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => removeName(i)}
+                    data-testid={`button-remove-split-name-${i}`}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+          <button
+            className="inline-flex items-center gap-1 text-xs text-[#1e3a5f] hover:underline font-medium"
+            onClick={addName}
+            data-testid="button-add-split-name"
+          >
+            <Plus className="w-3 h-3" />
+            Add another name
+          </button>
+        </div>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => onOpenChange(false)} data-testid="button-split-cancel">
+            Cancel
+          </Button>
+          <Button
+            className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+            onClick={() => splitMutation.mutate()}
+            disabled={splitMutation.isPending || validNames.length < 2}
+            data-testid="button-split-confirm"
+          >
+            {splitMutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Splitting...
+              </>
+            ) : (
+              `Split into ${validNames.length} topics`
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

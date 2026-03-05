@@ -41,6 +41,7 @@ AI-powered personal intelligence workspace.
 - `POST /api/entity-summary` - AI-generated summary for an entity based on captured intel (auth required)
 - `POST /api/add-entity` - Add a new entity to an existing category (auth required)
 - `POST /api/add-category` - Create a new category with optional initial entity (auth required)
+- `POST /api/split-topic` - Split a combined topic into individual topics (auth required). Accepts categoryName, originalEntityName, newNames[], topicType. Creates individual entities and removes the combined one. Guards against data loss if all names already exist
 - `PATCH /api/entity` - Update entity topic_type and/or priority (auth required). Accepts categoryName, entityName, and optional topic_type/priority fields
 - `POST /api/ai-insights` - Generate 3 AI insight bullet points for a topic from its captures (auth required). Returns `{ insights: string[] | null }`
 - `POST /api/link-topic` - Link a related topic to an entity (auth required). Accepts categoryName, entityName, linkedEntityName
