@@ -1,0 +1,22 @@
+"Add a small 'coming soon' teaser section to the landing page. Place it between the SHOWCASE CARDS section and the FINAL CTA section. White background, centred, max-width 760px, 60px vertical padding.
+The section has a subtle navy border (1px, #1e3a5f, border-radius 12px) with a light navy tint background (#f0f4f9), 40px padding inside.
+At the top left, a small pill badge: dark navy background, white text, small font — "Coming Soon"
+Headline in navy bold below the badge:
+"Ask Watchloom anything about your tracked topics"
+One paragraph in slate grey below the headline:
+"Soon you will be able to ask Watchloom questions in plain English and get instant answers from everything it has captured for you. What has changed with a competitor this month? What are the biggest themes across your industry right now? What did I capture about pricing changes last week? Watchloom will search its own knowledge of your workspace and answer in seconds."
+Three example query pills below the paragraph, displayed in a row, each styled as a rounded pill with white background, navy border, navy text, small font:
+Pill 1: "What is going on with Acme Corp this week?"
+Pill 2: "Summarise all my regulatory updates this month"
+Pill 3: "What are my competitors doing with pricing?"
+Below the pills, a single line in small slate grey italic text:
+"Join the waitlist to be first to access this feature when it launches."
+Below that line, a small email input field and a button side by side. Input placeholder: "Your work email". Button: solid navy, white text, "Join Waitlist". The input and button should be compact and centred, max-width 420px.
+The waitlist form does not need to be functional yet. Just wire it up to show a small green success message below the input that says "You are on the list. We will be in touch." when the button is clicked. Use frontend only state for this, no backend needed.
+Do not change anything else on the page."
+
+Why This Works Hard For You
+Three things happen with this section beyond just teasing a feature:
+It collects emails. Even people who are not ready to sign up for the full product might drop their email for early access to Ask Watchloom. That is a warm lead list building itself passively.
+It signals product ambition. A visitor sees that you are not just building a filing cabinet — you are building something they can have a conversation with. That raises the perceived ceiling of the product significantly.
+It creates urgency around the free trial. If someone sees a compelling coming soon feature, they are more likely to sign up now so they are already an established user when it launches rather than starting from scratch later.
