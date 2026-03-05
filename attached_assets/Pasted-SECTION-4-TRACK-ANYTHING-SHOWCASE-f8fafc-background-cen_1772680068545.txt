@@ -1,0 +1,37 @@
+SECTION 4 — TRACK ANYTHING SHOWCASE
+#f8fafc background, centred, max-width 1000px.
+Section label: "What can you track?"
+Section headline: "If it matters to your work, Intel App tracks it"
+Subheadline: "You define what matters. Our AI agents monitor it, capture it, and surface it — so nothing slips through."
+Six cards in a 3x2 grid. Each card: white background, subtle border, rounded corners, 24px padding. Each has a small coloured icon (use emoji or inline SVG), a bold card title, and a two-line example written as if it's real intelligence output:
+Card 1 — Competitors
+Example text: "Rival raised $40M Series B. Updated their enterprise pricing page. Added a new compliance module."
+Card 2 — Regulations & Law
+Example text: "New guidance issued on data localisation requirements. Compliance deadline confirmed for Q3."
+Card 3 — Industry News
+Example text: "Three major outlets covered shifts in your product category this week. Sentiment is cautiously positive."
+Card 4 — Websites & Pricing
+Example text: "Competitor's pricing page changed overnight. New tier added. Trial CTA removed from homepage."
+Card 5 — Policy & Government
+Example text: "Parliamentary committee published recommendations affecting your sector. Second reading scheduled."
+Card 6 — Anything You Define
+Style this card differently — navy background, white text. Text: "You decide what matters. Type it in plain English and our AI builds your tracking workspace automatically."
+---
+SECTION 5 — FINAL CTA
+White background, centred, generous padding.
+Large headline (#1e3a5f): "Be the most informed person in the room"
+Subtext (#64748b): "Join professionals who use Intel App to stay ahead of their market, their competition, and their industry — every single day."
+Single large button: "Get Started Free" — solid navy, white text, wide padding, rounded corners
+Below button in small grey text: "Free to start. No credit card required."
+---
+FOOTER
+Light grey background, two columns: left side shows "Intel App" in navy bold. Right side shows links: Sign In, Get Started.
+Bottom line: small grey text — "© 2026 Intel App"
+---
+PRESERVATION RULES — non-negotiable:
+- Do not change any route, component, or logic for authenticated users
+- Do not change the dashboard, capture, inbox, intelligence map, daily brief, or settings screens
+- Do not change the Supabase auth integration or any backend routes
+- Do not change the onboarding AI extraction logic
+- Do not change Step 3 of the signup flow (the account creation form)
+- Only modify: the landing page, the role cards in Step 1, and the placeholder text in Step 2"
