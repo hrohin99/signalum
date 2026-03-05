@@ -215,19 +215,42 @@ export default function LandingPage() {
             }}
             data-testid="stats-bar"
           >
-            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-6 md:gap-0">
+            <div
+              className="hidden md:flex items-stretch justify-center"
+              style={{ gap: 0 }}
+            >
+              <div className="flex-1 flex items-center justify-center text-center px-4">
+                <div>
+                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-hours">5+ hours</div>
+                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>saved every month per user</div>
+                </div>
+              </div>
+              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
+              <div className="flex-1 flex items-center justify-center text-center px-4">
+                <div>
+                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-schedule">Daily, weekly or monthly</div>
+                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>briefings on your schedule</div>
+                </div>
+              </div>
+              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
+              <div className="flex-1 flex items-center justify-center text-center px-4">
+                <div>
+                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-topic">Any topic</div>
+                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>set up in plain English</div>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-6 md:hidden">
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-hours">5+ hours</div>
+                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>5+ hours</div>
                 <div className="text-sm mt-1" style={{ color: "#64748b" }}>saved every month per user</div>
               </div>
-              <div className="hidden md:block" style={{ width: 1, height: 48, backgroundColor: "#e2e8f0" }} />
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-schedule">Daily, weekly or monthly</div>
+                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>Daily, weekly or monthly</div>
                 <div className="text-sm mt-1" style={{ color: "#64748b" }}>briefings on your schedule</div>
               </div>
-              <div className="hidden md:block" style={{ width: 1, height: 48, backgroundColor: "#e2e8f0" }} />
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-topic">Any topic</div>
+                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>Any topic</div>
                 <div className="text-sm mt-1" style={{ color: "#64748b" }}>set up in plain English</div>
               </div>
             </div>

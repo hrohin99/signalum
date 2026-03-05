@@ -4,6 +4,7 @@ import { queryClient, apiRequest } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
+import { supabase } from "@/lib/supabase";
 import LandingPage from "@/pages/landing";
 import SignupPage from "@/pages/signup";
 import SigninPage from "@/pages/signin";
@@ -27,6 +28,18 @@ function AppContent() {
       }
     }
   }, [user, session, location, setLocation]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") {
+        const landingRoutes = ["/signin", "/signup"];
+        if (landingRoutes.includes(location)) {
+          setLocation("/");
+        }
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [location, setLocation]);
 
   useEffect(() => {
     if (!user || !session) {

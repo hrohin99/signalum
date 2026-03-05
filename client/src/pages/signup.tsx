@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { SiGoogle } from "react-icons/si";
-import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal } from "lucide-react";
+import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal, Mail } from "lucide-react";
 import { Link } from "wouter";
 
 type SignupStep = 1 | 2 | 3;
@@ -32,6 +32,8 @@ export default function SignupPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [accountCreated, setAccountCreated] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
   const { signUp, signInWithGoogle } = useAuth();
   const { toast } = useToast();
 
@@ -62,11 +64,7 @@ export default function SignupPage() {
           variant: "destructive",
         });
       } else if (emailSent) {
-        toast({
-          title: "Account created",
-          description:
-            "We've sent a verification email to your inbox. Please confirm your email to get started.",
-        });
+        setAccountCreated(true);
       } else {
         toast({
           title: "Account created",
@@ -84,6 +82,36 @@ export default function SignupPage() {
         variant: "destructive",
       });
     }
+  };
+
+  const handleResendEmail = async () => {
+    setResendingEmail(true);
+    try {
+      const res = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, emailRedirectTo: window.location.origin }),
+      });
+      if (res.ok) {
+        toast({
+          title: "Email sent",
+          description: "We sent a new verification email to your inbox.",
+        });
+      } else {
+        toast({
+          title: "Could not resend",
+          description: "Please try again in a moment.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Could not resend",
+        description: "Please try again in a moment.",
+        variant: "destructive",
+      });
+    }
+    setResendingEmail(false);
   };
 
   const handleGoogleSignIn = async () => {
@@ -114,33 +142,39 @@ export default function SignupPage() {
           borderColor: "#e2e8f0",
         }}
       >
-        <div className="flex items-center gap-2 mb-6">
-          <div
-            className="w-8 h-8 rounded-md flex items-center justify-center"
-            style={{ backgroundColor: "#1e3a5f" }}
-          >
-            <Shield className="w-4 h-4 text-white" />
-          </div>
-          <span className="text-lg font-semibold" style={{ color: "#1e3a5f" }}>
-            Watchloom
-          </span>
-        </div>
-
-        <p className="text-sm mb-8" style={{ color: "#94a3b8" }} data-testid="text-step-indicator">
-          Step {step} of 3
-        </p>
-
-        <div className="flex gap-1 mb-8">
-          {[1, 2, 3].map((s) => (
+        {!accountCreated && (
+          <div className="flex items-center gap-2 mb-6">
             <div
-              key={s}
-              className="h-1 flex-1 rounded-full transition-colors"
-              style={{
-                backgroundColor: s <= step ? "#1e3a5f" : "#e2e8f0",
-              }}
-            />
-          ))}
-        </div>
+              className="w-8 h-8 rounded-md flex items-center justify-center"
+              style={{ backgroundColor: "#1e3a5f" }}
+            >
+              <Shield className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-lg font-semibold" style={{ color: "#1e3a5f" }}>
+              Watchloom
+            </span>
+          </div>
+        )}
+
+        {!accountCreated && (
+          <>
+            <p className="text-sm mb-8" style={{ color: "#94a3b8" }} data-testid="text-step-indicator">
+              Step {step} of 3
+            </p>
+
+            <div className="flex gap-1 mb-8">
+              {[1, 2, 3].map((s) => (
+                <div
+                  key={s}
+                  className="h-1 flex-1 rounded-full transition-colors"
+                  style={{
+                    backgroundColor: s <= step ? "#1e3a5f" : "#e2e8f0",
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
         {step === 1 && (
           <div>
@@ -252,7 +286,7 @@ export default function SignupPage() {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && !accountCreated && (
           <div>
             <h2
               className="text-2xl font-bold mb-2"
@@ -380,6 +414,63 @@ export default function SignupPage() {
                   Sign in
                 </span>
               </Link>
+            </p>
+          </div>
+        )}
+
+        {step === 3 && accountCreated && (
+          <div className="text-center py-4" data-testid="confirmation-screen">
+            <div className="flex items-center justify-center gap-2 mb-8">
+              <div
+                className="w-8 h-8 rounded-md flex items-center justify-center"
+                style={{ backgroundColor: "#1e3a5f" }}
+              >
+                <Shield className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-lg font-semibold" style={{ color: "#1e3a5f" }}>
+                Watchloom
+              </span>
+            </div>
+
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6"
+              style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
+            >
+              <Mail className="w-8 h-8" style={{ color: "#1e3a5f" }} />
+            </div>
+
+            <h2
+              className="text-2xl font-bold mb-4"
+              style={{ color: "#1e3a5f" }}
+              data-testid="text-check-inbox"
+            >
+              Check your inbox
+            </h2>
+
+            <p
+              className="text-sm mb-6 leading-relaxed"
+              style={{ color: "#64748b" }}
+              data-testid="text-confirmation-message"
+            >
+              We sent a confirmation email to{" "}
+              <span className="font-medium" style={{ color: "#334155" }}>
+                {email}
+              </span>
+              . Click the link in the email to activate your account and access your workspace.
+            </p>
+
+            <p className="text-xs" style={{ color: "#94a3b8" }} data-testid="text-resend-hint">
+              Did not receive it? Check your spam folder or{" "}
+              <button
+                type="button"
+                onClick={handleResendEmail}
+                disabled={resendingEmail}
+                className="font-medium hover:underline underline-offset-4 cursor-pointer"
+                style={{ color: "#1e3a5f" }}
+                data-testid="button-resend-email"
+              >
+                {resendingEmail ? "sending..." : "resend the email"}
+              </button>
             </p>
           </div>
         )}

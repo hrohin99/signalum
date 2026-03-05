@@ -104,7 +104,7 @@ export async function registerRoutes(
 
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
-      const { email, password, role, trackingText } = req.body;
+      const { email, password, role, trackingText, emailRedirectTo } = req.body;
 
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
@@ -136,7 +136,19 @@ export async function registerRoutes(
         }
       }
 
-      const token = jwt.sign({ email, userId: data.user?.id, purpose: "email-verification" }, JWT_SECRET, {
+      let safeRedirectTo: string | null = null;
+      if (emailRedirectTo && typeof emailRedirectTo === "string") {
+        try {
+          const parsed = new URL(emailRedirectTo);
+          const appUrl = getAppUrl();
+          const appParsed = new URL(appUrl);
+          if (parsed.hostname === appParsed.hostname || parsed.hostname.endsWith(".replit.dev") || parsed.hostname.endsWith(".replit.app") || parsed.hostname.endsWith(".repl.co")) {
+            safeRedirectTo = parsed.origin;
+          }
+        } catch {}
+      }
+
+      const token = jwt.sign({ email, userId: data.user?.id, purpose: "email-verification", redirectTo: safeRedirectTo }, JWT_SECRET, {
         expiresIn: "24h",
       });
 
@@ -162,6 +174,54 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/auth/resend-verification", async (req: Request, res: Response) => {
+    try {
+      const { email, emailRedirectTo } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+
+      const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+      const existingUser = users?.find((u: any) => u.email === email);
+
+      if (!existingUser) {
+        return res.status(404).json({ message: "No account found with that email" });
+      }
+
+      if (existingUser.email_confirmed_at) {
+        return res.status(400).json({ message: "Email is already confirmed" });
+      }
+
+      let safeRedirectTo: string | null = null;
+      if (emailRedirectTo && typeof emailRedirectTo === "string") {
+        try {
+          const parsed = new URL(emailRedirectTo);
+          const appUrl = getAppUrl();
+          const appParsed = new URL(appUrl);
+          if (parsed.hostname === appParsed.hostname || parsed.hostname.endsWith(".replit.dev") || parsed.hostname.endsWith(".replit.app") || parsed.hostname.endsWith(".repl.co")) {
+            safeRedirectTo = parsed.origin;
+          }
+        } catch {}
+      }
+
+      const token = jwt.sign({ email, userId: existingUser.id, purpose: "email-verification", redirectTo: safeRedirectTo }, JWT_SECRET, {
+        expiresIn: "24h",
+      });
+
+      const emailResult = await sendVerificationEmail(email, token);
+
+      if (!emailResult.success) {
+        return res.status(500).json({ message: "Failed to send verification email" });
+      }
+
+      return res.json({ success: true, emailSent: true });
+    } catch (error: any) {
+      console.error("Resend verification error:", error);
+      return res.status(500).json({ message: error.message || "Failed to resend" });
+    }
+  });
+
   app.get("/api/auth/verify-email", async (req: Request, res: Response) => {
     try {
       const { token } = req.query;
@@ -174,6 +234,7 @@ export async function registerRoutes(
         email: string;
         userId?: string;
         purpose: string;
+        redirectTo?: string;
       };
 
       if (decoded.purpose !== "email-verification") {
@@ -190,7 +251,7 @@ export async function registerRoutes(
         }
       }
 
-      const appUrl = getAppUrl();
+      const appUrl = decoded.redirectTo || getAppUrl();
 
       try {
         const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({

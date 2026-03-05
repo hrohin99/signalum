@@ -30,8 +30,9 @@ AI-powered personal intelligence workspace.
 - Vite exposes Supabase vars as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` via vite.config.ts
 
 ## API Routes
-- `POST /api/auth/signup` - Signup via Supabase Admin API (no Supabase email), sends branded verification email via Resend. Also accepts optional `role` and `trackingText` fields to persist onboarding context to user_profiles table at account creation
-- `GET /api/auth/verify-email` - Email verification link handler, validates JWT token and confirms email in Supabase
+- `POST /api/auth/signup` - Signup via Supabase Admin API (no Supabase email), sends branded verification email via Resend. Also accepts optional `role`, `trackingText`, and `emailRedirectTo` fields. Persists onboarding context to user_profiles table at account creation. The `emailRedirectTo` is validated against allowed domains before being embedded in the verification JWT
+- `POST /api/auth/resend-verification` - Resend verification email to an unconfirmed user. Accepts `email` and `emailRedirectTo`
+- `GET /api/auth/verify-email` - Email verification link handler, validates JWT token and confirms email in Supabase. Uses `redirectTo` from JWT (if validated) for magic link redirect
 - `POST /api/extract` - Onboarding: extract categories/entities from user description (auth required)
 - `POST /api/classify` - Classify captured content and match to workspace entity (auth required)
 - `POST /api/transcribe` - Transcribe audio via Claude (auth required, multipart form)
