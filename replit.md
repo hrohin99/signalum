@@ -12,9 +12,11 @@ AI-powered personal intelligence workspace.
 
 ## Key Features
 1. **Supabase Auth** - Email/password signup/login, Google OAuth
-2. **Onboarding Flow** - Free text input → Claude API extraction → Category/entity confirmation → Workspace creation
-3. **Dashboard** - Sidebar navigation with Capture, Inbox, Intelligence Map, Daily Brief, Settings pages
-4. **Capture System** - Four capture types (Text, Voice, URL, Document) with AI classification and entity routing
+2. **Onboarding Flow** - Free text input → Claude API extraction → Category/topic confirmation → Workspace creation
+3. **Dashboard** - Sidebar navigation with My Workspace (default), Capture, Inbox, Daily Brief, Settings pages
+4. **Capture System** - Four capture types (Text, Voice, URL, Document) with AI classification and topic routing
+5. **Welcome Modal** - One-time welcome overlay for new users after onboarding, dismissed state stored in user_profiles
+6. **Empty Category Nudge** - Inline add-topic form shown when clicking a category with 0 topics
 
 ## Environment Variables
 - `SUPABASE_URL` - Supabase project URL
@@ -42,9 +44,11 @@ AI-powered personal intelligence workspace.
 - `GET /api/workspace/:userId` - Check if workspace exists (auth required)
 - `POST /api/briefs/generate` - Generate a daily brief using Claude from all captures + entity data (auth required)
 - `GET /api/briefs` - List all briefs for authenticated user (auth required)
+- `GET /api/welcome-status` - Check if user has dismissed the welcome modal (auth required)
+- `POST /api/dismiss-welcome` - Mark welcome modal as dismissed for the user (auth required)
 
 ## Database Tables
-- `user_profiles` - User role and onboarding context (tracking text from signup Step 2), saved at account creation before email confirmation
+- `user_profiles` - User role, onboarding context (tracking text from signup Step 2), and welcome_dismissed flag. Saved at account creation before email confirmation
 - `workspaces` - User workspaces with categories/entities (jsonb)
 - `captures` - Captured content with entity/category match info
 - `briefs` - AI-generated daily intelligence briefs with content, capture/entity counts
@@ -60,7 +64,7 @@ AI-powered personal intelligence workspace.
 - `client/src/pages/dashboard.tsx` - Main dashboard layout with sidebar
 - `client/src/pages/capture.tsx` - Full capture page with 4 input types + AI classification
 - `client/src/pages/inbox.tsx` - Inbox page (empty state)
-- `client/src/pages/map.tsx` - Intelligence Map page (empty state)
+- `client/src/pages/map.tsx` - My Workspace page (category/topic view with empty category nudge and welcome modal)
 - `client/src/pages/brief.tsx` - Daily Brief page (empty state)
 - `client/src/pages/settings.tsx` - Settings/account page
 - `client/src/components/app-sidebar.tsx` - Sidebar navigation component
@@ -76,6 +80,23 @@ AI-powered personal intelligence workspace.
 - Users who complete the 3-step signup have their role + tracking text saved to the `user_profiles` database table at account creation (before email confirmation), and also stored in localStorage as `pendingOnboarding` as a fast-path fallback
 - After email verification and sign-in, App.tsx first checks localStorage, then falls back to checking the server via `GET /api/onboarding-context/:userId`. If onboarding data exists from either source, it auto-runs AI extraction and workspace creation, skipping the manual onboarding page
 - Only users who genuinely have no onboarding data (no localStorage AND no server-side profile) see the standard onboarding question page
+
+## UI Terminology (Plain English)
+- "Intelligence Map" → "My Workspace" (sidebar + page headers)
+- "Entities" → "Topics" (all user-facing text)
+- "Intel Items" → "Updates" (all user-facing text)
+- "Captures" (noun in Inbox) → "Submissions"
+- "Capture" (sidebar verb) — unchanged
+- "Daily Brief", "Inbox", "Settings" — unchanged
+- Database column names, API routes, and internal code variable names are NOT renamed
+
+## Routing (Authenticated)
+- `/` → My Workspace (default landing after login/onboarding)
+- `/capture` → Capture page
+- `/inbox` → Inbox page
+- `/brief` → Daily Brief page
+- `/settings` → Settings page
+- `/map` → Also renders My Workspace (legacy alias)
 
 ## Visual Style
 - White background, deep navy blue #1e3a5f accent

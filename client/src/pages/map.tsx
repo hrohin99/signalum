@@ -8,20 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   FolderOpen,
   Tag,
   ChevronRight,
@@ -38,6 +24,8 @@ import {
   Activity,
   Sparkles,
   Lightbulb,
+  Shield,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -61,15 +49,202 @@ const captureTypeIcons: Record<string, typeof PenLine> = {
   document: FileText,
 };
 
+function WelcomeModal({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="welcome-modal-overlay">
+      <div className="absolute inset-0 bg-black/40" onClick={onDismiss} />
+      <div
+        className="relative bg-white rounded-xl shadow-lg w-full max-w-[560px] mx-4"
+        style={{ padding: "40px" }}
+        data-testid="welcome-modal"
+      >
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-10 h-10 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-2">
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-lg font-semibold tracking-tight">Watchloom</span>
+        </div>
+
+        <h2 className="text-xl font-semibold text-[#1e3a5f] text-center mb-6" data-testid="text-welcome-headline">
+          Your workspace is ready. Here is what to do next.
+        </h2>
+
+        <div className="space-y-5 mb-8">
+          <div className="flex gap-4">
+            <div className="w-8 h-8 rounded-full bg-[#1e3a5f] flex items-center justify-center shrink-0 text-white text-sm font-semibold">
+              1
+            </div>
+            <div>
+              <p className="font-semibold text-[#1e3a5f] mb-1">Add what you want to track</p>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                You can see your categories on the left. Click any category with 0 topics and add the specific companies, topics, or names you want Watchloom to follow.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <div className="w-8 h-8 rounded-full bg-[#1e3a5f] flex items-center justify-center shrink-0 text-white text-sm font-semibold">
+              2
+            </div>
+            <div>
+              <p className="font-semibold text-[#1e3a5f] mb-1">Drop in your first piece of intelligence</p>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Click Capture in the sidebar and paste an article, type a note, or drop in a URL about anything relevant to your work. Our AI will file it in the right place automatically.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <div className="w-8 h-8 rounded-full bg-[#1e3a5f] flex items-center justify-center shrink-0 text-white text-sm font-semibold">
+              3
+            </div>
+            <div>
+              <p className="font-semibold text-[#1e3a5f] mb-1">Check back tomorrow morning</p>
+              <p className="text-sm text-slate-500 leading-relaxed">
+                Watchloom's AI agents are now working in the background. Your first briefing will be waiting for you tomorrow under Daily Brief.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <Button
+          className="w-full bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-11"
+          onClick={onDismiss}
+          data-testid="button-dismiss-welcome"
+        >
+          Got it, take me to my workspace
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyCategoryNudge({
+  categoryName,
+  onAdd,
+  isPending,
+}: {
+  categoryName: string;
+  onAdd: (name: string) => void;
+  isPending: boolean;
+}) {
+  const [inputValue, setInputValue] = useState("");
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  const handleAdd = () => {
+    const name = inputValue.trim();
+    if (!name) return;
+    onAdd(name);
+    setJustAdded(name);
+    setInputValue("");
+    setTimeout(() => setJustAdded(null), 3000);
+  };
+
+  return (
+    <div
+      className="rounded-lg bg-gray-100 border border-gray-200"
+      style={{ padding: "24px" }}
+      data-testid="empty-category-nudge"
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <Tag className="w-5 h-5 text-[#1e3a5f]" />
+        <h3 className="font-semibold text-[#1e3a5f]" data-testid="text-nudge-headline">Nothing here yet</h3>
+      </div>
+      <p className="text-sm text-slate-500 mb-4">
+        Name a few specific ones and Watchloom will start tracking them for you.
+      </p>
+      <div className="flex gap-2">
+        <Input
+          placeholder="e.g. Google, a regulation name, a specific topic..."
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleAdd();
+          }}
+          className="flex-1"
+          data-testid="input-nudge-topic"
+        />
+        <Button
+          size="sm"
+          className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-4"
+          disabled={!inputValue.trim() || isPending}
+          onClick={handleAdd}
+          data-testid="button-nudge-add"
+        >
+          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          Add
+        </Button>
+      </div>
+      {justAdded && (
+        <div className="flex items-center gap-1.5 mt-3 text-sm text-emerald-600" data-testid="text-nudge-confirmation">
+          <Check className="w-4 h-4" />
+          Added. Watchloom is now tracking this.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InlineAddTopic({
+  onAdd,
+  isPending,
+}: {
+  onAdd: (name: string) => void;
+  isPending: boolean;
+}) {
+  const [inputValue, setInputValue] = useState("");
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  const handleAdd = () => {
+    const name = inputValue.trim();
+    if (!name) return;
+    onAdd(name);
+    setJustAdded(name);
+    setInputValue("");
+    setTimeout(() => setJustAdded(null), 3000);
+  };
+
+  return (
+    <div className="mt-3" data-testid="inline-add-topic">
+      <div className="flex gap-2">
+        <Input
+          placeholder="Add another topic..."
+          value={inputValue}
+          onChange={(e) => setInputValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleAdd();
+          }}
+          className="flex-1"
+          data-testid="input-inline-add-topic"
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-[#1e3a5f] border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/5 px-4"
+          disabled={!inputValue.trim() || isPending}
+          onClick={handleAdd}
+          data-testid="button-inline-add-topic"
+        >
+          {isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+          Add
+        </Button>
+      </div>
+      {justAdded && (
+        <div className="flex items-center gap-1.5 mt-2 text-sm text-emerald-600" data-testid="text-inline-add-confirmation">
+          <Check className="w-4 h-4" />
+          Added. Watchloom is now tracking this.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MapPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
-  const [addEntityOpen, setAddEntityOpen] = useState(false);
-  const [newEntityName, setNewEntityName] = useState("");
-  const [newEntityType, setNewEntityType] = useState("other");
-  const [addToCategory, setAddToCategory] = useState("");
+  const [showWelcome, setShowWelcome] = useState(false);
 
   const { data: wsData, isLoading: wsLoading } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
@@ -80,6 +255,28 @@ export default function MapPage() {
     queryKey: ["/api/captures"],
     enabled: !!user,
   });
+
+  const { data: welcomeStatus } = useQuery<{ dismissed: boolean }>({
+    queryKey: ["/api/welcome-status"],
+    enabled: !!user,
+  });
+
+  const dismissWelcomeMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/dismiss-welcome");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/welcome-status"] });
+      setShowWelcome(false);
+    },
+  });
+
+  useEffect(() => {
+    if (welcomeStatus && !welcomeStatus.dismissed) {
+      setShowWelcome(true);
+    }
+  }, [welcomeStatus]);
 
   const categories = wsData?.workspace?.categories ?? [];
   const loading = wsLoading || capLoading;
@@ -114,15 +311,20 @@ export default function MapPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
-      setAddEntityOpen(false);
-      setNewEntityName("");
-      setNewEntityType("other");
-      toast({ title: "Entity added", description: "New entity has been added to the category." });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const handleNudgeAdd = (name: string) => {
+    if (!selectedCategory) return;
+    addEntityMutation.mutate({
+      categoryName: selectedCategory,
+      entityName: name,
+      entityType: "other",
+    });
+  };
 
   const getCaptureCountForCategory = (categoryName: string) =>
     captures.filter((c) => c.matchedCategory === categoryName).length;
@@ -130,10 +332,8 @@ export default function MapPage() {
   const getCaptureCountForEntity = (entityName: string) =>
     captures.filter((c) => c.matchedEntity === entityName).length;
 
-  const getLatestCaptureDate = (entityName: string) => {
-    const matching = captures.filter((c) => c.matchedEntity === entityName);
-    if (matching.length === 0) return null;
-    return new Date(matching[0].createdAt);
+  const handleDismissWelcome = () => {
+    dismissWelcomeMutation.mutate();
   };
 
   if (loading) {
@@ -162,8 +362,8 @@ export default function MapPage() {
     return (
       <div className="p-8 max-w-4xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Intelligence Map</h1>
-          <p className="text-muted-foreground mt-1">Visualize connections between your tracked entities.</p>
+          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
+          <p className="text-muted-foreground mt-1">Your tracked categories and topics.</p>
         </div>
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
@@ -171,7 +371,7 @@ export default function MapPage() {
           </div>
           <h3 className="font-medium text-foreground mb-1">No workspace data yet</h3>
           <p className="text-sm text-muted-foreground max-w-sm">
-            Complete the onboarding to set up your categories and entities.
+            Complete the onboarding to set up your categories and topics.
           </p>
         </div>
       </div>
@@ -180,10 +380,12 @@ export default function MapPage() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto">
+      {showWelcome && <WelcomeModal onDismiss={handleDismissWelcome} />}
+
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Intelligence Map</h1>
+        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
         <p className="text-muted-foreground mt-1">
-          {categories.length} categories, {categories.reduce((a, c) => a + c.entities.length, 0)} entities, {captures.length} captured items
+          {categories.length} categories, {categories.reduce((a, c) => a + c.entities.length, 0)} topics, {captures.length} updates
         </p>
       </div>
 
@@ -218,110 +420,35 @@ export default function MapPage() {
                       {cat.name}
                     </p>
                     <p className={`text-xs mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
-                      {cat.entities.length} entities{count > 0 ? ` · ${count} items` : ""}
+                      {cat.entities.length} topics{count > 0 ? ` · ${count} updates` : ""}
                     </p>
                   </div>
                   <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isActive ? "text-white/70" : "text-muted-foreground group-hover:translate-x-0.5"}`} />
                 </div>
-                <div className="flex flex-wrap gap-1.5 pl-12">
-                  {cat.entities.slice(0, 4).map((e) => (
-                    <span
-                      key={e.name}
-                      className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                        isActive
-                          ? "bg-white/15 text-white/80"
-                          : "bg-muted text-muted-foreground"
-                      }`}
-                    >
-                      {e.name}
-                    </span>
-                  ))}
-                  {cat.entities.length > 4 && (
-                    <span className={`text-[10px] px-1.5 py-0.5 ${isActive ? "text-white/60" : "text-muted-foreground"}`}>
-                      +{cat.entities.length - 4} more
-                    </span>
-                  )}
-                </div>
+                {cat.entities.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pl-12">
+                    {cat.entities.slice(0, 4).map((e) => (
+                      <span
+                        key={e.name}
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          isActive
+                            ? "bg-white/15 text-white/80"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {e.name}
+                      </span>
+                    ))}
+                    {cat.entities.length > 4 && (
+                      <span className={`text-[10px] px-1.5 py-0.5 ${isActive ? "text-white/60" : "text-muted-foreground"}`}>
+                        +{cat.entities.length - 4} more
+                      </span>
+                    )}
+                  </div>
+                )}
               </button>
             );
           })}
-
-          <Dialog open={addEntityOpen} onOpenChange={setAddEntityOpen}>
-            <DialogTrigger asChild>
-              <Button
-                variant="outline"
-                className="w-full mt-3 border-dashed text-muted-foreground hover:text-[#1e3a5f] hover:border-[#1e3a5f]/30"
-                onClick={() => {
-                  setAddToCategory(selectedCategory || categories[0]?.name || "");
-                }}
-                data-testid="button-add-entity"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Entity
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add a new entity</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-2">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Category</label>
-                  <Select value={addToCategory} onValueChange={setAddToCategory}>
-                    <SelectTrigger data-testid="select-add-category">
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((c) => (
-                        <SelectItem key={c.name} value={c.name}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Entity name</label>
-                  <Input
-                    placeholder="e.g. OpenAI, GDPR, John Smith"
-                    value={newEntityName}
-                    onChange={(e) => setNewEntityName(e.target.value)}
-                    data-testid="input-add-entity-name"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium text-foreground">Type</label>
-                  <Select value={newEntityType} onValueChange={setNewEntityType}>
-                    <SelectTrigger data-testid="select-add-entity-type">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(entityTypeLabels).map(([val, label]) => (
-                        <SelectItem key={val} value={val}>{label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  className="w-full bg-[#1e3a5f]"
-                  disabled={!newEntityName.trim() || !addToCategory || addEntityMutation.isPending}
-                  onClick={() => {
-                    addEntityMutation.mutate({
-                      categoryName: addToCategory,
-                      entityName: newEntityName.trim(),
-                      entityType: newEntityType,
-                    });
-                  }}
-                  data-testid="button-confirm-add-entity"
-                >
-                  {addEntityMutation.isPending ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4 mr-2" />
-                  )}
-                  Add Entity
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         </div>
 
         <div className="md:col-span-2">
@@ -342,40 +469,55 @@ export default function MapPage() {
                 <p className="text-sm text-muted-foreground mt-0.5">{activeCategory.description}</p>
               </div>
 
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">
-                Entities ({activeCategory.entities.length})
-              </p>
+              {activeCategory.entities.length === 0 ? (
+                <EmptyCategoryNudge
+                  categoryName={activeCategory.name}
+                  onAdd={handleNudgeAdd}
+                  isPending={addEntityMutation.isPending}
+                />
+              ) : (
+                <>
+                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">
+                    Topics ({activeCategory.entities.length})
+                  </p>
 
-              <div className="space-y-2">
-                {activeCategory.entities.map((entity) => {
-                  const count = getCaptureCountForEntity(entity.name);
-                  return (
-                    <button
-                      key={entity.name}
-                      onClick={() => setSelectedEntity(entity.name)}
-                      className="w-full text-left rounded-lg bg-card border border-border/50 p-4 flex items-center gap-3 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm transition-all group"
-                      data-testid={`button-entity-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
-                    >
-                      <div className="w-9 h-9 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
-                        <Tag className="w-4 h-4 text-[#1e3a5f]" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-foreground">{entity.name}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {entityTypeLabels[entity.type] || entity.type}
-                          {count > 0 ? ` · ${count} captured item${count !== 1 ? "s" : ""}` : ""}
-                        </p>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                    </button>
-                  );
-                })}
-              </div>
+                  <div className="space-y-2">
+                    {activeCategory.entities.map((entity) => {
+                      const count = getCaptureCountForEntity(entity.name);
+                      return (
+                        <button
+                          key={entity.name}
+                          onClick={() => setSelectedEntity(entity.name)}
+                          className="w-full text-left rounded-lg bg-card border border-border/50 p-4 flex items-center gap-3 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm transition-all group"
+                          data-testid={`button-entity-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
+                        >
+                          <div className="w-9 h-9 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
+                            <Tag className="w-4 h-4 text-[#1e3a5f]" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm text-foreground">{entity.name}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {entityTypeLabels[entity.type] || entity.type}
+                              {count > 0 ? ` · ${count} update${count !== 1 ? "s" : ""}` : ""}
+                            </p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <InlineAddTopic
+                    onAdd={handleNudgeAdd}
+                    isPending={addEntityMutation.isPending}
+                  />
+                </>
+              )}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Network className="w-8 h-8 text-muted-foreground/40 mb-3" />
-              <p className="text-muted-foreground">Select a category to view its entities.</p>
+              <p className="text-muted-foreground">Select a category to view its topics.</p>
             </div>
           )}
         </div>
@@ -411,7 +553,7 @@ function EntityDetail({
           variant="ghost"
           size="icon"
           onClick={onBack}
-          data-testid="button-back-to-entities"
+          data-testid="button-back-to-topics"
         >
           <ArrowLeft className="w-4 h-4" />
         </Button>
@@ -432,7 +574,7 @@ function EntityDetail({
         <div className="flex items-center gap-1.5 text-sm">
           <BarChart3 className="w-3.5 h-3.5 text-[#1e3a5f]" />
           <span className="font-medium text-foreground">{captures.length}</span>
-          <span className="text-muted-foreground">item{captures.length !== 1 ? "s" : ""}</span>
+          <span className="text-muted-foreground">update{captures.length !== 1 ? "s" : ""}</span>
         </div>
         <div className="w-px h-4 bg-border" />
         <div className="flex items-center gap-1.5 text-sm">
@@ -465,14 +607,14 @@ function EntityDetail({
             Unable to generate summary at this time. Try again later.
           </p>
         ) : (
-          <p className="text-sm text-foreground leading-relaxed">{summary || `No intelligence data available for ${entity.name} yet.`}</p>
+          <p className="text-sm text-foreground leading-relaxed">{summary || `No updates available for ${entity.name} yet.`}</p>
         )}
       </div>
 
       {captures.length > 0 ? (
         <div className="space-y-3">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">
-            Captured intel ({captures.length})
+            Updates ({captures.length})
           </p>
           <ScrollArea className="max-h-[400px]">
             <div className="space-y-3 pr-3">
@@ -516,7 +658,7 @@ function EntityDetail({
             <div className="flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200/60 px-4 py-3" data-testid="text-capture-more-prompt">
               <Lightbulb className="w-5 h-5 text-amber-500 shrink-0" />
               <p className="text-sm text-amber-800">
-                Capture more intel about <span className="font-medium">{entity.name}</span> to build a richer picture.
+                Capture more updates about <span className="font-medium">{entity.name}</span> to build a richer picture.
               </p>
             </div>
           )}
@@ -525,7 +667,7 @@ function EntityDetail({
         <div className="border border-dashed border-border rounded-lg p-10 text-center">
           <FileText className="w-7 h-7 text-muted-foreground/40 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground mb-1">
-            No intel captured for this entity yet.
+            No updates captured for this topic yet.
           </p>
           <p className="text-xs text-muted-foreground">
             Use the Capture page to add articles, notes, or documents about {entity.name}.

@@ -153,7 +153,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
             <div className="text-center space-y-2">
               <h2 className="text-xl font-semibold text-foreground">Analyzing your input...</h2>
               <p className="text-muted-foreground">
-                AI is extracting categories and entities from your description.
+                AI is extracting categories and topics from your description.
               </p>
             </div>
           </div>

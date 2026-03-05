@@ -223,6 +223,7 @@ CRITICAL EXTRACTION RULES:
 3. Scan the entire input and make a complete list of every proper noun and specific name before generating your response. Every single one must appear in the output.
 4. Do NOT generalize or summarize named entities into broader terms. If the user says "eIDAS 2.0 and UK DIATF", both "eIDAS 2.0" and "UK DIATF" must appear as individual entities — do not replace them with a generic term like "identity regulations".
 5. It is better to include too many entities than to miss even one that the user explicitly named.
+6. IMPORTANT — VAGUE INPUT HANDLING: If the user gives a vague or general description without naming any specific entities (e.g. "I want to track competitors" or "keep up with industry trends"), you MUST still create appropriate categories based on what they described, but leave the entities array EMPTY (an empty array []) for those categories. Do NOT invent, guess, or fabricate placeholder entity names. Only include entities that the user explicitly named. A category with zero entities is perfectly valid.
 
 Return a JSON object with this exact structure:
 {
@@ -241,7 +242,7 @@ Return a JSON object with this exact structure:
   "summary": "A one-sentence summary of what the user wants to track"
 }
 
-Create 2-5 categories. Each category can have as many entities as needed to capture every name the user mentioned. Only return valid JSON, no other text.
+Create 2-5 categories. Each category can have as many entities as needed to capture every name the user mentioned, or zero entities if no specific names were provided for that category. Only return valid JSON, no other text.
 
 User's description: ${description}`
           }
@@ -527,6 +528,26 @@ Return only the summary paragraph, no JSON, no formatting.`
     } catch (error: any) {
       console.error("Create workspace error:", error);
       return res.status(500).json({ message: error.message || "Failed to create workspace" });
+    }
+  });
+
+  app.get("/api/welcome-status", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profile = await storage.getUserProfile(userId);
+      return res.json({ dismissed: profile ? profile.welcomeDismissed === 1 : false });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Failed to check welcome status" });
+    }
+  });
+
+  app.post("/api/dismiss-welcome", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      await storage.dismissWelcome(userId);
+      return res.json({ success: true });
+    } catch (error: any) {
+      return res.status(500).json({ message: error.message || "Failed to dismiss welcome" });
     }
   });
 

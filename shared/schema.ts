@@ -7,6 +7,7 @@ export const userProfiles = pgTable("user_profiles", {
   userId: varchar("user_id", { length: 255 }).notNull().unique(),
   role: text("role"),
   onboardingContext: text("onboarding_context"),
+  welcomeDismissed: integer("welcome_dismissed").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

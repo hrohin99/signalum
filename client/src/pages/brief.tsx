@@ -125,7 +125,7 @@ export default function BriefPage() {
     },
     onError: (error: Error) => {
       const msg = error.message.includes("400:")
-        ? "No captured intel yet. Capture some content first."
+        ? "No updates yet. Capture some content first."
         : error.message.includes("404:")
           ? "No workspace found. Complete onboarding first."
           : "Something went wrong generating your brief. Please try again.";
@@ -171,7 +171,7 @@ export default function BriefPage() {
           </div>
           <h3 className="font-medium text-foreground mb-1" data-testid="text-no-briefs">No briefs yet</h3>
           <p className="text-sm text-muted-foreground max-w-sm">
-            Click "Generate Now" to create your first intelligence brief based on your tracked categories and captured data.
+            Click "Generate Now" to create your first brief based on your tracked categories and updates.
           </p>
         </div>
       )}
@@ -195,11 +195,11 @@ export default function BriefPage() {
                   </span>
                   <span className="flex items-center gap-1" data-testid={`text-brief-captures-${brief.id}`}>
                     <Database className="w-3.5 h-3.5" />
-                    {brief.captureCount} captures
+                    {brief.captureCount} submissions
                   </span>
                   <span className="flex items-center gap-1" data-testid={`text-brief-entities-${brief.id}`}>
                     <Users className="w-3.5 h-3.5" />
-                    {brief.entityCount} entities
+                    {brief.entityCount} topics
                   </span>
                 </div>
               </CardHeader>

@@ -45,14 +45,14 @@ export default function InboxPage() {
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Inbox</h1>
         <p className="text-muted-foreground mt-1">
-          All confirmed captures, most recent first.
+          All confirmed submissions, most recent first.
         </p>
       </div>
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20" data-testid="inbox-loading">
           <Loader2 className="w-8 h-8 animate-spin text-[#1e3a5f]" />
-          <p className="text-sm text-muted-foreground mt-3">Loading captures…</p>
+          <p className="text-sm text-muted-foreground mt-3">Loading submissions…</p>
         </div>
       ) : confirmed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center" data-testid="inbox-empty">
@@ -61,7 +61,7 @@ export default function InboxPage() {
           </div>
           <h3 className="font-medium text-foreground mb-1">No items in your inbox</h3>
           <p className="text-sm text-muted-foreground max-w-sm">
-            Captured items that need your attention will appear here. Start by capturing something new.
+            Submissions that need your attention will appear here. Start by capturing something new.
           </p>
         </div>
       ) : (

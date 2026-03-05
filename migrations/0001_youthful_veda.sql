@@ -1,0 +1,1 @@
+ALTER TABLE "user_profiles" ADD COLUMN "welcome_dismissed" integer DEFAULT 0 NOT NULL;

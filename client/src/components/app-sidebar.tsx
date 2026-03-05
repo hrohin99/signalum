@@ -24,9 +24,9 @@ import {
 } from "lucide-react";
 
 const navItems = [
-  { title: "Capture", url: "/", icon: PenLine },
+  { title: "My Workspace", url: "/", icon: Network },
+  { title: "Capture", url: "/capture", icon: PenLine },
   { title: "Inbox", url: "/inbox", icon: Inbox },
-  { title: "Intelligence Map", url: "/map", icon: Network },
   { title: "Daily Brief", url: "/brief", icon: Newspaper },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

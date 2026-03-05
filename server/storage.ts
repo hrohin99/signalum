@@ -12,6 +12,7 @@ export const db = drizzle(pool);
 export interface IStorage {
   getUserProfile(userId: string): Promise<UserProfile | undefined>;
   createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
+  dismissWelcome(userId: string): Promise<void>;
   getWorkspaceByUserId(userId: string): Promise<Workspace | undefined>;
   createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
   updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined>;
@@ -36,6 +37,13 @@ export class DatabaseStorage implements IStorage {
       .values(profile)
       .returning();
     return created;
+  }
+
+  async dismissWelcome(userId: string): Promise<void> {
+    await db
+      .update(userProfiles)
+      .set({ welcomeDismissed: 1 })
+      .where(eq(userProfiles.userId, userId));
   }
 
   async getWorkspaceByUserId(userId: string): Promise<Workspace | undefined> {
