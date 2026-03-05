@@ -1,0 +1,15 @@
+"Fix three issues in the authenticated app.
+FIX 1 — TOPIC TYPES SHOWING AS OTHER AFTER SPLIT
+After splitting the combined topic, the three new topics iProov, IDEMIA, and incode are showing type as Other instead of Competitor. Find these topics in the entities table and update their topic_type to competitor. Also check why the split function is not preserving or assigning the correct topic type when creating new topics from a split — fix the split logic so it always assigns the same topic_type as the original combined topic.
+FIX 2 — BATTLECARD WIDGET NOT RENDERING
+On the full screen topic view for competitor type topics, the battlecard widget is still not appearing. The widget_config for competitor type should include battlecard but it is not rendering.
+Debug this step by step:
+1. Check the topic_type_configs table — verify the competitor row exists and its widget_config jsonb contains battlecard
+2. Check the frontend widget renderer — find where widget_config is read and where widget components are mapped to widget names
+3. Add console logging temporarily to output which widgets are being attempted to render for the current topic
+4. Fix whatever is preventing the battlecard component from rendering
+5. The battlecard should appear in the left column between the AI Summary section and the Updates Feed
+6. When it first renders with no saved data, show four empty editable sections with placeholder text and the Auto-fill with AI button at the top
+FIX 3 — DELETE MISROUTED TOPIC
+There is a topic called "I want to create battle card for my competitor and SWOT analysis" in the Competitor Landscape category. This is a misrouted user intent, not a real topic. Delete this topic and its associated updates from the database. Also improve the capture routing prompt so that when a user submits text that is clearly a request or instruction rather than intelligence about a topic — phrases like "I want to", "can you", "please create", "how do I" — the AI recognises it as a user intent and responds with a helpful message instead of creating a topic or filing it as an update.
+Do not change anything else."
