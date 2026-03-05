@@ -1,0 +1,32 @@
+Both issues are clear. Let me address each one.
+
+Issue 1 — AI Picking Wrong Category Instead of Creating New One
+You are completely right. When someone says "I want to track Project Alfie with deadlines" that has nothing to do with Competitor Landscape. The AI should be smart enough to recognise it does not fit and create a new category called something like "Internal Projects" rather than forcing a bad match.
+The current behaviour is worse than useless — it actively misfiled your note and told you it knew it was wrong while doing it. That destroys trust in the product instantly.
+
+Issue 2 — Loading Screen On Every Navigation
+Every time you switch screens the app is doing a full reload rather than a client-side navigation. This makes the product feel slow and unpolished. It should be instant.
+
+One Combined Prompt
+Paste this into Replit Agent:
+
+"Fix two issues in the authenticated app.
+FIX 1 — AI ROUTING SHOULD CREATE NEW CATEGORIES WHEN NOTHING FITS
+Currently when the AI cannot find a good match for a captured note, it is picking the closest existing category even when the match is clearly wrong. This is bad behaviour — it misfiled a note about an internal project into Competitor Landscape.
+Update the AI routing logic as follows:
+1. Update the Claude prompt used for routing captures to include this instruction: If the captured content does not clearly belong to any existing category with a confidence of 70 percent or higher, do not force a match. Instead return a new_category_suggested object with a recommended category name and description based on the content.
+2. When the AI returns a new category suggestion instead of a match, show the user this in the AI Classification result:
+- Instead of showing an existing category, show: "No existing category fits this note"
+- Below that: "We suggest creating a new category: [suggested category name]" with the category name in a navy pill
+- Below that: the AI reasoning in one italic line
+- Two buttons: "Create category and confirm" and "Choose different category"
+3. When the user clicks "Create category and confirm":
+- Create the new category in the database
+- Create a new topic under it based on any specific entity mentioned in the note
+- File the capture under the new topic
+- Show a green success message: "New category created and note filed."
+4. When the user clicks "Choose different category":
+- Show a simple dropdown of all existing categories
+- Let the user manually select where to file it
+- Confirm and file
+The confidence threshold for forcing an existing match should be 70 percent. Below that, always suggest a new category.
