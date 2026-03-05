@@ -73,6 +73,13 @@ export async function registerRoutes(
             role: "user",
             content: `You are an intelligence analyst assistant. A user wants to set up a personal intelligence tracking workspace. Based on their description below, extract structured categories and entities they want to track.
 
+CRITICAL EXTRACTION RULES:
+1. You MUST extract EVERY specific name mentioned by the user. This includes every company name, product name, person name, regulation name, standard name, framework name, organization name, technology name, and any other proper noun or named entity.
+2. If the user lists multiple items (e.g. "iProov, Thales and Idemia"), EACH item MUST appear as a separate entity. Never skip, merge, or omit any explicitly named item.
+3. Scan the entire input and make a complete list of every proper noun and specific name before generating your response. Every single one must appear in the output.
+4. Do NOT generalize or summarize named entities into broader terms. If the user says "eIDAS 2.0 and UK DIATF", both "eIDAS 2.0" and "UK DIATF" must appear as individual entities — do not replace them with a generic term like "identity regulations".
+5. It is better to include too many entities than to miss even one that the user explicitly named.
+
 Return a JSON object with this exact structure:
 {
   "categories": [
@@ -90,7 +97,7 @@ Return a JSON object with this exact structure:
   "summary": "A one-sentence summary of what the user wants to track"
 }
 
-Be thorough but concise. Create 2-5 categories. Each category should have 1-5 relevant entities. Only return valid JSON, no other text.
+Create 2-5 categories. Each category can have as many entities as needed to capture every name the user mentioned. Only return valid JSON, no other text.
 
 User's description: ${description}`
           }
