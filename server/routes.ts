@@ -353,13 +353,29 @@ Return a JSON object with this exact structure:
       "entities": [
         {
           "name": "Entity Name",
-          "type": "person|company|topic|technology|regulation|event|location|other"
+          "type": "person|company|topic|technology|regulation|event|location|other",
+          "topic_type": "competitor|project|regulation|person|trend|account|technology|event|deal|risk|general"
         }
       ]
     }
   ],
   "summary": "A one-sentence summary of what the user wants to track"
 }
+
+TOPIC TYPE RULES:
+- For each entity, infer the most appropriate topic_type from context:
+  - "competitor" — a rival company or product
+  - "project" — an initiative, program, or deliverable
+  - "regulation" — a law, regulation, standard, or policy
+  - "person" — an individual worth tracking
+  - "trend" — an emerging trend or market shift
+  - "account" — a client, prospect, or partner
+  - "technology" — a technology, platform, or tool
+  - "event" — a conference, deadline, or milestone
+  - "deal" — a commercial opportunity or transaction
+  - "risk" — a threat, vulnerability, or risk factor
+  - "general" — use only when no other type fits
+- Choose based on the entity's role in the user's description, not just the entity type field.
 
 Create 2-5 categories. Each category can have as many entities as needed to capture every name the user mentioned, or zero entities if no specific names were provided for that category. Only return valid JSON, no other text.
 
@@ -412,7 +428,12 @@ User's description: ${description}`
       }
 
       const entities = flattenEntities(workspace.categories as ExtractedCategory[]);
-      const entityList = entities.map(e => `- ${e.entityName} (${e.entityType}) in category "${e.categoryName}"`).join("\n");
+      const entityList = entities.map(e => {
+        const cat = (workspace.categories as ExtractedCategory[]).find(c => c.name === e.categoryName);
+        const ent = cat?.entities.find(en => en.name === e.entityName);
+        const topicType = ent?.topic_type || 'general';
+        return `- ${e.entityName} (${e.entityType}, topic_type: ${topicType}) in category "${e.categoryName}"`;
+      }).join("\n");
 
       const client = getAnthropicClient();
 
@@ -427,7 +448,7 @@ User's description: ${description}`
             role: "user",
             content: `You are an intelligence routing assistant. A user captured the following ${type} content. Match it to the most relevant entity from their workspace, but ONLY if the match is genuinely appropriate.
 
-Available entities:
+Available entities (with their current topic_type):
 ${entityList}
 
 Available categories:
@@ -438,14 +459,19 @@ ${content}
 
 IMPORTANT: Evaluate how well the content fits any existing entity and category. Assign a confidence score from 0 to 100.
 
+Additionally, evaluate whether the matched entity's current topic_type is still the best fit given this new content. The valid topic_type values are: competitor, project, regulation, person, trend, account, technology, event, deal, risk, general.
+
 If your confidence is 70 or above, return this JSON:
 {
   "matched": true,
   "confidence": <number>,
   "matchedEntity": "Entity Name",
   "matchedCategory": "Category Name",
-  "reason": "One sentence explaining why this content matches this entity."
+  "reason": "One sentence explaining why this content matches this entity.",
+  "suggested_type_change": "new_type_key or null"
 }
+
+Set "suggested_type_change" to a new topic_type key ONLY if the content strongly suggests the entity's current type is wrong. Set it to null if the current type is fine.
 
 If your confidence is below 70 — meaning no existing category or entity is a genuinely good fit — do NOT force a match. Instead, suggest a new category. Return this JSON:
 {
@@ -458,7 +484,8 @@ If your confidence is below 70 — meaning no existing category or entity is a g
   },
   "suggestedEntity": {
     "name": "Suggested Topic Name",
-    "type": "topic"
+    "type": "topic",
+    "topic_type": "inferred_type_key"
   }
 }
 
@@ -482,6 +509,9 @@ Always return valid JSON only, no other text.`
 
       const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
 
+      const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
+      const suggestedTypeChange = (typeof parsed.suggested_type_change === "string" && validTopicTypes.includes(parsed.suggested_type_change)) ? parsed.suggested_type_change : null;
+
       if (parsed.matched === true && confidence >= 70 && parsed.matchedEntity && parsed.matchedCategory) {
         return res.json({
           matched: true,
@@ -489,6 +519,7 @@ Always return valid JSON only, no other text.`
           matchedEntity: parsed.matchedEntity,
           matchedCategory: parsed.matchedCategory,
           reason: parsed.reason || "",
+          suggested_type_change: suggestedTypeChange,
         });
       }
 
@@ -722,7 +753,7 @@ Return only the summary paragraph, no JSON, no formatting.`
   app.post("/api/add-category", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const { categoryName, categoryDescription, entityName, entityType } = req.body;
+      const { categoryName, categoryDescription, entityName, entityType, topicType } = req.body;
 
       if (!categoryName || typeof categoryName !== "string" || categoryName.length > 200) {
         return res.status(400).json({ message: "Invalid or missing category name" });
@@ -742,10 +773,13 @@ Return only the summary paragraph, no JSON, no formatting.`
       const allowedEntityTypes = ["person", "company", "topic", "technology", "regulation", "event", "location", "other"];
       const safeEntityType = (typeof entityType === "string" && allowedEntityTypes.includes(entityType)) ? entityType : "topic";
 
+      const validTopicTypesForCategory = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
+      const safeTopicType = (typeof topicType === "string" && validTopicTypesForCategory.includes(topicType)) ? topicType : "general";
+
       const newCategory: ExtractedCategory = {
         name: categoryName,
         description: typeof categoryDescription === "string" ? categoryDescription : "",
-        entities: entityName ? [{ name: entityName, type: safeEntityType, topic_type: 'general', related_topic_ids: [], priority: 'medium' as const }] : [],
+        entities: entityName ? [{ name: entityName, type: safeEntityType, topic_type: safeTopicType, related_topic_ids: [], priority: 'medium' as const }] : [],
       };
 
       categories.push(newCategory);
@@ -753,6 +787,65 @@ Return only the summary paragraph, no JSON, no formatting.`
       return res.json({ success: true, workspace: updated, newCategory });
     } catch (error: any) {
       console.error("Add category error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.patch("/api/entity", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { categoryName, entityName, topic_type, priority } = req.body;
+
+      if (!categoryName || !entityName) {
+        return res.status(400).json({ message: "Missing categoryName or entityName" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const entity = category.entities.find(e => e.name === entityName);
+      if (!entity) {
+        return res.status(404).json({ message: "Entity not found" });
+      }
+
+      const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
+      if (topic_type !== undefined) {
+        if (typeof topic_type !== "string" || !validTopicTypes.includes(topic_type)) {
+          return res.status(400).json({ message: "Invalid topic_type" });
+        }
+        entity.topic_type = topic_type;
+      }
+
+      const validPriorities = ["high", "medium", "low", "watch"];
+      if (priority !== undefined) {
+        if (typeof priority !== "string" || !validPriorities.includes(priority)) {
+          return res.status(400).json({ message: "Invalid priority" });
+        }
+        entity.priority = priority as 'high' | 'medium' | 'low' | 'watch';
+      }
+
+      const updated = await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, workspace: updated });
+    } catch (error: any) {
+      console.error("Update entity error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/topic-types", requireAuth, async (_req: Request, res: Response) => {
+    try {
+      const configs = await storage.getTopicTypeConfigs("00000000-0000-0000-0000-000000000000");
+      return res.json({ topicTypes: configs });
+    } catch (error: any) {
+      console.error("Get topic types error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

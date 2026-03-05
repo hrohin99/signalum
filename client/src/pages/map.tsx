@@ -26,10 +26,33 @@ import {
   Shield,
   Check,
   Send,
+  Pencil,
+  ChevronDown as ChevronDownIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import type { ExtractedCategory, Capture } from "@shared/schema";
+
+const topicTypeMap: Record<string, { icon: string; displayName: string }> = {
+  competitor: { icon: "🎯", displayName: "Competitor" },
+  project: { icon: "📋", displayName: "Project" },
+  regulation: { icon: "⚖️", displayName: "Regulation or Policy" },
+  person: { icon: "👤", displayName: "Person to Watch" },
+  trend: { icon: "📈", displayName: "Market Trend" },
+  account: { icon: "🤝", displayName: "Account" },
+  technology: { icon: "⚙️", displayName: "Technology" },
+  event: { icon: "📅", displayName: "Event" },
+  deal: { icon: "💰", displayName: "Deal" },
+  risk: { icon: "⚠️", displayName: "Risk" },
+  general: { icon: "📌", displayName: "General" },
+};
+
+const priorityConfig: Record<string, { color: string; label: string; dotClass: string }> = {
+  high: { color: "bg-red-500", label: "High", dotClass: "bg-red-500" },
+  medium: { color: "bg-amber-500", label: "Medium", dotClass: "bg-amber-500" },
+  low: { color: "bg-gray-400", label: "Low", dotClass: "bg-gray-400" },
+  watch: { color: "bg-blue-500", label: "Watch", dotClass: "bg-blue-500" },
+};
 
 const entityTypeLabels: Record<string, string> = {
   person: "Person",
@@ -429,18 +452,21 @@ export default function MapPage() {
                 </div>
                 {cat.entities.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pl-12">
-                    {cat.entities.slice(0, 4).map((e) => (
-                      <span
-                        key={e.name}
-                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                          isActive
-                            ? "bg-white/15 text-white/80"
-                            : "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {e.name}
-                      </span>
-                    ))}
+                    {cat.entities.slice(0, 4).map((e) => {
+                      const typeInfo = topicTypeMap[e.topic_type || "general"] || topicTypeMap.general;
+                      return (
+                        <span
+                          key={e.name}
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            isActive
+                              ? "bg-white/15 text-white/80"
+                              : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {typeInfo.icon} {e.name}
+                        </span>
+                      );
+                    })}
                     {cat.entities.length > 4 && (
                       <span className={`text-[10px] px-1.5 py-0.5 ${isActive ? "text-white/60" : "text-muted-foreground"}`}>
                         +{cat.entities.length - 4} more
@@ -537,7 +563,7 @@ function EntityDetail({
   summaryError,
   onBack,
 }: {
-  entity: { name: string; type: string };
+  entity: { name: string; type: string; topic_type?: string; priority?: 'high' | 'medium' | 'low' | 'watch' };
   categoryName: string;
   captures: Capture[];
   summary?: string;
@@ -545,18 +571,64 @@ function EntityDetail({
   summaryError: boolean;
   onBack: () => void;
 }) {
+  const { user } = useAuth();
   const lastDate = captures.length > 0 ? new Date(captures[0].createdAt) : null;
   const status = captures.length > 0 ? "Active" : "New";
   const [inlineText, setInlineText] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+  const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const confirmTimerRef = useRef<number | null>(null);
+  const typeDropdownRef = useRef<HTMLDivElement>(null);
+  const priorityDropdownRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
+
+  const currentTopicType = entity.topic_type || "general";
+  const currentPriority = entity.priority || "medium";
+  const typeInfo = topicTypeMap[currentTopicType] || topicTypeMap.general;
+  const priInfo = priorityConfig[currentPriority] || priorityConfig.medium;
 
   useEffect(() => {
     return () => {
       if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (typeDropdownRef.current && !typeDropdownRef.current.contains(e.target as Node)) {
+        setShowTypeDropdown(false);
+      }
+      if (priorityDropdownRef.current && !priorityDropdownRef.current.contains(e.target as Node)) {
+        setShowPriorityDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const updateEntityMutation = useMutation({
+    mutationFn: async (data: { topic_type?: string; priority?: string }) => {
+      const res = await apiRequest("PATCH", "/api/entity", {
+        categoryName,
+        entityName: entity.name,
+        ...data,
+      });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      if (variables.topic_type) {
+        toast({ title: "Topic type updated." });
+      }
+      if (variables.priority) {
+        toast({ title: "Priority updated." });
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
 
   const inlineMutation = useMutation({
     mutationFn: async (content: string) => {
@@ -601,11 +673,72 @@ function EntityDetail({
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg font-semibold text-foreground" data-testid="text-entity-name">{entity.name}</h2>
-            <Badge variant="secondary" className="text-xs">
-              {entityTypeLabels[entity.type] || entity.type}
-            </Badge>
+
+            <div className="relative" ref={typeDropdownRef}>
+              <button
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] text-xs font-medium hover:bg-[#1e3a5f]/20 transition-colors"
+                onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+                data-testid="button-edit-topic-type"
+              >
+                <span>{typeInfo.icon}</span>
+                <span>{typeInfo.displayName}</span>
+                <Pencil className="w-3 h-3 ml-0.5 opacity-60" />
+              </button>
+              {showTypeDropdown && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[200px] max-h-[280px] overflow-y-auto" data-testid="dropdown-topic-type">
+                  {Object.entries(topicTypeMap).map(([key, val]) => (
+                    <button
+                      key={key}
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentTopicType ? "bg-muted font-medium" : ""}`}
+                      onClick={() => {
+                        if (key !== currentTopicType) {
+                          updateEntityMutation.mutate({ topic_type: key });
+                        }
+                        setShowTypeDropdown(false);
+                      }}
+                      data-testid={`option-type-${key}`}
+                    >
+                      <span>{val.icon}</span>
+                      <span>{val.displayName}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative" ref={priorityDropdownRef}>
+              <button
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border text-xs font-medium hover:bg-muted transition-colors"
+                onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
+                data-testid="button-edit-priority"
+              >
+                <span className={`w-2 h-2 rounded-full ${priInfo.dotClass}`} />
+                <span className="text-foreground">{priInfo.label}</span>
+                <ChevronDownIcon className="w-3 h-3 opacity-60" />
+              </button>
+              {showPriorityDropdown && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]" data-testid="dropdown-priority">
+                  {Object.entries(priorityConfig).map(([key, val]) => (
+                    <button
+                      key={key}
+                      className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentPriority ? "bg-muted font-medium" : ""}`}
+                      onClick={() => {
+                        if (key !== currentPriority) {
+                          updateEntityMutation.mutate({ priority: key });
+                        }
+                        setShowPriorityDropdown(false);
+                      }}
+                      data-testid={`option-priority-${key}`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${val.dotClass}`} />
+                      <span>{val.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">
             in {categoryName}

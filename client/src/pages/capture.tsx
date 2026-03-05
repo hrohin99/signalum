@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery } from "@tanstack/react-query";
@@ -19,6 +20,7 @@ interface ClassificationMatch {
   matchedEntity: string;
   matchedCategory: string;
   reason: string;
+  suggested_type_change?: string | null;
 }
 
 interface ClassificationNewCategory {
@@ -32,10 +34,25 @@ interface ClassificationNewCategory {
   suggestedEntity: {
     name: string;
     type: string;
+    topic_type?: string;
   };
 }
 
 type ClassificationResult = ClassificationMatch | ClassificationNewCategory;
+
+const topicTypeDisplayNames: Record<string, string> = {
+  competitor: "Competitor",
+  project: "Project",
+  regulation: "Regulation or Policy",
+  person: "Person to Watch",
+  trend: "Market Trend",
+  account: "Account",
+  technology: "Technology",
+  event: "Event",
+  deal: "Deal",
+  risk: "Risk",
+  general: "General",
+};
 
 const captureTypes = [
   { key: "text" as const, icon: PenLine, title: "Text Note", description: "Type or paste text to capture" },
@@ -98,6 +115,21 @@ export default function CapturePage() {
     }
   };
 
+  const handleTypeChangeAccept = async (entityName: string, categoryName: string, newType: string) => {
+    try {
+      await apiRequest("PATCH", "/api/entity", {
+        categoryName,
+        entityName,
+        topic_type: newType,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace"] });
+      toast({ title: "Topic type updated." });
+    } catch {
+      toast({ title: "Failed to update type", variant: "destructive" });
+    }
+  };
+
   const classifyContent = async (content: string, type: string) => {
     setIsClassifying(true);
     setPendingContent(content);
@@ -119,6 +151,22 @@ export default function CapturePage() {
         });
       } else {
         setClassification(data);
+        if (data.matched && data.suggested_type_change) {
+          const suggestedType = data.suggested_type_change;
+          const displayName = topicTypeDisplayNames[suggestedType] || suggestedType;
+          toast({
+            title: `This looks like a ${displayName}. Want to update the topic type?`,
+            action: (
+              <ToastAction
+                altText="Update topic type"
+                onClick={() => handleTypeChangeAccept(data.matchedEntity, data.matchedCategory, suggestedType)}
+                data-testid="button-accept-type-change"
+              >
+                Yes
+              </ToastAction>
+            ),
+          });
+        }
       }
     } catch (err: any) {
       toast({
@@ -176,6 +224,7 @@ export default function CapturePage() {
         categoryDescription: classification.suggestedCategory.description,
         entityName: classification.suggestedEntity.name,
         entityType: classification.suggestedEntity.type,
+        topicType: classification.suggestedEntity.topic_type || 'general',
       });
 
       queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
