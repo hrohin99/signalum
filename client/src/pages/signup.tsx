@@ -217,8 +217,7 @@ export default function SignupPage() {
               What do you most need to stay on top of?
             </h2>
             <p className="text-sm mb-6" style={{ color: "#64748b" }}>
-              Be specific — mention competitors, regulations, topics, or
-              anything else you track at work.
+              Just write naturally. Our AI will figure out the rest.
             </p>
             <Textarea
               value={trackingText}
