@@ -22,6 +22,15 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(self), geolocation=()");
+  next();
+});
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -64,7 +73,6 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
 
     console.error("Internal Server Error:", err);
 
@@ -72,7 +80,11 @@ app.use((req, res, next) => {
       return next(err);
     }
 
-    return res.status(status).json({ message });
+    const safeMessage = status < 500
+      ? (err.message || "Bad request")
+      : "Internal Server Error";
+
+    return res.status(status).json({ message: safeMessage });
   });
 
   // importantly only setup vite in development and after

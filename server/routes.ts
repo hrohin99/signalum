@@ -62,9 +62,48 @@ if (!JWT_SECRET) {
   throw new Error("SESSION_SECRET environment variable is required for email verification tokens");
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function isAllowedRedirectUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const appUrl = getAppUrl();
+    const appParsed = new URL(appUrl);
+    return (
+      parsed.protocol === "https:" &&
+      (parsed.hostname === appParsed.hostname ||
+        parsed.hostname.endsWith(".supabase.co") ||
+        parsed.hostname.endsWith(".replit.dev") ||
+        parsed.hostname.endsWith(".replit.app") ||
+        parsed.hostname.endsWith(".repl.co"))
+    );
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeErrorMessage(error: any): string {
+  if (error?.message && typeof error.message === "string") {
+    const msg = error.message;
+    if (msg.includes("API key") || msg.includes("secret") || msg.includes("token") || msg.includes("password") || msg.includes("credential")) {
+      return "An internal error occurred";
+    }
+    return msg.slice(0, 200);
+  }
+  return "An internal error occurred";
+}
+
 function verificationResultPage(message: string, success: boolean): string {
   const color = success ? "#16a34a" : "#dc2626";
   const icon = success ? "&#10003;" : "&#10007;";
+  const safeMessage = escapeHtml(message);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -85,7 +124,7 @@ function verificationResultPage(message: string, success: boolean): string {
           <tr>
             <td style="padding:48px 40px;text-align:center;">
               <div style="width:56px;height:56px;border-radius:50%;background-color:${color};color:#fff;font-size:28px;line-height:56px;margin:0 auto 24px;">${icon}</div>
-              <p style="margin:0 0 32px;font-size:17px;color:#333;line-height:1.5;">${message}</p>
+              <p style="margin:0 0 32px;font-size:17px;color:#333;line-height:1.5;">${safeMessage}</p>
               <a href="/" style="display:inline-block;padding:12px 32px;background-color:#1e3a5f;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600;">Go to Watchloom</a>
             </td>
           </tr>
@@ -137,14 +176,9 @@ export async function registerRoutes(
       }
 
       let safeRedirectTo: string | null = null;
-      if (emailRedirectTo && typeof emailRedirectTo === "string") {
+      if (emailRedirectTo && typeof emailRedirectTo === "string" && isAllowedRedirectUrl(emailRedirectTo)) {
         try {
-          const parsed = new URL(emailRedirectTo);
-          const appUrl = getAppUrl();
-          const appParsed = new URL(appUrl);
-          if (parsed.hostname === appParsed.hostname || parsed.hostname.endsWith(".replit.dev") || parsed.hostname.endsWith(".replit.app") || parsed.hostname.endsWith(".repl.co")) {
-            safeRedirectTo = parsed.origin;
-          }
+          safeRedirectTo = new URL(emailRedirectTo).origin;
         } catch {}
       }
 
@@ -170,7 +204,7 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error("Signup error:", error);
-      return res.status(500).json({ message: error.message || "Signup failed" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -194,14 +228,9 @@ export async function registerRoutes(
       }
 
       let safeRedirectTo: string | null = null;
-      if (emailRedirectTo && typeof emailRedirectTo === "string") {
+      if (emailRedirectTo && typeof emailRedirectTo === "string" && isAllowedRedirectUrl(emailRedirectTo)) {
         try {
-          const parsed = new URL(emailRedirectTo);
-          const appUrl = getAppUrl();
-          const appParsed = new URL(appUrl);
-          if (parsed.hostname === appParsed.hostname || parsed.hostname.endsWith(".replit.dev") || parsed.hostname.endsWith(".replit.app") || parsed.hostname.endsWith(".repl.co")) {
-            safeRedirectTo = parsed.origin;
-          }
+          safeRedirectTo = new URL(emailRedirectTo).origin;
         } catch {}
       }
 
@@ -218,7 +247,7 @@ export async function registerRoutes(
       return res.json({ success: true, emailSent: true });
     } catch (error: any) {
       console.error("Resend verification error:", error);
-      return res.status(500).json({ message: error.message || "Failed to resend" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -266,7 +295,10 @@ export async function registerRoutes(
         });
 
         if (!linkError && linkData?.properties?.action_link) {
-          return res.redirect(linkData.properties.action_link);
+          const actionLink = linkData.properties.action_link;
+          if (isAllowedRedirectUrl(actionLink)) {
+            return res.redirect(actionLink);
+          }
         }
       } catch (linkErr) {
         console.error("Failed to generate magic link for auto-sign-in:", linkErr);
@@ -288,6 +320,10 @@ export async function registerRoutes(
 
       if (!description || typeof description !== "string" || description.trim().length < 10) {
         return res.status(400).json({ message: "Description must be at least 10 characters" });
+      }
+
+      if (description.length > 5000) {
+        return res.status(400).json({ message: "Description is too long (max 5000 characters)" });
       }
 
       const client = getAnthropicClient();
@@ -348,7 +384,7 @@ User's description: ${description}`
       return res.json(parsed);
     } catch (error: any) {
       console.error("Extract error:", error);
-      return res.status(500).json({ message: error.message || "Failed to analyze input" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -359,6 +395,15 @@ User's description: ${description}`
 
       if (!content || !type) {
         return res.status(400).json({ message: "Missing content or type" });
+      }
+
+      if (typeof content !== "string" || content.length > 10000) {
+        return res.status(400).json({ message: "Content is invalid or too long (max 10000 characters)" });
+      }
+
+      const allowedTypes = ["text", "voice", "url", "document"];
+      if (typeof type !== "string" || !allowedTypes.includes(type)) {
+        return res.status(400).json({ message: "Invalid content type" });
       }
 
       const workspace = await storage.getWorkspaceByUserId(userId);
@@ -413,7 +458,7 @@ If no entity is a good match, pick the closest one and explain why. Always retur
       return res.json(parsed);
     } catch (error: any) {
       console.error("Classify error:", error);
-      return res.status(500).json({ message: error.message || "Failed to classify content" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -461,7 +506,7 @@ If no entity is a good match, pick the closest one and explain why. Always retur
       return res.json({ transcription: textContent.text });
     } catch (error: any) {
       console.error("Transcribe error:", error);
-      return res.status(500).json({ message: error.message || "Failed to transcribe audio" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -472,6 +517,23 @@ If no entity is a good match, pick the closest one and explain why. Always retur
 
       if (!type || !content) {
         return res.status(400).json({ message: "Missing type or content" });
+      }
+
+      if (typeof content !== "string" || content.length > 10000) {
+        return res.status(400).json({ message: "Content is invalid or too long (max 10000 characters)" });
+      }
+
+      const allowedCaptureTypes = ["text", "voice", "url", "document"];
+      if (typeof type !== "string" || !allowedCaptureTypes.includes(type)) {
+        return res.status(400).json({ message: "Invalid capture type" });
+      }
+
+      if (matchedEntity && (typeof matchedEntity !== "string" || matchedEntity.length > 200)) {
+        return res.status(400).json({ message: "Invalid matched entity" });
+      }
+
+      if (matchedCategory && (typeof matchedCategory !== "string" || matchedCategory.length > 200)) {
+        return res.status(400).json({ message: "Invalid matched category" });
       }
 
       const capture = await storage.createCapture({
@@ -486,7 +548,7 @@ If no entity is a good match, pick the closest one and explain why. Always retur
       return res.json({ success: true, capture });
     } catch (error: any) {
       console.error("Create capture error:", error);
-      return res.status(500).json({ message: error.message || "Failed to save capture" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -497,7 +559,7 @@ If no entity is a good match, pick the closest one and explain why. Always retur
       return res.json(captures);
     } catch (error: any) {
       console.error("Get captures error:", error);
-      return res.status(500).json({ message: error.message || "Failed to get captures" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -548,7 +610,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       return res.json({ summary: textContent.text.trim() });
     } catch (error: any) {
       console.error("Entity summary error:", error);
-      return res.status(500).json({ message: error.message || "Failed to generate summary" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -560,6 +622,17 @@ Return only the summary paragraph, no JSON, no formatting.`
       if (!categoryName || !entityName) {
         return res.status(400).json({ message: "Missing categoryName or entityName" });
       }
+
+      if (typeof categoryName !== "string" || categoryName.length > 200) {
+        return res.status(400).json({ message: "Invalid category name" });
+      }
+
+      if (typeof entityName !== "string" || entityName.length > 200) {
+        return res.status(400).json({ message: "Invalid entity name" });
+      }
+
+      const allowedEntityTypes = ["person", "company", "topic", "technology", "regulation", "event", "location", "other"];
+      const safeEntityType = (typeof entityType === "string" && allowedEntityTypes.includes(entityType)) ? entityType : "other";
 
       const workspace = await storage.getWorkspaceByUserId(userId);
       if (!workspace) {
@@ -577,13 +650,13 @@ Return only the summary paragraph, no JSON, no formatting.`
         return res.status(400).json({ message: "Entity already exists in this category" });
       }
 
-      category.entities.push({ name: entityName, type: entityType || "other" });
+      category.entities.push({ name: entityName, type: safeEntityType });
 
       const updated = await storage.updateWorkspaceCategories(userId, categories);
       return res.json({ success: true, workspace: updated });
     } catch (error: any) {
       console.error("Add entity error:", error);
-      return res.status(500).json({ message: error.message || "Failed to add entity" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -610,7 +683,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       return res.json({ success: true, workspace });
     } catch (error: any) {
       console.error("Create workspace error:", error);
-      return res.status(500).json({ message: error.message || "Failed to create workspace" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -620,7 +693,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       const profile = await storage.getUserProfile(userId);
       return res.json({ dismissed: profile ? profile.welcomeDismissed === 1 : false });
     } catch (error: any) {
-      return res.status(500).json({ message: error.message || "Failed to check welcome status" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -630,7 +703,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       await storage.dismissWelcome(userId);
       return res.json({ success: true });
     } catch (error: any) {
-      return res.status(500).json({ message: error.message || "Failed to dismiss welcome" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -711,7 +784,7 @@ Total entities tracked: ${entities.length}`
       return res.json(brief);
     } catch (error: any) {
       console.error("Generate brief error:", error);
-      return res.status(500).json({ message: error.message || "Failed to generate brief" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -722,7 +795,7 @@ Total entities tracked: ${entities.length}`
       return res.json(briefsList);
     } catch (error: any) {
       console.error("Get briefs error:", error);
-      return res.status(500).json({ message: error.message || "Failed to get briefs" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -749,7 +822,7 @@ Total entities tracked: ${entities.length}`
       return res.json({ success: true, profile });
     } catch (error: any) {
       console.error("Save onboarding context error:", error);
-      return res.status(500).json({ message: error.message || "Failed to save onboarding context" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
@@ -775,7 +848,7 @@ Total entities tracked: ${entities.length}`
       return res.json({ exists: false });
     } catch (error: any) {
       console.error("Get onboarding context error:", error);
-      return res.status(500).json({ message: error.message || "Failed to get onboarding context" });
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
