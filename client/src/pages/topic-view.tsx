@@ -107,9 +107,16 @@ export default function TopicViewPage({ params }: { params: { category: string; 
   const allTopics = categories.flatMap((c) => c.entities.map((e) => ({ ...e, categoryName: c.name })));
 
   const entityTopicType = (entity?.topic_type || "general").toLowerCase();
-  const widgetConfig = topicTypesData?.topicTypes?.find(
+  const apiWidgetConfig = topicTypesData?.topicTypes?.find(
     (t) => t.typeKey === entityTopicType
   )?.widgetConfig as { widgets: string[] } | undefined;
+
+  const fallbackWidgetConfigs: Record<string, { widgets: string[] }> = {
+    competitor: { widgets: ["battlecard", "quick_stats", "updates_feed"] },
+    general: { widgets: ["updates_feed"] },
+  };
+
+  const widgetConfig = apiWidgetConfig || fallbackWidgetConfigs[entityTopicType] || fallbackWidgetConfigs.general;
 
   const loading = wsLoading || capLoading;
 
@@ -175,7 +182,7 @@ function TopicViewContent({
   allCaptures: Capture[];
   allTopics: (ExtractedEntity & { categoryName: string })[];
   categories: ExtractedCategory[];
-  widgetConfig?: { widgets: string[] };
+  widgetConfig: { widgets: string[] };
   onBack: () => void;
 }) {
   const { user } = useAuth();
@@ -485,14 +492,14 @@ function WidgetsSection({
   entity: ExtractedEntity;
   categoryName: string;
   captures: Capture[];
-  widgetConfig?: { widgets: string[] };
+  widgetConfig: { widgets: string[] };
   allCaptures: Capture[];
 }) {
-  const widgets = widgetConfig?.widgets ?? [];
+  const widgets = widgetConfig.widgets;
   const builtWidgets = ["battlecard", "quick_stats", "updates_feed"];
 
   const nonFeedWidgets = widgets.filter((w) => w !== "updates_feed");
-  const hasUpdatesFeed = widgets.includes("updates_feed") || true;
+  const hasUpdatesFeed = widgets.includes("updates_feed");
 
   return (
     <div className="space-y-4" data-testid="section-widgets">
