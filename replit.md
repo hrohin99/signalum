@@ -50,7 +50,7 @@ AI-powered personal intelligence workspace.
 ## File Structure
 - `client/src/lib/supabase.ts` - Supabase client initialization
 - `client/src/lib/auth-context.tsx` - Auth provider with Supabase auth hooks
-- `client/src/pages/landing.tsx` - Public landing page (hero with pill badge, scrolling tag strip, how-it-works 3-column, track-anything 6-card showcase, final CTA, footer)
+- `client/src/pages/landing.tsx` - Public landing page (hero with pill badge, "the real problem" section with comparison card, scrolling tag strip, how-it-works 3-column, social proof testimonials, track-anything 6-card showcase, "coming soon" Ask Watchloom teaser with waitlist form, final CTA, footer)
 - `client/src/pages/signup.tsx` - 3-step signup flow (role → tracking text → account creation)
 - `client/src/pages/signin.tsx` - Simple sign-in page
 - `client/src/pages/auth.tsx` - Legacy auth page (no longer routed, kept for reference)

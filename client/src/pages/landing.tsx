@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useState } from "react";
 
 const SCROLLING_TAGS = [
   "Competitors", "Industry Trends", "News Articles", "Meeting Notes",
@@ -166,6 +167,9 @@ function ProductMockup() {
 }
 
 export default function LandingPage() {
+  const [waitlistEmail, setWaitlistEmail] = useState("");
+  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+
   return (
     <div className="min-h-screen bg-white" style={{ fontFamily: "'DM Sans', sans-serif" }}>
       <style>{`
@@ -257,6 +261,84 @@ export default function LandingPage() {
 
         <div className="max-w-[860px] mx-auto px-4">
           <ProductMockup />
+        </div>
+      </section>
+
+      {/* SECTION 1.5 - THE REAL PROBLEM */}
+      <section className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 24px" }}>
+        <div className="mx-auto flex flex-col md:flex-row items-start gap-10" style={{ maxWidth: 860 }}>
+          <div className="w-full md:w-[55%]">
+            <p
+              className="text-xs font-semibold uppercase tracking-widest mb-4"
+              style={{ color: "#64748b" }}
+              data-testid="text-problem-label"
+            >
+              The real problem
+            </p>
+            <h2
+              className="text-2xl md:text-3xl font-bold leading-tight mb-6"
+              style={{ color: "#1e3a5f" }}
+              data-testid="text-problem-headline"
+            >
+              You are not short on information. You are short on clarity.
+            </h2>
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "#64748b" }} data-testid="text-problem-p1">
+              Every day you get hit with newsletters, alerts, articles, Slack messages, and LinkedIn posts. The information is everywhere. The problem is none of it connects.
+            </p>
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "#64748b" }} data-testid="text-problem-p2">
+              You bookmark things you never revisit. You save articles you forget about. You take notes that sit in a folder nobody opens. Storing information is not the same as understanding it.
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "#64748b" }} data-testid="text-problem-p3">
+              Watchloom does not just store what you capture. It reads it, connects it to everything else you track, and turns it into a clear picture of what is actually happening in your world.
+            </p>
+          </div>
+
+          <div className="w-full md:w-[45%]">
+            <div
+              style={{
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: 24,
+              }}
+              data-testid="card-comparison"
+            >
+              <div className="flex flex-wrap">
+                <div className="flex-1 pr-4" style={{ borderRight: "1px solid #e2e8f0", minWidth: 140 }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94626a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    <span className="text-xs font-semibold" style={{ color: "#94626a" }}>Without Watchloom</span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Bookmarks you never revisit</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Notes scattered across tools</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Alerts with no context</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Hours spent piecing it together</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Blindsided by things you should have known</p>
+                  </div>
+                </div>
+
+                <div className="flex-1 pl-4" style={{ minWidth: 140 }}>
+                  <div className="flex items-center gap-2 mb-4">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>With Watchloom</span>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Everything captured in one place</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>AI connects the dots automatically</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Context built up over time</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Briefed on your schedule</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Always the most informed person in the room</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -541,6 +623,120 @@ export default function LandingPage() {
               <p className="text-sm leading-relaxed text-white">
                 You tell us what matters in plain English. We build your tracking workspace automatically, no setup, no configuration, no IT required.
               </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 4.5 - COMING SOON TEASER */}
+      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 24px" }}>
+        <div className="mx-auto" style={{ maxWidth: 760 }}>
+          <div
+            style={{
+              border: "1px solid #1e3a5f",
+              borderRadius: 12,
+              backgroundColor: "#f0f4f9",
+              padding: 40,
+            }}
+            data-testid="card-coming-soon"
+          >
+            <span
+              className="inline-block text-xs font-semibold text-white rounded-full px-3 py-1 mb-5"
+              style={{ backgroundColor: "#1e3a5f" }}
+              data-testid="badge-coming-soon"
+            >
+              Coming Soon
+            </span>
+
+            <h3
+              className="text-xl md:text-2xl font-bold mb-4"
+              style={{ color: "#1e3a5f" }}
+              data-testid="text-coming-soon-headline"
+            >
+              Ask Watchloom anything about your tracked topics
+            </h3>
+
+            <p
+              className="text-sm leading-relaxed mb-6"
+              style={{ color: "#64748b" }}
+              data-testid="text-coming-soon-description"
+            >
+              Soon you will be able to ask Watchloom questions in plain English and get instant answers from everything it has captured for you. What has changed with a competitor this month? What are the biggest themes across your industry right now? What did I capture about pricing changes last week? Watchloom will search its own knowledge of your workspace and answer in seconds.
+            </p>
+
+            <div className="flex flex-wrap gap-3 mb-6" data-testid="pills-coming-soon">
+              <span
+                className="text-xs rounded-full px-4 py-2"
+                style={{ backgroundColor: "#ffffff", border: "1px solid #1e3a5f", color: "#1e3a5f" }}
+                data-testid="pill-query-1"
+              >
+                What is going on with Acme Corp this week?
+              </span>
+              <span
+                className="text-xs rounded-full px-4 py-2"
+                style={{ backgroundColor: "#ffffff", border: "1px solid #1e3a5f", color: "#1e3a5f" }}
+                data-testid="pill-query-2"
+              >
+                Summarise all my regulatory updates this month
+              </span>
+              <span
+                className="text-xs rounded-full px-4 py-2"
+                style={{ backgroundColor: "#ffffff", border: "1px solid #1e3a5f", color: "#1e3a5f" }}
+                data-testid="pill-query-3"
+              >
+                What are my competitors doing with pricing?
+              </span>
+            </div>
+
+            <p
+              className="text-xs italic mb-4"
+              style={{ color: "#64748b" }}
+              data-testid="text-coming-soon-cta"
+            >
+              Join the waitlist to be first to access this feature when it launches.
+            </p>
+
+            <div className="flex items-center justify-center">
+              <div className="flex flex-col items-center" style={{ maxWidth: 420, width: "100%" }}>
+                <div className="flex flex-wrap w-full gap-2">
+                  <input
+                    type="email"
+                    placeholder="Your work email"
+                    aria-label="Work email for waitlist"
+                    value={waitlistEmail}
+                    onChange={(e) => setWaitlistEmail(e.target.value)}
+                    className="flex-1 text-sm rounded-lg px-4 py-2.5 outline-none"
+                    style={{
+                      minWidth: 200,
+                      border: "1px solid #e2e8f0",
+                      backgroundColor: "#ffffff",
+                      color: "#1e3a5f",
+                    }}
+                    data-testid="input-waitlist-email"
+                  />
+                  <button
+                    onClick={() => {
+                      if (waitlistEmail.trim()) {
+                        setWaitlistSubmitted(true);
+                      }
+                    }}
+                    className="text-sm font-semibold text-white rounded-lg px-5 py-2.5 transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: "#1e3a5f" }}
+                    data-testid="button-join-waitlist"
+                  >
+                    Join Waitlist
+                  </button>
+                </div>
+                {waitlistSubmitted && (
+                  <p
+                    className="text-xs mt-3"
+                    style={{ color: "#16a34a" }}
+                    data-testid="text-waitlist-success"
+                  >
+                    You are on the list. We will be in touch.
+                  </p>
+                )}
+              </div>
             </div>
           </div>
         </div>
