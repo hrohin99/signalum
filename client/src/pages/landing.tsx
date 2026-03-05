@@ -171,16 +171,87 @@ export default function LandingPage() {
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div className="min-h-screen bg-white" style={{ fontFamily: "'DM Sans', sans-serif", scrollBehavior: "smooth" }}>
       <style>{`
         @keyframes scrollTags {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
+        html { scroll-behavior: smooth; }
       `}</style>
 
+      {/* NAVBAR */}
+      <nav
+        className="fixed top-0 left-0 w-full flex items-center justify-between"
+        style={{
+          backgroundColor: "#ffffff",
+          borderBottom: "1px solid #e2e8f0",
+          padding: "16px 24px",
+          zIndex: 1000,
+        }}
+        data-testid="navbar-landing"
+      >
+        <div className="flex items-center gap-2">
+          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" data-testid="icon-navbar-logo">
+            <rect width="32" height="32" rx="8" fill="#1e3a5f" />
+            <path d="M8 10l4 12 4-8 4 8 4-12" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          </svg>
+          <span className="text-lg font-bold" style={{ color: "#1e3a5f" }} data-testid="text-navbar-brand">
+            Watchloom
+          </span>
+        </div>
+
+        <div className="hidden md:flex items-center gap-8">
+          <a
+            href="#how-it-works"
+            className="text-sm font-medium transition-opacity hover:opacity-70"
+            style={{ color: "#64748b" }}
+            data-testid="link-nav-how"
+          >
+            How it works
+          </a>
+          <a
+            href="#what-you-can-track"
+            className="text-sm font-medium transition-opacity hover:opacity-70"
+            style={{ color: "#64748b" }}
+            data-testid="link-nav-track"
+          >
+            What you can track
+          </a>
+          <a
+            href="#coming-soon"
+            className="text-sm font-medium transition-opacity hover:opacity-70"
+            style={{ color: "#64748b" }}
+            data-testid="link-nav-coming-soon"
+          >
+            Coming soon
+          </a>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Link href="/signin">
+            <button
+              className="px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
+              style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "#ffffff" }}
+              data-testid="button-nav-signin"
+            >
+              Sign In
+            </button>
+          </Link>
+          <Link href="/signup">
+            <button
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#1e3a5f" }}
+              data-testid="button-nav-start-trial"
+            >
+              Start Free Trial
+            </button>
+          </Link>
+        </div>
+      </nav>
+
       {/* SECTION 1 - HERO */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "120px 24px 0 24px" }}>
+      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "120px 24px 0 24px", marginTop: 68 }}>
         <div className="max-w-[720px] mx-auto text-center">
           <div
             className="inline-block rounded-full px-4 py-1.5 text-xs font-medium mb-8"
@@ -391,7 +462,7 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 3 - HOW IT WORKS */}
-      <section className="w-full px-6" style={{ backgroundColor: "#ffffff", padding: "80px 24px" }}>
+      <section id="how-it-works" className="w-full px-6" style={{ backgroundColor: "#ffffff", padding: "80px 24px", scrollMarginTop: 80 }}>
         <div className="max-w-[960px] mx-auto">
           <div className="text-center mb-16">
             <p
@@ -578,7 +649,7 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 4 - TRACK ANYTHING SHOWCASE */}
-      <section className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 24px" }}>
+      <section id="what-you-can-track" className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 24px", scrollMarginTop: 80 }}>
         <div className="max-w-[1000px] mx-auto">
           <div className="text-center mb-16">
             <p
@@ -649,7 +720,7 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 4.5 - COMING SOON TEASER */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 24px" }}>
+      <section id="coming-soon" className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 24px", scrollMarginTop: 80 }}>
         <div className="mx-auto" style={{ maxWidth: 760 }}>
           <div
             style={{
