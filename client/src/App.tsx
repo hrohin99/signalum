@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -19,6 +19,8 @@ function AppContent() {
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [autoOnboarding, setAutoOnboarding] = useState(false);
   const [location, setLocation] = useLocation();
+  const initialLoadComplete = useRef(false);
+  const checkedUserId = useRef<string | null>(null);
 
   useEffect(() => {
     if (user && session) {
@@ -43,11 +45,13 @@ function AppContent() {
 
   useEffect(() => {
     if (!user || !session) {
+      checkedUserId.current = null;
+      initialLoadComplete.current = false;
       setHasCompletedOnboarding(null);
       return;
     }
 
-    if (hasCompletedOnboarding === true) {
+    if (checkedUserId.current === user.id) {
       return;
     }
 
@@ -64,9 +68,11 @@ function AppContent() {
       })
       .then(async (data) => {
         if (data && data.exists) {
+          checkedUserId.current = user.id;
           setHasCompletedOnboarding(true);
           localStorage.removeItem("pendingOnboarding");
           setCheckingOnboarding(false);
+          initialLoadComplete.current = true;
           return;
         }
 
@@ -142,26 +148,33 @@ function AppContent() {
             });
 
             localStorage.removeItem("pendingOnboarding");
+            checkedUserId.current = user.id;
             setAutoOnboarding(false);
             setHasCompletedOnboarding(true);
+            initialLoadComplete.current = true;
             return;
           } catch {
             setAutoOnboarding(false);
             setHasCompletedOnboarding(false);
+            initialLoadComplete.current = true;
           }
           return;
         }
 
         setHasCompletedOnboarding(false);
         setCheckingOnboarding(false);
+        initialLoadComplete.current = true;
       })
       .catch(() => {
         setHasCompletedOnboarding(false);
         setCheckingOnboarding(false);
+        initialLoadComplete.current = true;
       });
   }, [user, session]);
 
-  if (loading || checkingOnboarding || autoOnboarding) {
+  const showInitialSpinner = !initialLoadComplete.current && (loading || checkingOnboarding || autoOnboarding);
+
+  if (showInitialSpinner) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
@@ -200,7 +213,11 @@ function AppContent() {
   if (!hasCompletedOnboarding) {
     return (
       <OnboardingPage
-        onComplete={() => setHasCompletedOnboarding(true)}
+        onComplete={() => {
+          checkedUserId.current = user.id;
+          initialLoadComplete.current = true;
+          setHasCompletedOnboarding(true);
+        }}
       />
     );
   }
