@@ -458,7 +458,16 @@ User's description: ${description}`
         messages: [
           {
             role: "user",
-            content: `You are an intelligence routing assistant. A user captured the following ${type} content. Match it to the most relevant entity from their workspace, but ONLY if the match is genuinely appropriate.
+            content: `You are an intelligence routing assistant. A user captured the following ${type} content. Your FIRST task is to determine whether this is actual intelligence content or a user request/instruction.
+
+USER INTENT DETECTION (check this FIRST):
+If the captured content is a request, instruction, or question directed at the system rather than actual intelligence about a topic — for example phrases like "I want to", "can you", "please create", "how do I", "help me", "generate a", "make me", "build a", "create a", "show me", "tell me", "I need", "could you", "would you", "I'd like to" — then this is a USER INTENT, not intelligence content. Return this JSON:
+{
+  "user_intent": true,
+  "message": "A helpful, friendly response acknowledging what the user wants and guiding them to the right feature. For example, if they want a battle card, tell them they can find it on their topic page. If they want analysis, point them to the relevant feature."
+}
+
+If the content IS genuine intelligence (news, notes, observations, data about a topic), proceed with classification:
 
 Available entities (with their current topic_type):
 ${entityList}
@@ -521,6 +530,13 @@ Always return valid JSON only, no other text.`
         parsed = JSON.parse(jsonStr);
       } catch {
         return res.status(500).json({ message: "Failed to parse AI classification" });
+      }
+
+      if (parsed.user_intent === true) {
+        return res.json({
+          user_intent: true,
+          message: parsed.message || "It looks like you're asking for help rather than submitting intelligence. Try using the relevant feature from your workspace instead.",
+        });
       }
 
       const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
@@ -1421,6 +1437,44 @@ Rules:
       return res.json({ battlecard: card });
     } catch (error: any) {
       console.error("Autofill battlecard error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entity", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { categoryName, entityName } = req.body;
+
+      if (!categoryName || !entityName) {
+        return res.status(400).json({ message: "categoryName and entityName are required" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const entityIndex = category.entities.findIndex(e => e.name === entityName);
+      if (entityIndex === -1) {
+        return res.status(404).json({ message: "Entity not found in category" });
+      }
+
+      category.entities.splice(entityIndex, 1);
+
+      await storage.updateWorkspaceCategories(userId, categories);
+
+      const deletedCaptures = await storage.deleteCapturesByEntity(userId, entityName, categoryName);
+
+      return res.json({ success: true, deletedCaptures });
+    } catch (error: any) {
+      console.error("Delete entity error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

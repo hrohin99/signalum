@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown } from "lucide-react";
+import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, MessageCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,7 +38,12 @@ interface ClassificationNewCategory {
   };
 }
 
-type ClassificationResult = ClassificationMatch | ClassificationNewCategory;
+interface ClassificationUserIntent {
+  user_intent: true;
+  message: string;
+}
+
+type ClassificationResult = ClassificationMatch | ClassificationNewCategory | ClassificationUserIntent;
 
 const topicTypeDisplayNames: Record<string, string> = {
   competitor: "Competitor",
@@ -139,8 +144,10 @@ export default function CapturePage() {
 
     try {
       const res = await apiRequest("POST", "/api/classify", { content, type });
-      const data: ClassificationResult = await res.json();
-      if (typeof data.matched === "undefined") {
+      const data = await res.json();
+      if (data.user_intent === true) {
+        setClassification(data as ClassificationUserIntent);
+      } else if (typeof data.matched === "undefined") {
         const legacyData = data as any;
         setClassification({
           matched: true,
@@ -150,7 +157,7 @@ export default function CapturePage() {
           reason: legacyData.reason,
         });
       } else {
-        setClassification(data);
+        setClassification(data as ClassificationResult);
         if (data.matched && data.suggested_type_change) {
           const suggestedType = data.suggested_type_change;
           const displayName = topicTypeDisplayNames[suggestedType] || suggestedType;
@@ -587,7 +594,41 @@ export default function CapturePage() {
         </div>
       )}
 
-      {classification && !isClassifying && classification.matched && (
+      {classification && !isClassifying && 'user_intent' in classification && classification.user_intent && (
+        <div className="mt-6 border border-border rounded-md p-6 space-y-5" data-testid="card-user-intent">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground mb-3">Not a capture</p>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-md bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                <MessageCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground" data-testid="text-user-intent-title">
+                  This looks like a request, not intelligence
+                </p>
+                <p className="text-sm text-muted-foreground" data-testid="text-user-intent-message">
+                  {classification.message}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-end">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setClassification(null);
+                setPendingContent("");
+                setPendingType("");
+              }}
+              data-testid="button-dismiss-intent"
+            >
+              Got it
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {classification && !isClassifying && !('user_intent' in classification) && classification.matched && (
         <div className="mt-6 border border-border rounded-md p-6 space-y-5">
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-3">AI Classification</p>
@@ -646,7 +687,7 @@ export default function CapturePage() {
         </div>
       )}
 
-      {classification && !isClassifying && !classification.matched && !showManualPicker && (
+      {classification && !isClassifying && !('user_intent' in classification) && !classification.matched && !showManualPicker && (
         <div className="mt-6 border border-border rounded-md p-6 space-y-5">
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-3">AI Classification</p>

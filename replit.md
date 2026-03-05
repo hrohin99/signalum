@@ -34,7 +34,7 @@ AI-powered personal intelligence workspace.
 - `POST /api/auth/resend-verification` - Resend verification email to an unconfirmed user. Accepts `email` and `emailRedirectTo`
 - `GET /api/auth/verify-email` - Email verification link handler, validates JWT token and confirms email in Supabase. On success redirects to `APP_BASE_URL/workspace` (with magic link auto-sign-in). On failure/expiry redirects to `APP_BASE_URL/login?error=invalid-token`. Uses `APP_BASE_URL` env var for redirect base URL
 - `POST /api/extract` - Onboarding: extract categories/entities from user description (auth required)
-- `POST /api/classify` - Classify captured content and match to workspace entity (auth required). Returns `matched: true` with entity/category (plus optional `suggested_type_change` if AI detects a better topic_type) or `matched: false` with `suggestedCategory` and `suggestedEntity` (including inferred `topic_type`) when confidence is below 70%
+- `POST /api/classify` - Classify captured content and match to workspace entity (auth required). Returns `matched: true` with entity/category (plus optional `suggested_type_change` if AI detects a better topic_type), `matched: false` with `suggestedCategory` and `suggestedEntity` (including inferred `topic_type`) when confidence is below 70%, or `user_intent: true` with a helpful `message` when the input is a request/instruction rather than intelligence content
 - `POST /api/transcribe` - Transcribe audio via Claude (auth required, multipart form)
 - `POST /api/captures` - Save a confirmed capture (auth required)
 - `GET /api/captures` - List all captures for authenticated user (auth required)
@@ -44,6 +44,7 @@ AI-powered personal intelligence workspace.
 - `POST /api/split-topic` - Split a combined topic into individual topics (auth required). Accepts categoryName, originalEntityName, newNames[], topicType. Creates individual entities and removes the combined one. Guards against data loss if all names already exist. Always inherits topic_type from original entity as primary source of truth
 - `POST /api/fix-topic-types` - Bulk fix topic_type for entities (auth required). Accepts `fixes` array of `{ categoryName, entityName, topic_type }` objects
 - `PATCH /api/entity` - Update entity topic_type and/or priority (auth required). Accepts categoryName, entityName, and optional topic_type/priority fields
+- `DELETE /api/entity` - Delete an entity (topic) and its associated captures (auth required). Accepts categoryName and entityName in request body
 - `POST /api/ai-insights` - Generate 3 AI insight bullet points for a topic from its captures (auth required). Returns `{ insights: string[] | null }`
 - `POST /api/link-topic` - Link a related topic to an entity (auth required). Accepts categoryName, entityName, linkedEntityName
 - `GET /api/topic-types` - Get all system topic type configs (auth required)

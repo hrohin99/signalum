@@ -26,6 +26,7 @@ export interface IStorage {
   upsertProductContext(context: InsertProductContext): Promise<ProductContext>;
   getBattlecard(tenantId: string, entityId: string): Promise<Battlecard | undefined>;
   upsertBattlecard(tenantId: string, entityId: string, data: Partial<InsertBattlecard>): Promise<Battlecard>;
+  deleteCapturesByEntity(userId: string, entityName: string, categoryName: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -173,6 +174,13 @@ export class DatabaseStorage implements IStorage {
       .values({ tenantId, entityId, ...data })
       .returning();
     return created;
+  }
+  async deleteCapturesByEntity(userId: string, entityName: string, categoryName: string): Promise<number> {
+    const deleted = await db
+      .delete(captures)
+      .where(and(eq(captures.userId, userId), eq(captures.matchedEntity, entityName), eq(captures.matchedCategory, categoryName)))
+      .returning();
+    return deleted.length;
   }
 }
 
