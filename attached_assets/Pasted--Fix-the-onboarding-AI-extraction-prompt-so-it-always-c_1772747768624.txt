@@ -1,0 +1,23 @@
+"Fix the onboarding AI extraction prompt so it always creates one topic per named entity, never combining multiple names into a single topic.
+Find the Claude prompt used in the onboarding extraction — the one that processes the user's answer to 'What do you want to track?' and returns categories and entities.
+Update the prompt with these explicit instructions:
+1. Every specifically named company, person, product, regulation, standard, or project must become its own individual topic. Never combine multiple named items into one topic.
+2. Examples of what NOT to do:
+- Do not create a topic called "iProov, IDEMIA, incode" — create three separate topics: iProov, IDEMIA, incode
+- Do not create a topic called "eIDAS 2.0 and UK DIATF" — create two separate topics: eIDAS 2.0, UK DIATF
+- Do not create a topic called "Liveness and Deepfake" — create two separate topics: Liveness Detection, Deepfake Technology
+3. Examples of what TO do:
+- User says "I want to track iProov, IDEMIA and incode as competitors" — create category: Competitor Landscape, topics: iProov, IDEMIA, incode — each as individual entries
+- User says "track regulations like eIDAS 2.0 and UK DIATF" — create category: Regulations, topics: eIDAS 2.0, UK DIATF — each as individual entries
+4. The only exception is when the user explicitly names a group as a single thing — for example "the big four accounting firms" should become one topic called "Big Four Accounting Firms" because the user is treating them as a group.
+5. Also assign the correct topic_type to each extracted entity:
+- Named companies or products: competitor
+- Named regulations, laws, standards: regulation
+- Named people: person
+- Named internal projects: project
+- Named technologies or platforms: technology
+- Named events or conferences: event
+- Anything unclear: general
+Also update the capture routing prompt with the same rule — when a capture mentions multiple specific named entities, suggest filing it under each relevant individual topic, not a combined one.
+Also update the category extraction to never put multiple distinct named entities as a single comma-separated topic name anywhere in the system.
+Do not change anything else."
