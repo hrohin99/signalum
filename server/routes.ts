@@ -16,6 +16,11 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY!
 );
 
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
 function getAnthropicClient() {
   return new Anthropic({
     apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
@@ -109,13 +114,17 @@ export async function registerRoutes(
         return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
 
-      const { data, error } = await supabase.auth.signUp({ email, password });
+      const { data, error } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: false,
+      });
 
       if (error) {
         return res.status(400).json({ message: error.message });
       }
 
-      const token = jwt.sign({ email, purpose: "email-verification" }, JWT_SECRET, {
+      const token = jwt.sign({ email, userId: data.user?.id, purpose: "email-verification" }, JWT_SECRET, {
         expiresIn: "24h",
       });
 
@@ -151,11 +160,22 @@ export async function registerRoutes(
 
       const decoded = jwt.verify(token, JWT_SECRET) as {
         email: string;
+        userId?: string;
         purpose: string;
       };
 
       if (decoded.purpose !== "email-verification") {
         return res.status(400).send(verificationResultPage("Invalid verification link.", false));
+      }
+
+      if (decoded.userId) {
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(decoded.userId, {
+          email_confirm: true,
+        });
+        if (error) {
+          console.error("Failed to confirm email in Supabase:", error);
+          return res.status(500).send(verificationResultPage("Something went wrong confirming your email. Please try again.", false));
+        }
       }
 
       return res.send(verificationResultPage("Your email has been verified! You can now sign in.", true));

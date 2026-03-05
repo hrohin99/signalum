@@ -21,14 +21,15 @@ AI-powered personal intelligence workspace.
 - `SUPABASE_ANON_KEY` - Supabase anonymous key
 - `AI_INTEGRATIONS_ANTHROPIC_API_KEY` - Replit AI integration key (auto-configured)
 - `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` - Replit AI integration URL (auto-configured)
+- `SUPABASE_SERVICE_ROLE_KEY` - Supabase service role key for admin user creation (bypasses email rate limits)
 - `RESEND_API_KEY` - Resend API key for transactional emails
 - `EMAIL_FROM` - Sender email address for transactional emails
 - `SESSION_SECRET` - Used for signing JWT verification tokens
 - Vite exposes Supabase vars as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` via vite.config.ts
 
 ## API Routes
-- `POST /api/auth/signup` - Signup with email/password, sends branded verification email via Resend
-- `GET /api/auth/verify-email` - Email verification link handler, validates JWT token
+- `POST /api/auth/signup` - Signup via Supabase Admin API (no Supabase email), sends branded verification email via Resend
+- `GET /api/auth/verify-email` - Email verification link handler, validates JWT token and confirms email in Supabase
 - `POST /api/extract` - Onboarding: extract categories/entities from user description (auth required)
 - `POST /api/classify` - Classify captured content and match to workspace entity (auth required)
 - `POST /api/transcribe` - Transcribe audio via Claude (auth required, multipart form)
