@@ -57,8 +57,8 @@ AI-powered personal intelligence workspace.
 ## File Structure
 - `client/src/lib/supabase.ts` - Supabase client initialization
 - `client/src/lib/auth-context.tsx` - Auth provider with Supabase auth hooks
-- `client/src/pages/landing.tsx` - Public landing page (hero with pill badge, "the real problem" section with comparison card, scrolling tag strip, how-it-works 3-column, social proof testimonials, track-anything 6-card showcase, "coming soon" Ask Watchloom teaser with waitlist form, final CTA, footer)
-- `client/src/pages/signup.tsx` - 3-step signup flow (role → tracking text → account creation)
+- `client/src/pages/landing.tsx` - Public landing page (hero with pill badge, interactive tracking input + "Build my workspace" CTA, animated product mockup (3-stage CSS animation: Capture → AI Routing → Intelligence Map, 9s loop), "the real problem" section with comparison card, scrolling tag strip, how-it-works 3-column, social proof testimonials, track-anything 6-card showcase, "coming soon" Ask Watchloom teaser with waitlist form, final CTA, footer)
+- `client/src/pages/signup.tsx` - 3-step signup flow (role → tracking text → account creation). Supports hero skip: when arriving via /signup?from=hero with localStorage "watchloom_tracking_intent" set, skips Steps 1 & 2 and goes straight to Step 3 account creation with tracking text pre-populated
 - `client/src/pages/signin.tsx` - Simple sign-in page
 - `client/src/pages/auth.tsx` - Legacy auth page (no longer routed, kept for reference)
 - `client/src/pages/onboarding.tsx` - Onboarding flow with AI extraction (shown to users who skip 3-step signup)

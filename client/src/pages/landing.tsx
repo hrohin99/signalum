@@ -1,5 +1,8 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { useToast } from "@/hooks/use-toast";
+import { Sparkles } from "lucide-react";
 
 const TYPING_TEXT = "Acme Corp just announced a new enterprise pricing tier targeting mid-market customers.";
 
@@ -37,6 +40,74 @@ const TRACK_CARDS = [
     text: "Anything happening in a space you follow gets captured, summarised, and waiting for you each morning.",
   },
 ];
+
+function HeroTrackingInput() {
+  const [trackingInput, setTrackingInput] = useState("");
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
+  const { toast } = useToast();
+
+  const handleBuildWorkspace = () => {
+    if (!trackingInput.trim()) return;
+    localStorage.setItem("watchloom_tracking_intent", trackingInput.trim());
+
+    if (user) {
+      toast({
+        title: "We have added your new tracking topic to your workspace.",
+      });
+      navigate("/");
+    } else {
+      navigate("/signup?from=hero");
+    }
+  };
+
+  return (
+    <div className="mx-auto mt-6" style={{ maxWidth: 600 }}>
+      <div
+        style={{
+          border: "2px solid #1e3a5f",
+          borderRadius: 12,
+          padding: 16,
+          backgroundColor: "#ffffff",
+        }}
+        data-testid="hero-tracking-input"
+      >
+        <input
+          type="text"
+          value={trackingInput}
+          onChange={(e) => setTrackingInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") handleBuildWorkspace(); }}
+          placeholder="What do you want to track? e.g. competitors, industry news, regulations..."
+          className="w-full text-sm outline-none"
+          style={{
+            border: "none",
+            padding: "4px 0",
+            color: "#334155",
+            backgroundColor: "transparent",
+          }}
+          data-testid="input-hero-tracking"
+        />
+        <button
+          onClick={handleBuildWorkspace}
+          disabled={!trackingInput.trim()}
+          className="w-full flex items-center justify-center gap-2 mt-3 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
+          style={{
+            backgroundColor: "#1e3a5f",
+            color: "#ffffff",
+            padding: "12px 0",
+          }}
+          data-testid="button-build-workspace"
+        >
+          <Sparkles className="w-4 h-4" />
+          Build my workspace
+        </button>
+      </div>
+      <p className="text-sm mt-3 text-center" style={{ color: "#64748b" }} data-testid="text-hero-trust">
+        Free for 14 days. No credit card required.
+      </p>
+    </div>
+  );
+}
 
 function ProductMockup() {
   return (
@@ -584,9 +655,7 @@ export default function LandingPage() {
             </Link>
           </div>
 
-          <p className="text-sm" style={{ color: "#64748b" }} data-testid="text-hero-context">
-            Track competitors, trends, news, industries, topics, people and anything at all.
-          </p>
+          <HeroTrackingInput />
         </div>
 
         <div className="max-w-[860px] mx-auto px-4">

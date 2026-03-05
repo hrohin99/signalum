@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { SiGoogle } from "react-icons/si";
 import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal, Mail } from "lucide-react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 
 type SignupStep = 1 | 2 | 3;
 
@@ -23,10 +23,15 @@ const ROLES = [
 ] as const;
 
 export default function SignupPage() {
-  const [step, setStep] = useState<SignupStep>(1);
-  const [selectedRole, setSelectedRole] = useState<string>("");
-  const [otherRoleText, setOtherRoleText] = useState("");
-  const [trackingText, setTrackingText] = useState("");
+  const searchString = useSearch();
+  const fromHero = searchString.includes("from=hero");
+  const heroIntent = typeof window !== "undefined" ? localStorage.getItem("watchloom_tracking_intent") : null;
+  const skipToStep3 = fromHero && !!heroIntent;
+
+  const [step, setStep] = useState<SignupStep>(skipToStep3 ? 3 : 1);
+  const [selectedRole, setSelectedRole] = useState<string>(skipToStep3 ? "other" : "");
+  const [otherRoleText, setOtherRoleText] = useState(skipToStep3 ? "General" : "");
+  const [trackingText, setTrackingText] = useState(skipToStep3 ? heroIntent! : "");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -49,6 +54,7 @@ export default function SignupPage() {
         "pendingOnboarding",
         JSON.stringify({ role: effectiveRole, trackingText, fullName })
       );
+      localStorage.removeItem("watchloom_tracking_intent");
 
       const { error, emailSent } = await signUp(email, password, {
         role: effectiveRole,
@@ -119,6 +125,7 @@ export default function SignupPage() {
       "pendingOnboarding",
       JSON.stringify({ role: effectiveRole, trackingText, fullName })
     );
+    localStorage.removeItem("watchloom_tracking_intent");
     const { error } = await signInWithGoogle();
     if (error) {
       localStorage.removeItem("pendingOnboarding");
@@ -158,21 +165,32 @@ export default function SignupPage() {
 
         {!accountCreated && (
           <>
-            <p className="text-sm mb-8" style={{ color: "#94a3b8" }} data-testid="text-step-indicator">
-              Step {step} of 3
-            </p>
-
-            <div className="flex gap-1 mb-8">
-              {[1, 2, 3].map((s) => (
-                <div
-                  key={s}
-                  className="h-1 flex-1 rounded-full transition-colors"
-                  style={{
-                    backgroundColor: s <= step ? "#1e3a5f" : "#e2e8f0",
-                  }}
-                />
-              ))}
-            </div>
+            {skipToStep3 ? (
+              <div
+                className="text-xs rounded-lg px-3 py-2 mb-8"
+                style={{ backgroundColor: "rgba(30,58,95,0.06)", color: "#1e3a5f" }}
+                data-testid="text-hero-skip-notice"
+              >
+                Your workspace is being prepared based on what you told us.
+              </div>
+            ) : (
+              <>
+                <p className="text-sm mb-8" style={{ color: "#94a3b8" }} data-testid="text-step-indicator">
+                  Step {step} of 3
+                </p>
+                <div className="flex gap-1 mb-8">
+                  {[1, 2, 3].map((s) => (
+                    <div
+                      key={s}
+                      className="h-1 flex-1 rounded-full transition-colors"
+                      style={{
+                        backgroundColor: s <= step ? "#1e3a5f" : "#e2e8f0",
+                      }}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
 

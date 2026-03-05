@@ -1,0 +1,22 @@
+CHANGE 3 — INTERACTIVE TRACKING INPUT IN HERO
+Below the CTA buttons and above the animated mockup, add an interactive input area. This replaces the small grey trust text line that currently says "Track competitors, trends, news..." — remove that line and replace it with this component.
+A rounded input container, max-width 600px, centred, white background, navy border 2px, border-radius 12px, 16px padding.
+Inside: a text input field, full width, no border of its own, placeholder text: "What do you want to track? e.g. competitors, industry news, regulations..."
+Below the input, a full width navy button: "Build my workspace" with a small sparkle icon on the left.
+When the user types something and clicks "Build my workspace":
+- Store their input text in localStorage with the key "watchloom_tracking_intent"
+- If the user is not logged in, take them directly to Step 3 of the signup flow (skipping Step 1 and Step 2 since they have already answered the tracking question here) with a subtle message at the top of Step 3: "Your workspace is being prepared based on what you told us."
+- If the user is already logged in, take them to My Workspace with a toast notification: "We have added your new tracking topic to your workspace."
+In the 3-step signup flow, when the user arrives at Step 3 having come from the homepage input:
+- Auto-populate the Step 2 tracking answer field with whatever they typed on the homepage
+- Skip showing Step 1 and Step 2 entirely — go straight to Step 3 account creation
+- Pass the stored tracking intent through to the onboarding AI extraction exactly as if they had completed Step 2 normally
+Below the input button, keep the small grey text but update it to:
+"Free for 14 days. No credit card required."
+---
+PRESERVATION RULES:
+- Do not change any authenticated screens
+- Do not change the backend or database
+- Do not change the 3-step signup flow UI — only add the skip logic when coming from homepage input
+- Do not change any other landing page sections
+- The navbar must not appear inside the authenticated app — landing page only"
