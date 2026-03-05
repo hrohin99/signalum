@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { SiGoogle } from "react-icons/si";
-import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal } from "lucide-react";
 import { Link } from "wouter";
 
 type SignupStep = 1 | 2 | 3;
@@ -16,11 +16,16 @@ const ROLES = [
   { id: "analyst", label: "Analyst", icon: BarChart3 },
   { id: "sales_bd", label: "Sales & BD", icon: Handshake },
   { id: "executive", label: "Executive", icon: Crown },
+  { id: "strategy_planning", label: "Strategy & Planning", icon: Target },
+  { id: "consultant_advisor", label: "Consultant / Advisor", icon: Lightbulb },
+  { id: "researcher", label: "Researcher", icon: Search },
+  { id: "other", label: "Other", icon: MoreHorizontal },
 ] as const;
 
 export default function SignupPage() {
   const [step, setStep] = useState<SignupStep>(1);
   const [selectedRole, setSelectedRole] = useState<string>("");
+  const [otherRoleText, setOtherRoleText] = useState("");
   const [trackingText, setTrackingText] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -30,6 +35,9 @@ export default function SignupPage() {
   const { signUp, signInWithGoogle } = useAuth();
   const { toast } = useToast();
 
+  const effectiveRole = selectedRole === "other" ? otherRoleText.trim() : selectedRole;
+  const canContinueStep1 = selectedRole !== "" && (selectedRole !== "other" || otherRoleText.trim().length > 0);
+
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -37,7 +45,7 @@ export default function SignupPage() {
     try {
       localStorage.setItem(
         "pendingOnboarding",
-        JSON.stringify({ role: selectedRole, trackingText, fullName })
+        JSON.stringify({ role: effectiveRole, trackingText, fullName })
       );
 
       const { error, emailSent } = await signUp(email, password);
@@ -78,7 +86,7 @@ export default function SignupPage() {
   const handleGoogleSignIn = async () => {
     localStorage.setItem(
       "pendingOnboarding",
-      JSON.stringify({ role: selectedRole, trackingText, fullName })
+      JSON.stringify({ role: effectiveRole, trackingText, fullName })
     );
     const { error } = await signInWithGoogle();
     if (error) {
@@ -140,7 +148,7 @@ export default function SignupPage() {
             >
               What's your role?
             </h2>
-            <div className="grid grid-cols-2 gap-3 mb-8">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               {ROLES.map((role) => {
                 const Icon = role.icon;
                 const isSelected = selectedRole === role.id;
@@ -148,8 +156,13 @@ export default function SignupPage() {
                   <button
                     key={role.id}
                     type="button"
-                    onClick={() => setSelectedRole(role.id)}
-                    className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 p-5 transition-all cursor-pointer"
+                    onClick={() => {
+                      setSelectedRole(role.id);
+                      if (role.id !== "other") {
+                        setOtherRoleText("");
+                      }
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-all cursor-pointer"
                     style={{
                       borderColor: isSelected ? "#1e3a5f" : "#e2e8f0",
                       backgroundColor: isSelected ? "rgba(30,58,95,0.04)" : "#ffffff",
@@ -170,9 +183,20 @@ export default function SignupPage() {
                 );
               })}
             </div>
+            {selectedRole === "other" && (
+              <div className="mb-4">
+                <Input
+                  value={otherRoleText}
+                  onChange={(e) => setOtherRoleText(e.target.value)}
+                  placeholder="What's your title?"
+                  className="h-11"
+                  data-testid="input-other-role"
+                />
+              </div>
+            )}
             <Button
               onClick={() => setStep(2)}
-              disabled={!selectedRole}
+              disabled={!canContinueStep1}
               className="w-full h-11 text-white font-semibold"
               style={{ backgroundColor: "#1e3a5f" }}
               data-testid="button-continue-step1"
@@ -199,7 +223,7 @@ export default function SignupPage() {
             <Textarea
               value={trackingText}
               onChange={(e) => setTrackingText(e.target.value)}
-              placeholder="e.g. I track competitors in identity verification — iProov, Thales, Idemia — plus EU and UK digital identity regulations like eIDAS 2.0 and UK DIATF."
+              placeholder="e.g. I need to keep track of what our competitors are doing, stay on top of new regulations in our industry, and follow any news or policy changes that could affect our business."
               className="min-h-[120px] mb-8 text-sm resize-none"
               data-testid="input-tracking-text"
             />

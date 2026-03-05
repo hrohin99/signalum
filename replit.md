@@ -50,7 +50,7 @@ AI-powered personal intelligence workspace.
 ## File Structure
 - `client/src/lib/supabase.ts` - Supabase client initialization
 - `client/src/lib/auth-context.tsx` - Auth provider with Supabase auth hooks
-- `client/src/pages/landing.tsx` - Public landing page (hero, features, social proof, footer)
+- `client/src/pages/landing.tsx` - Public landing page (hero with pill badge, scrolling tag strip, how-it-works 3-column, track-anything 6-card showcase, final CTA, footer)
 - `client/src/pages/signup.tsx` - 3-step signup flow (role → tracking text → account creation)
 - `client/src/pages/signin.tsx` - Simple sign-in page
 - `client/src/pages/auth.tsx` - Legacy auth page (no longer routed, kept for reference)
@@ -69,7 +69,7 @@ AI-powered personal intelligence workspace.
 
 ## Pre-Auth Flow
 - Landing page at `/` for unauthenticated users with hero section, features, and social proof
-- 3-step signup at `/signup`: Step 1 (role selection) → Step 2 (tracking text) → Step 3 (account creation)
+- 3-step signup at `/signup`: Step 1 (8 role cards in 2x4 grid, "Other" reveals text input) → Step 2 (tracking text) → Step 3 (account creation)
 - Sign-in at `/signin`: simple email/password form
 - Users who complete the 3-step signup have their role + tracking text stored in localStorage as `pendingOnboarding`
 - After email verification and sign-in, App.tsx auto-runs AI extraction and workspace creation from the stored context, skipping the manual onboarding page
