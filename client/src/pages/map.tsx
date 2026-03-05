@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -23,9 +23,9 @@ import {
   BarChart3,
   Activity,
   Sparkles,
-  Lightbulb,
   Shield,
   Check,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -547,6 +547,47 @@ function EntityDetail({
 }) {
   const lastDate = captures.length > 0 ? new Date(captures[0].createdAt) : null;
   const status = captures.length > 0 ? "Active" : "New";
+  const [inlineText, setInlineText] = useState("");
+  const [showConfirmation, setShowConfirmation] = useState(false);
+  const confirmTimerRef = useRef<number | null>(null);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+
+  const inlineMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await apiRequest("POST", "/api/captures", {
+        type: "text",
+        content,
+        matchedEntity: entity.name,
+        matchedCategory: categoryName,
+        matchReason: "Direct update from topic view",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      setInlineText("");
+      setShowConfirmation(true);
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+      confirmTimerRef.current = window.setTimeout(() => setShowConfirmation(false), 3000);
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = () => {
+    if (inlineMutation.isPending) return;
+    const trimmed = inlineText.trim();
+    if (!trimmed) return;
+    inlineMutation.mutate(trimmed);
+  };
 
   return (
     <div className="space-y-5">
@@ -655,15 +696,6 @@ function EntityDetail({
               })}
             </div>
           </ScrollArea>
-
-          {captures.length <= 2 && (
-            <div className="flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200/60 px-4 py-3" data-testid="text-capture-more-prompt">
-              <Lightbulb className="w-5 h-5 text-amber-500 shrink-0" />
-              <p className="text-sm text-amber-800">
-                Capture more updates about <span className="font-medium">{entity.name}</span> to build a richer picture.
-              </p>
-            </div>
-          )}
         </div>
       ) : (
         <div className="border border-dashed border-border rounded-lg p-10 text-center">
@@ -676,6 +708,42 @@ function EntityDetail({
           </p>
         </div>
       )}
+
+      <div className="space-y-2" data-testid="inline-capture-form">
+        <div className="flex items-end gap-2">
+          <textarea
+            className="flex-1 min-h-[80px] rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]/50 resize-none"
+            placeholder={`Add an update to ${entity.name}...`}
+            value={inlineText}
+            onChange={(e) => setInlineText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                handleSubmit();
+              }
+            }}
+            disabled={inlineMutation.isPending}
+            data-testid="input-inline-capture"
+          />
+          <Button
+            onClick={handleSubmit}
+            disabled={!inlineText.trim() || inlineMutation.isPending}
+            className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-10 px-4"
+            data-testid="button-inline-capture-submit"
+          >
+            {inlineMutation.isPending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+        {showConfirmation && (
+          <p className="text-sm text-emerald-600 font-medium flex items-center gap-1.5" data-testid="text-update-confirmation">
+            <Check className="w-3.5 h-3.5" />
+            Update added.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
