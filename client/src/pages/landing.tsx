@@ -65,7 +65,7 @@ export default function LandingPage() {
             style={{ color: "#64748b", fontSize: "20px" }}
             data-testid="text-hero-subheadline"
           >
-            Every day you hear things, read things, and notice things that matter — and most of it disappears. Intel App captures everything, routes it automatically, and delivers a daily briefing every morning.
+            Every day you hear things, read things, and notice things that matter — and most of it disappears. Watchloom captures everything, routes it automatically, and delivers a daily briefing every morning.
           </p>
 
           <div className="flex items-center justify-center gap-4 mb-6">
@@ -259,7 +259,7 @@ export default function LandingPage() {
               style={{ color: "#1e3a5f" }}
               data-testid="text-track-headline"
             >
-              If it matters to your work, Intel App tracks it
+              If it matters to your work, Watchloom tracks it
             </h2>
             <p
               className="text-base max-w-[640px] mx-auto"
@@ -333,7 +333,7 @@ export default function LandingPage() {
             style={{ color: "#64748b" }}
             data-testid="text-cta-subtext"
           >
-            Join professionals who use Intel App to stay ahead of their market, their competition, and their industry — every single day.
+            Join professionals who use Watchloom to stay ahead of their market, their competition, and their industry — every single day.
           </p>
           <Link href="/signup">
             <button
@@ -358,7 +358,7 @@ export default function LandingPage() {
         <div className="max-w-[1000px] mx-auto">
           <div className="flex items-center justify-between mb-6">
             <span className="text-base font-bold" style={{ color: "#1e3a5f" }} data-testid="text-footer-brand">
-              Intel App
+              Watchloom
             </span>
             <div className="flex items-center gap-6">
               <Link href="/signin">
@@ -382,7 +382,7 @@ export default function LandingPage() {
             </div>
           </div>
           <p className="text-xs" style={{ color: "#94a3b8" }}>
-            &copy; 2026 Intel App
+            &copy; 2026 Watchloom
           </p>
         </div>
       </footer>

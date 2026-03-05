@@ -119,7 +119,7 @@ export default function SignupPage() {
             <Shield className="w-4 h-4 text-white" />
           </div>
           <span className="text-lg font-semibold" style={{ color: "#1e3a5f" }}>
-            Intel App
+            Watchloom
           </span>
         </div>
 

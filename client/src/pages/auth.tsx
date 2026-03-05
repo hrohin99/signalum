@@ -75,7 +75,7 @@ export default function AuthPage() {
               <div className="w-10 h-10 rounded-md bg-[#1e3a5f] flex items-center justify-center">
                 <Shield className="w-5 h-5 text-white" />
               </div>
-              <span className="text-2xl font-semibold tracking-tight text-foreground">Intel App</span>
+              <span className="text-2xl font-semibold tracking-tight text-foreground">Watchloom</span>
             </div>
             <p className="text-muted-foreground mt-4 text-lg leading-relaxed">
               Your personal AI-powered intelligence workspace.

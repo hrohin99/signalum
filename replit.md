@@ -1,4 +1,4 @@
-# Intel App
+# Watchloom
 
 AI-powered personal intelligence workspace.
 

@@ -78,7 +78,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
           <div className="w-9 h-9 rounded-md bg-[#1e3a5f] flex items-center justify-center">
             <Shield className="w-4 h-4 text-white" />
           </div>
-          <span className="text-xl font-semibold tracking-tight text-foreground">Intel App</span>
+          <span className="text-xl font-semibold tracking-tight text-foreground">Watchloom</span>
         </div>
 
         <div className="flex items-center gap-2 mt-6 mb-8">

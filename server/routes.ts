@@ -70,7 +70,7 @@ function verificationResultPage(message: string, success: boolean): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Email Verification — Intel App</title>
+  <title>Email Verification — Watchloom</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f5f7;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:80px 0;">
@@ -79,14 +79,14 @@ function verificationResultPage(message: string, success: boolean): string {
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
             <td style="background-color:#1e3a5f;padding:24px 40px;text-align:center;">
-              <span style="font-size:24px;font-weight:600;color:#ffffff;">Intel App</span>
+              <span style="font-size:24px;font-weight:600;color:#ffffff;">Watchloom</span>
             </td>
           </tr>
           <tr>
             <td style="padding:48px 40px;text-align:center;">
               <div style="width:56px;height:56px;border-radius:50%;background-color:${color};color:#fff;font-size:28px;line-height:56px;margin:0 auto 24px;">${icon}</div>
               <p style="margin:0 0 32px;font-size:17px;color:#333;line-height:1.5;">${message}</p>
-              <a href="/" style="display:inline-block;padding:12px 32px;background-color:#1e3a5f;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600;">Go to Intel App</a>
+              <a href="/" style="display:inline-block;padding:12px 32px;background-color:#1e3a5f;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600;">Go to Watchloom</a>
             </td>
           </tr>
         </table>

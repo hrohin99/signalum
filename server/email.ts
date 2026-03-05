@@ -26,7 +26,7 @@ export async function sendVerificationEmail(
   const { data, error } = await resend.emails.send({
     from: fromAddress,
     to,
-    subject: "Confirm your email — Intel App",
+    subject: "Confirm your email — Watchloom",
     html: `
 <!DOCTYPE html>
 <html lang="en">
@@ -41,7 +41,7 @@ export async function sendVerificationEmail(
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
             <td style="background-color:#1e3a5f;padding:32px 40px;text-align:center;">
-              <span style="font-size:24px;font-weight:600;color:#ffffff;letter-spacing:-0.3px;">Intel App</span>
+              <span style="font-size:24px;font-weight:600;color:#ffffff;letter-spacing:-0.3px;">Watchloom</span>
             </td>
           </tr>
           <tr>
@@ -70,7 +70,7 @@ export async function sendVerificationEmail(
           <tr>
             <td style="padding:24px 40px;border-top:1px solid #eee;text-align:center;">
               <p style="margin:0;font-size:12px;color:#aaaaaa;">
-                You received this email because you signed up for Intel App.<br>
+                You received this email because you signed up for Watchloom.<br>
                 If you didn't create an account, you can safely ignore this email.
               </p>
             </td>
@@ -81,7 +81,7 @@ export async function sendVerificationEmail(
   </table>
 </body>
 </html>`,
-    text: `Intel App\n\nConfirm your email to access your workspace\n\nThanks for signing up. Visit the link below to verify your email address:\n\n${verificationLink}\n\nIf you didn't create an account, you can safely ignore this email.`,
+    text: `Watchloom\n\nConfirm your email to access your workspace\n\nThanks for signing up. Visit the link below to verify your email address:\n\n${verificationLink}\n\nIf you didn't create an account, you can safely ignore this email.`,
   });
 
   if (error) {
