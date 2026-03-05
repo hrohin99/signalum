@@ -839,7 +839,9 @@ Return only the summary paragraph, no JSON, no formatting.`
 
       const originalEntity = category.entities[originalIndex];
       const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
-      const safeTopicType = (typeof topicType === "string" && validTopicTypes.includes(topicType.toLowerCase())) ? topicType.toLowerCase() : (originalEntity.topic_type || "general");
+      const originalTopicType = originalEntity.topic_type ? originalEntity.topic_type.toLowerCase() : null;
+      const clientTopicType = (typeof topicType === "string" && validTopicTypes.includes(topicType.toLowerCase())) ? topicType.toLowerCase() : null;
+      const safeTopicType = (originalTopicType && validTopicTypes.includes(originalTopicType)) ? originalTopicType : (clientTopicType || "general");
 
       const existingNames = category.entities
         .filter(e => e.name !== originalEntityName)
@@ -870,6 +872,51 @@ Return only the summary paragraph, no JSON, no formatting.`
       return res.json({ success: true, workspace: updated, created: newEntities.length });
     } catch (error: any) {
       console.error("Split topic error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/fix-topic-types", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { fixes } = req.body;
+
+      if (!Array.isArray(fixes) || fixes.length === 0) {
+        return res.status(400).json({ message: "Provide an array of fixes with categoryName, entityName, and topic_type" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
+      let fixedCount = 0;
+
+      for (const fix of fixes) {
+        const { categoryName, entityName, topic_type } = fix;
+        if (!categoryName || !entityName || !topic_type) continue;
+        if (!validTopicTypes.includes(topic_type.toLowerCase())) continue;
+
+        const category = categories.find(c => c.name === categoryName);
+        if (!category) continue;
+
+        const entity = category.entities.find(e => e.name === entityName);
+        if (!entity) continue;
+
+        entity.topic_type = topic_type.toLowerCase();
+        fixedCount++;
+      }
+
+      if (fixedCount === 0) {
+        return res.status(404).json({ message: "No matching entities found to fix" });
+      }
+
+      const updated = await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, fixed: fixedCount, workspace: updated });
+    } catch (error: any) {
+      console.error("Fix topic types error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

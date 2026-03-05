@@ -471,7 +471,7 @@ export default function MapPage() {
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-foreground">{entity.name}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {entityTypeLabels[entity.type] || entity.type}
+                              {topicTypeMap[(entity.topic_type || "general").toLowerCase()]?.displayName || entityTypeLabels[entity.type] || entity.type}
                               {count > 0 ? ` · ${count} update${count !== 1 ? "s" : ""}` : ""}
                             </p>
                           </div>
