@@ -43,8 +43,8 @@ function ProductMockup() {
   ];
 
   const intelItems = [
-    { date: "Mar 4, 2026", text: "No on-premises option confirmed in vendor call." },
-    { date: "Mar 4, 2026", text: "Cloud-only architecture limits air-gapped deployments." },
+    { date: "Mar 4, 2026", text: "Pricing page updated — new enterprise tier added." },
+    { date: "Mar 4, 2026", text: "Homepage messaging shifted toward enterprise buyers." },
   ];
 
   return (
@@ -114,7 +114,7 @@ function ProductMockup() {
 
         <div className="flex-1 p-6" style={{ backgroundColor: "#ffffff" }}>
           <div className="mb-1">
-            <span className="text-xl font-bold" style={{ color: "#1e3a5f" }}>iProov</span>
+            <span className="text-xl font-bold" style={{ color: "#1e3a5f" }}>Acme Technologies</span>
           </div>
           <span
             className="inline-block text-xs rounded-full px-2.5 py-0.5 mb-5"
@@ -131,7 +131,7 @@ function ProductMockup() {
               <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>AI Summary</span>
             </div>
             <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>
-              iProov confirmed they do not offer on-premises deployment, positioning them exclusively as a cloud-based provider. This represents a notable capability gap for regulated sectors requiring data sovereignty.
+              Acme Technologies launched a redesigned product page this week and quietly updated their enterprise pricing. Early signals suggest they are moving upmarket toward larger customers.
             </p>
           </div>
 
