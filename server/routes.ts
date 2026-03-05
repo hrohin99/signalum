@@ -344,6 +344,18 @@ CRITICAL EXTRACTION RULES:
 5. It is better to include too many entities than to miss even one that the user explicitly named.
 6. IMPORTANT — VAGUE INPUT HANDLING: If the user gives a vague or general description without naming any specific entities (e.g. "I want to track competitors" or "keep up with industry trends"), you MUST still create appropriate categories based on what they described, but leave the entities array EMPTY (an empty array []) for those categories. Do NOT invent, guess, or fabricate placeholder entity names. Only include entities that the user explicitly named. A category with zero entities is perfectly valid.
 
+ONE TOPIC PER NAMED ENTITY — NEVER COMBINE:
+7. Every specifically named company, person, product, regulation, standard, or project MUST become its own individual entity. NEVER combine multiple named items into a single entity name.
+8. Examples of what NOT to do:
+   - Do NOT create an entity called "iProov, IDEMIA, incode" — create THREE separate entities: "iProov", "IDEMIA", "incode"
+   - Do NOT create an entity called "eIDAS 2.0 and UK DIATF" — create TWO separate entities: "eIDAS 2.0", "UK DIATF"
+   - Do NOT create an entity called "Liveness and Deepfake" — create TWO separate entities: "Liveness Detection", "Deepfake Technology"
+   - Do NOT use comma-separated or "and"-joined names as a single entity name anywhere in your output.
+9. Examples of what TO do:
+   - User says "I want to track iProov, IDEMIA and incode as competitors" → category: "Competitor Landscape", entities: "iProov", "IDEMIA", "incode" — each as individual entries
+   - User says "track regulations like eIDAS 2.0 and UK DIATF" → category: "Regulations", entities: "eIDAS 2.0", "UK DIATF" — each as individual entries
+10. The ONLY exception: when the user explicitly names a group as a single thing — e.g. "the big four accounting firms" should become one entity "Big Four Accounting Firms" because the user is treating the group as a single concept.
+
 Return a JSON object with this exact structure:
 {
   "categories": [
@@ -461,6 +473,8 @@ IMPORTANT: Evaluate how well the content fits any existing entity and category. 
 
 Additionally, evaluate whether the matched entity's current topic_type is still the best fit given this new content. The valid topic_type values are: competitor, project, regulation, person, trend, account, technology, event, deal, risk, general.
 
+MULTI-ENTITY RULE: If the captured content mentions multiple specific named entities (companies, people, regulations, etc.), suggest filing it under each relevant individual topic separately — never suggest a single combined topic name. Each named entity should be its own topic. For the primary match, pick the single most relevant entity. Do NOT create or suggest topic names that combine multiple names (e.g. never suggest "iProov and IDEMIA" as a single topic name).
+
 If your confidence is 70 or above, return this JSON:
 {
   "matched": true,
@@ -488,6 +502,8 @@ If your confidence is below 70 — meaning no existing category or entity is a g
     "topic_type": "inferred_type_key"
   }
 }
+
+IMPORTANT: The suggestedEntity name must ALWAYS be a single named entity. Never combine multiple names into one topic name (e.g. never "Company A, Company B" or "Regulation X and Y"). If the content relates to multiple entities, pick the single most relevant one for the suggestion.
 
 Always return valid JSON only, no other text.`
           }
