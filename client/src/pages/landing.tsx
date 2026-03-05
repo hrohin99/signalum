@@ -180,11 +180,11 @@ export default function LandingPage() {
       `}</style>
 
       {/* SECTION 1 - HERO */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "120px 24px 0 24px" }}>
+      <section className="w-full" style={{ backgroundColor: "#1e3a5f", padding: "120px 24px 0 24px" }}>
         <div className="max-w-[720px] mx-auto text-center">
           <div
-            className="inline-block rounded-full px-4 py-1.5 text-xs font-medium text-white mb-8"
-            style={{ backgroundColor: "#1e3a5f" }}
+            className="inline-block rounded-full px-4 py-1.5 text-xs font-medium mb-8"
+            style={{ backgroundColor: "rgba(255,255,255,0.15)", color: "#ffffff" }}
             data-testid="badge-hero-pill"
           >
             Your AI intelligence workspace
@@ -192,7 +192,7 @@ export default function LandingPage() {
 
           <h1
             className="text-4xl md:text-5xl lg:text-[56px] font-bold tracking-tight leading-tight mb-6"
-            style={{ color: "#1e3a5f" }}
+            style={{ color: "#ffffff" }}
             data-testid="text-hero-headline"
           >
             Know more. Miss nothing.
@@ -200,17 +200,16 @@ export default function LandingPage() {
 
           <p
             className="leading-relaxed max-w-[640px] mx-auto mb-10"
-            style={{ color: "#64748b", fontSize: "20px" }}
+            style={{ color: "#94a3b8", fontSize: "20px" }}
             data-testid="text-hero-subheadline"
           >
             Most professionals spend 5 or more hours every month manually searching for news, tracking competitors, and piecing together what changed in their industry. Watchloom's AI agents do all of that automatically, crawling the internet continuously so you wake up every morning already knowing what matters.
           </p>
 
           <div
-            className="max-w-[640px] mx-auto mb-10"
+            className="max-w-[640px] mx-auto mb-10 rounded-lg"
             style={{
-              borderTop: "1px solid #e2e8f0",
-              borderBottom: "1px solid #e2e8f0",
+              backgroundColor: "#254b7a",
               padding: "32px 0",
             }}
             data-testid="stats-bar"
@@ -221,37 +220,37 @@ export default function LandingPage() {
             >
               <div className="flex-1 flex items-center justify-center text-center px-4">
                 <div>
-                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-hours">5+ hours</div>
-                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>saved every month per user</div>
+                  <div className="text-2xl font-bold" style={{ color: "#ffffff" }} data-testid="stat-hours">5+ hours</div>
+                  <div className="text-sm mt-1" style={{ color: "#94a3b8" }}>saved every month per user</div>
                 </div>
               </div>
-              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
+              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "rgba(255,255,255,0.2)" }} />
               <div className="flex-1 flex items-center justify-center text-center px-4">
                 <div>
-                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-schedule">Daily, weekly or monthly</div>
-                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>briefings on your schedule</div>
+                  <div className="text-2xl font-bold" style={{ color: "#ffffff" }} data-testid="stat-schedule">Daily, weekly or monthly</div>
+                  <div className="text-sm mt-1" style={{ color: "#94a3b8" }}>briefings on your schedule</div>
                 </div>
               </div>
-              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
+              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "rgba(255,255,255,0.2)" }} />
               <div className="flex-1 flex items-center justify-center text-center px-4">
                 <div>
-                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-topic">Any topic</div>
-                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>set up in plain English</div>
+                  <div className="text-2xl font-bold" style={{ color: "#ffffff" }} data-testid="stat-topic">Any topic</div>
+                  <div className="text-sm mt-1" style={{ color: "#94a3b8" }}>set up in plain English</div>
                 </div>
               </div>
             </div>
             <div className="flex flex-col items-center gap-6 md:hidden">
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>5+ hours</div>
-                <div className="text-sm mt-1" style={{ color: "#64748b" }}>saved every month per user</div>
+                <div className="text-2xl font-bold" style={{ color: "#ffffff" }}>5+ hours</div>
+                <div className="text-sm mt-1" style={{ color: "#94a3b8" }}>saved every month per user</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>Daily, weekly or monthly</div>
-                <div className="text-sm mt-1" style={{ color: "#64748b" }}>briefings on your schedule</div>
+                <div className="text-2xl font-bold" style={{ color: "#ffffff" }}>Daily, weekly or monthly</div>
+                <div className="text-sm mt-1" style={{ color: "#94a3b8" }}>briefings on your schedule</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>Any topic</div>
-                <div className="text-sm mt-1" style={{ color: "#64748b" }}>set up in plain English</div>
+                <div className="text-2xl font-bold" style={{ color: "#ffffff" }}>Any topic</div>
+                <div className="text-sm mt-1" style={{ color: "#94a3b8" }}>set up in plain English</div>
               </div>
             </div>
           </div>
@@ -259,8 +258,8 @@ export default function LandingPage() {
           <div className="flex items-center justify-center gap-4 mb-6">
             <Link href="/signup">
               <button
-                className="px-8 py-3 rounded-lg text-base font-semibold text-white transition-opacity hover:opacity-90"
-                style={{ backgroundColor: "#1e3a5f" }}
+                className="px-8 py-3 rounded-lg text-base font-semibold transition-opacity hover:opacity-90"
+                style={{ backgroundColor: "#ffffff", color: "#1e3a5f" }}
                 data-testid="button-get-started"
               >
                 Get Started Free
@@ -269,7 +268,7 @@ export default function LandingPage() {
             <Link href="/signin">
               <button
                 className="px-8 py-3 rounded-lg text-base font-semibold border-2 transition-opacity hover:opacity-80"
-                style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "white" }}
+                style={{ color: "#ffffff", borderColor: "#ffffff", backgroundColor: "transparent" }}
                 data-testid="button-sign-in-hero"
               >
                 Sign In
@@ -288,30 +287,30 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 1.5 - THE REAL PROBLEM */}
-      <section className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 24px" }}>
+      <section className="w-full" style={{ backgroundColor: "#1e3a5f", padding: "80px 24px" }}>
         <div className="mx-auto flex flex-col md:flex-row items-start gap-10" style={{ maxWidth: 860 }}>
           <div className="w-full md:w-[55%]">
             <p
               className="text-xs font-semibold uppercase tracking-widest mb-4"
-              style={{ color: "#64748b" }}
+              style={{ color: "#94a3b8" }}
               data-testid="text-problem-label"
             >
               The real problem
             </p>
             <h2
               className="text-2xl md:text-3xl font-bold leading-tight mb-6"
-              style={{ color: "#1e3a5f" }}
+              style={{ color: "#ffffff" }}
               data-testid="text-problem-headline"
             >
               You are not short on information. You are short on clarity.
             </h2>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: "#64748b" }} data-testid="text-problem-p1">
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "#94a3b8" }} data-testid="text-problem-p1">
               Every day you get hit with newsletters, alerts, articles, Slack messages, and LinkedIn posts. The information is everywhere. The problem is none of it connects.
             </p>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: "#64748b" }} data-testid="text-problem-p2">
+            <p className="text-sm leading-relaxed mb-4" style={{ color: "#94a3b8" }} data-testid="text-problem-p2">
               You bookmark things you never revisit. You save articles you forget about. You take notes that sit in a folder nobody opens. Storing information is not the same as understanding it.
             </p>
-            <p className="text-sm leading-relaxed" style={{ color: "#64748b" }} data-testid="text-problem-p3">
+            <p className="text-sm leading-relaxed" style={{ color: "#94a3b8" }} data-testid="text-problem-p3">
               Watchloom does not just store what you capture. It reads it, connects it to everything else you track, and turns it into a clear picture of what is actually happening in your world.
             </p>
           </div>
@@ -319,44 +318,43 @@ export default function LandingPage() {
           <div className="w-full md:w-[45%]">
             <div
               style={{
-                backgroundColor: "#ffffff",
-                border: "1px solid #e2e8f0",
+                backgroundColor: "#254b7a",
                 borderRadius: 8,
                 padding: 24,
               }}
               data-testid="card-comparison"
             >
               <div className="flex flex-wrap">
-                <div className="flex-1 pr-4" style={{ borderRight: "1px solid #e2e8f0", minWidth: 140 }}>
+                <div className="flex-1 pr-4" style={{ borderRight: "1px solid rgba(255,255,255,0.2)", minWidth: 140 }}>
                   <div className="flex items-center gap-2 mb-4">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#94626a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <line x1="18" y1="6" x2="6" y2="18" />
                       <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
-                    <span className="text-xs font-semibold" style={{ color: "#94626a" }}>Without Watchloom</span>
+                    <span className="text-xs font-semibold" style={{ color: "#f87171" }}>Without Watchloom</span>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Bookmarks you never revisit</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Notes scattered across tools</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Alerts with no context</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Hours spent piecing it together</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Blindsided by things you should have known</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#94a3b8" }}>Bookmarks you never revisit</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#94a3b8" }}>Notes scattered across tools</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#94a3b8" }}>Alerts with no context</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#94a3b8" }}>Hours spent piecing it together</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#94a3b8" }}>Blindsided by things you should have known</p>
                   </div>
                 </div>
 
                 <div className="flex-1 pl-4" style={{ minWidth: 140 }}>
                   <div className="flex items-center gap-2 mb-4">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>With Watchloom</span>
+                    <span className="text-xs font-semibold" style={{ color: "#ffffff" }}>With Watchloom</span>
                   </div>
                   <div className="flex flex-col gap-3">
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Everything captured in one place</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>AI connects the dots automatically</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Context built up over time</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Briefed on your schedule</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Always the most informed person in the room</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#ffffff" }}>Everything captured in one place</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#ffffff" }}>AI connects the dots automatically</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#ffffff" }}>Context built up over time</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#ffffff" }}>Briefed on your schedule</p>
+                    <p className="text-xs leading-relaxed" style={{ color: "#ffffff" }}>Always the most informed person in the room</p>
                   </div>
                 </div>
               </div>
@@ -368,7 +366,7 @@ export default function LandingPage() {
       {/* SECTION 2 - SCROLLING TAG STRIP */}
       <section
         className="w-full overflow-hidden"
-        style={{ backgroundColor: "#f8fafc", padding: "40px 0" }}
+        style={{ backgroundColor: "#0f2440", padding: "40px 0" }}
       >
         <div
           className="flex whitespace-nowrap"
@@ -384,7 +382,6 @@ export default function LandingPage() {
               style={{
                 backgroundColor: "#ffffff",
                 color: "#1e3a5f",
-                border: "1px solid #e2e8f0",
               }}
             >
               {tag}
@@ -766,26 +763,26 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 5 - FINAL CTA */}
-      <section className="w-full px-6 py-24" style={{ backgroundColor: "#ffffff" }}>
+      <section className="w-full px-6 py-24" style={{ backgroundColor: "#1e3a5f" }}>
         <div className="max-w-[640px] mx-auto text-center">
           <h2
             className="text-3xl md:text-4xl font-bold mb-4"
-            style={{ color: "#1e3a5f" }}
+            style={{ color: "#ffffff" }}
             data-testid="text-cta-headline"
           >
             Stay ahead of everything that matters to you
           </h2>
           <p
             className="text-base mb-10"
-            style={{ color: "#64748b" }}
+            style={{ color: "#94a3b8" }}
             data-testid="text-cta-subtext"
           >
             Join professionals who have stopped wasting hours on manual research. Watchloom tracks everything, briefs you on schedule, and gives you that time back.
           </p>
           <Link href="/signup">
             <button
-              className="px-10 py-4 rounded-lg text-base font-semibold text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#1e3a5f" }}
+              className="px-10 py-4 rounded-lg text-base font-semibold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#ffffff", color: "#1e3a5f" }}
               data-testid="button-cta-get-started"
             >
               Start Your Free 14-Day Trial
