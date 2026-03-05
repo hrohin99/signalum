@@ -5,7 +5,7 @@ AI-powered personal intelligence workspace.
 ## Architecture
 - **Frontend**: React + Vite + Tailwind CSS + shadcn/ui components
 - **Backend**: Node.js/Express
-- **Auth**: Supabase (email/password + Google OAuth)
+- **Auth**: Supabase (email/password + Google OAuth) with Resend transactional emails
 - **AI**: Replit AI Integrations (Anthropic Claude) for entity extraction and content classification
 - **Database**: PostgreSQL (Replit) via Drizzle ORM
 - **Routing**: wouter (frontend), Express routes (backend)
@@ -21,9 +21,14 @@ AI-powered personal intelligence workspace.
 - `SUPABASE_ANON_KEY` - Supabase anonymous key
 - `AI_INTEGRATIONS_ANTHROPIC_API_KEY` - Replit AI integration key (auto-configured)
 - `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` - Replit AI integration URL (auto-configured)
+- `RESEND_API_KEY` - Resend API key for transactional emails
+- `EMAIL_FROM` - Sender email address for transactional emails
+- `SESSION_SECRET` - Used for signing JWT verification tokens
 - Vite exposes Supabase vars as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` via vite.config.ts
 
 ## API Routes
+- `POST /api/auth/signup` - Signup with email/password, sends branded verification email via Resend
+- `GET /api/auth/verify-email` - Email verification link handler, validates JWT token
 - `POST /api/extract` - Onboarding: extract categories/entities from user description (auth required)
 - `POST /api/classify` - Classify captured content and match to workspace entity (auth required)
 - `POST /api/transcribe` - Transcribe audio via Claude (auth required, multipart form)
@@ -53,7 +58,8 @@ AI-powered personal intelligence workspace.
 - `client/src/pages/brief.tsx` - Daily Brief page (empty state)
 - `client/src/pages/settings.tsx` - Settings/account page
 - `client/src/components/app-sidebar.tsx` - Sidebar navigation component
-- `server/routes.ts` - API routes
+- `server/routes.ts` - API routes (including auth signup/verification)
+- `server/email.ts` - Resend email sending (branded verification emails)
 - `server/storage.ts` - Database storage layer with Drizzle
 - `shared/schema.ts` - Drizzle schemas and shared TypeScript types
 

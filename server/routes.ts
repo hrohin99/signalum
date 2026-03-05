@@ -2,9 +2,11 @@ import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@supabase/supabase-js";
-import { randomUUID } from "crypto";
+import { randomUUID, createHmac } from "crypto";
 import multer from "multer";
+import jwt from "jsonwebtoken";
 import { storage } from "./storage";
+import { sendVerificationEmail } from "./email";
 import type { ExtractionResult, ExtractedCategory } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -50,10 +52,120 @@ function flattenEntities(categories: ExtractedCategory[]) {
   );
 }
 
+const JWT_SECRET = process.env.SESSION_SECRET!;
+if (!JWT_SECRET) {
+  throw new Error("SESSION_SECRET environment variable is required for email verification tokens");
+}
+
+function verificationResultPage(message: string, success: boolean): string {
+  const color = success ? "#16a34a" : "#dc2626";
+  const icon = success ? "&#10003;" : "&#10007;";
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Verification — Intel App</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:80px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background-color:#1e3a5f;padding:24px 40px;text-align:center;">
+              <span style="font-size:24px;font-weight:600;color:#ffffff;">Intel App</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:48px 40px;text-align:center;">
+              <div style="width:56px;height:56px;border-radius:50%;background-color:${color};color:#fff;font-size:28px;line-height:56px;margin:0 auto 24px;">${icon}</div>
+              <p style="margin:0 0 32px;font-size:17px;color:#333;line-height:1.5;">${message}</p>
+              <a href="/" style="display:inline-block;padding:12px 32px;background-color:#1e3a5f;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600;">Go to Intel App</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  app.post("/api/auth/signup", async (req: Request, res: Response) => {
+    try {
+      const { email, password } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email and password are required" });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+
+      const { data, error } = await supabase.auth.signUp({ email, password });
+
+      if (error) {
+        return res.status(400).json({ message: error.message });
+      }
+
+      const token = jwt.sign({ email, purpose: "email-verification" }, JWT_SECRET, {
+        expiresIn: "24h",
+      });
+
+      const emailResult = await sendVerificationEmail(email, token);
+
+      if (!emailResult.success) {
+        console.error("Failed to send verification email:", emailResult.error);
+        return res.status(201).json({
+          success: true,
+          message: "Account created, but we couldn't send the verification email. Please try signing up again or contact support.",
+          emailSent: false,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "Account created. Check your email to verify your address.",
+        emailSent: true,
+      });
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      return res.status(500).json({ message: error.message || "Signup failed" });
+    }
+  });
+
+  app.get("/api/auth/verify-email", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.query;
+
+      if (!token || typeof token !== "string") {
+        return res.status(400).send(verificationResultPage("Invalid verification link.", false));
+      }
+
+      const decoded = jwt.verify(token, JWT_SECRET) as {
+        email: string;
+        purpose: string;
+      };
+
+      if (decoded.purpose !== "email-verification") {
+        return res.status(400).send(verificationResultPage("Invalid verification link.", false));
+      }
+
+      return res.send(verificationResultPage("Your email has been verified! You can now sign in.", true));
+    } catch (error: any) {
+      if (error.name === "TokenExpiredError") {
+        return res.status(400).send(verificationResultPage("This verification link has expired. Please sign up again.", false));
+      }
+      return res.status(400).send(verificationResultPage("Invalid verification link.", false));
+    }
+  });
 
   app.post("/api/extract", requireAuth, async (req: Request, res: Response) => {
     try {

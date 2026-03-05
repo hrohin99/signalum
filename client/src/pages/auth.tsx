@@ -21,23 +21,37 @@ export default function AuthPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    const { error } = isSignUp
-      ? await signUp(email, password)
-      : await signIn(email, password);
-
-    setIsLoading(false);
-
-    if (error) {
-      toast({
-        title: "Authentication Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else if (isSignUp) {
-      toast({
-        title: "Account created",
-        description: "Check your email to confirm your account, or sign in if email confirmation is disabled.",
-      });
+    if (isSignUp) {
+      const { error, emailSent } = await signUp(email, password);
+      setIsLoading(false);
+      if (error) {
+        toast({
+          title: "Authentication Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      } else if (emailSent) {
+        toast({
+          title: "Account created",
+          description: "We've sent a verification email to your inbox. Please confirm your email to get started.",
+        });
+      } else {
+        toast({
+          title: "Account created",
+          description: "Your account was created but we couldn't send the verification email. Please try signing in directly.",
+          variant: "destructive",
+        });
+      }
+    } else {
+      const { error } = await signIn(email, password);
+      setIsLoading(false);
+      if (error) {
+        toast({
+          title: "Authentication Error",
+          description: error.message,
+          variant: "destructive",
+        });
+      }
     }
   };
 
