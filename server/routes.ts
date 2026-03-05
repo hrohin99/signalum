@@ -104,7 +104,7 @@ export async function registerRoutes(
 
   app.post("/api/auth/signup", async (req: Request, res: Response) => {
     try {
-      const { email, password } = req.body;
+      const { email, password, role, trackingText } = req.body;
 
       if (!email || !password) {
         return res.status(400).json({ message: "Email and password are required" });
@@ -122,6 +122,18 @@ export async function registerRoutes(
 
       if (error) {
         return res.status(400).json({ message: error.message });
+      }
+
+      if (data.user?.id && (role || trackingText)) {
+        try {
+          await storage.createUserProfile({
+            userId: data.user.id,
+            role: role || null,
+            onboardingContext: trackingText || null,
+          });
+        } catch (profileError: any) {
+          console.error("Failed to save onboarding profile:", profileError);
+        }
       }
 
       const token = jwt.sign({ email, userId: data.user?.id, purpose: "email-verification" }, JWT_SECRET, {
@@ -607,6 +619,59 @@ Total entities tracked: ${entities.length}`
     } catch (error: any) {
       console.error("Get briefs error:", error);
       return res.status(500).json({ message: error.message || "Failed to get briefs" });
+    }
+  });
+
+  app.post("/api/onboarding-context", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { role, trackingText } = req.body;
+
+      if (!role && !trackingText) {
+        return res.status(400).json({ message: "Missing role or trackingText" });
+      }
+
+      const existing = await storage.getUserProfile(userId);
+      if (existing) {
+        return res.json({ success: true, profile: existing });
+      }
+
+      const profile = await storage.createUserProfile({
+        userId,
+        role: role || null,
+        onboardingContext: trackingText || null,
+      });
+
+      return res.json({ success: true, profile });
+    } catch (error: any) {
+      console.error("Save onboarding context error:", error);
+      return res.status(500).json({ message: error.message || "Failed to save onboarding context" });
+    }
+  });
+
+  app.get("/api/onboarding-context/:userId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const authenticatedUserId = (req as any).userId;
+      const { userId } = req.params;
+
+      if (authenticatedUserId !== userId) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+
+      const profile = await storage.getUserProfile(userId);
+
+      if (profile && profile.onboardingContext) {
+        return res.json({
+          exists: true,
+          role: profile.role,
+          trackingText: profile.onboardingContext,
+        });
+      }
+
+      return res.json({ exists: false });
+    } catch (error: any) {
+      console.error("Get onboarding context error:", error);
+      return res.status(500).json({ message: error.message || "Failed to get onboarding context" });
     }
   });
 

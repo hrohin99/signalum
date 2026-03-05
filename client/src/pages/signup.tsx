@@ -48,7 +48,10 @@ export default function SignupPage() {
         JSON.stringify({ role: effectiveRole, trackingText, fullName })
       );
 
-      const { error, emailSent } = await signUp(email, password);
+      const { error, emailSent } = await signUp(email, password, {
+        role: effectiveRole,
+        trackingText,
+      });
       setIsLoading(false);
 
       if (error) {

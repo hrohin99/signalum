@@ -44,52 +44,85 @@ function AppContent() {
         }
 
         const pendingRaw = localStorage.getItem("pendingOnboarding");
+        let onboardingRole: string | null = null;
+        let onboardingText: string | null = null;
+
         if (pendingRaw) {
           try {
             const pending = JSON.parse(pendingRaw);
             if (pending.trackingText && pending.role) {
-              setAutoOnboarding(true);
-              setCheckingOnboarding(false);
-
-              const roleLabel =
-                pending.role === "product_manager"
-                  ? "Product Manager"
-                  : pending.role === "analyst"
-                    ? "Analyst"
-                    : pending.role === "sales_bd"
-                      ? "Sales & BD"
-                      : pending.role === "executive"
-                        ? "Executive"
-                        : pending.role;
-
-              const description = `Role: ${roleLabel}. ${pending.trackingText}`;
+              onboardingRole = pending.role;
+              onboardingText = pending.trackingText;
 
               try {
-                const extractRes = await apiRequest("POST", "/api/extract", { description });
-                const extraction = await extractRes.json();
-
-                if (!extraction?.categories?.length) {
-                  throw new Error("No categories extracted");
-                }
-
-                await apiRequest("POST", "/api/workspace", {
-                  userId: user.id,
-                  categories: extraction.categories,
+                await apiRequest("POST", "/api/onboarding-context", {
+                  role: pending.role,
+                  trackingText: pending.trackingText,
                 });
-
-                localStorage.removeItem("pendingOnboarding");
-                setAutoOnboarding(false);
-                setHasCompletedOnboarding(true);
-                return;
               } catch {
-                setAutoOnboarding(false);
-                setHasCompletedOnboarding(false);
               }
-              return;
             }
           } catch {
             localStorage.removeItem("pendingOnboarding");
           }
+        }
+
+        if (!onboardingRole || !onboardingText) {
+          try {
+            const contextRes = await fetch(`/api/onboarding-context/${user.id}`, {
+              credentials: "include",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            });
+            if (contextRes.ok) {
+              const contextData = await contextRes.json();
+              if (contextData.exists && contextData.trackingText) {
+                onboardingRole = contextData.role || "other";
+                onboardingText = contextData.trackingText;
+              }
+            }
+          } catch {
+          }
+        }
+
+        if (onboardingRole && onboardingText) {
+          setAutoOnboarding(true);
+          setCheckingOnboarding(false);
+
+          const roleLabel =
+            onboardingRole === "product_manager"
+              ? "Product Manager"
+              : onboardingRole === "analyst"
+                ? "Analyst"
+                : onboardingRole === "sales_bd"
+                  ? "Sales & BD"
+                  : onboardingRole === "executive"
+                    ? "Executive"
+                    : onboardingRole;
+
+          const description = `Role: ${roleLabel}. ${onboardingText}`;
+
+          try {
+            const extractRes = await apiRequest("POST", "/api/extract", { description });
+            const extraction = await extractRes.json();
+
+            if (!extraction?.categories?.length) {
+              throw new Error("No categories extracted");
+            }
+
+            await apiRequest("POST", "/api/workspace", {
+              userId: user.id,
+              categories: extraction.categories,
+            });
+
+            localStorage.removeItem("pendingOnboarding");
+            setAutoOnboarding(false);
+            setHasCompletedOnboarding(true);
+            return;
+          } catch {
+            setAutoOnboarding(false);
+            setHasCompletedOnboarding(false);
+          }
+          return;
         }
 
         setHasCompletedOnboarding(false);

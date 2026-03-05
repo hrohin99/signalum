@@ -1,7 +1,7 @@
 import { eq, desc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { workspaces, captures, briefs, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -10,6 +10,8 @@ const pool = new pg.Pool({
 export const db = drizzle(pool);
 
 export interface IStorage {
+  getUserProfile(userId: string): Promise<UserProfile | undefined>;
+  createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
   getWorkspaceByUserId(userId: string): Promise<Workspace | undefined>;
   createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
   updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined>;
@@ -20,6 +22,22 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
+  async getUserProfile(userId: string): Promise<UserProfile | undefined> {
+    const [profile] = await db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.userId, userId));
+    return profile;
+  }
+
+  async createUserProfile(profile: InsertUserProfile): Promise<UserProfile> {
+    const [created] = await db
+      .insert(userProfiles)
+      .values(profile)
+      .returning();
+    return created;
+  }
+
   async getWorkspaceByUserId(userId: string): Promise<Workspace | undefined> {
     const [workspace] = await db
       .select()

@@ -28,7 +28,7 @@ AI-powered personal intelligence workspace.
 - Vite exposes Supabase vars as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` via vite.config.ts
 
 ## API Routes
-- `POST /api/auth/signup` - Signup via Supabase Admin API (no Supabase email), sends branded verification email via Resend
+- `POST /api/auth/signup` - Signup via Supabase Admin API (no Supabase email), sends branded verification email via Resend. Also accepts optional `role` and `trackingText` fields to persist onboarding context to user_profiles table at account creation
 - `GET /api/auth/verify-email` - Email verification link handler, validates JWT token and confirms email in Supabase
 - `POST /api/extract` - Onboarding: extract categories/entities from user description (auth required)
 - `POST /api/classify` - Classify captured content and match to workspace entity (auth required)
@@ -38,11 +38,13 @@ AI-powered personal intelligence workspace.
 - `POST /api/entity-summary` - AI-generated summary for an entity based on captured intel (auth required)
 - `POST /api/add-entity` - Add a new entity to an existing category (auth required)
 - `POST /api/workspace` - Create user workspace (auth required)
+- `GET /api/onboarding-context/:userId` - Check if user has onboarding context saved from 3-step signup (auth required)
 - `GET /api/workspace/:userId` - Check if workspace exists (auth required)
 - `POST /api/briefs/generate` - Generate a daily brief using Claude from all captures + entity data (auth required)
 - `GET /api/briefs` - List all briefs for authenticated user (auth required)
 
 ## Database Tables
+- `user_profiles` - User role and onboarding context (tracking text from signup Step 2), saved at account creation before email confirmation
 - `workspaces` - User workspaces with categories/entities (jsonb)
 - `captures` - Captured content with entity/category match info
 - `briefs` - AI-generated daily intelligence briefs with content, capture/entity counts
@@ -71,9 +73,9 @@ AI-powered personal intelligence workspace.
 - Landing page at `/` for unauthenticated users with hero section, features, and social proof
 - 3-step signup at `/signup`: Step 1 (8 role cards in 2x4 grid, "Other" reveals text input) → Step 2 (tracking text) → Step 3 (account creation)
 - Sign-in at `/signin`: simple email/password form
-- Users who complete the 3-step signup have their role + tracking text stored in localStorage as `pendingOnboarding`
-- After email verification and sign-in, App.tsx auto-runs AI extraction and workspace creation from the stored context, skipping the manual onboarding page
-- Users who sign in without prior signup context (e.g. Google OAuth without going through signup flow) see the standard onboarding page
+- Users who complete the 3-step signup have their role + tracking text saved to the `user_profiles` database table at account creation (before email confirmation), and also stored in localStorage as `pendingOnboarding` as a fast-path fallback
+- After email verification and sign-in, App.tsx first checks localStorage, then falls back to checking the server via `GET /api/onboarding-context/:userId`. If onboarding data exists from either source, it auto-runs AI extraction and workspace creation, skipping the manual onboarding page
+- Only users who genuinely have no onboarding data (no localStorage AND no server-side profile) see the standard onboarding question page
 
 ## Visual Style
 - White background, deep navy blue #1e3a5f accent
