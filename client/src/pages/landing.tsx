@@ -11,7 +11,7 @@ const TRACK_CARDS = [
   {
     emoji: "🏢",
     title: "Your Competitors",
-    text: "A rival just updated their pricing and launched a new feature. You found out this morning — before your next customer call.",
+    text: "A rival just updated their pricing and launched a new feature. You found out this morning, before your next customer call.",
   },
   {
     emoji: "📰",
@@ -43,7 +43,7 @@ function ProductMockup() {
   ];
 
   const intelItems = [
-    { date: "Mar 4, 2026", text: "Pricing page updated — new enterprise tier added." },
+    { date: "Mar 4, 2026", text: "Pricing page updated, new enterprise tier added." },
     { date: "Mar 4, 2026", text: "Homepage messaging shifted toward enterprise buyers." },
   ];
 
@@ -175,7 +175,7 @@ export default function LandingPage() {
         }
       `}</style>
 
-      {/* SECTION 1 — HERO */}
+      {/* SECTION 1 - HERO */}
       <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "120px 24px 0 24px" }}>
         <div className="max-w-[720px] mx-auto text-center">
           <div
@@ -199,8 +199,35 @@ export default function LandingPage() {
             style={{ color: "#64748b", fontSize: "20px" }}
             data-testid="text-hero-subheadline"
           >
-            Watchloom captures everything you come across — articles, ideas, meetings, news — and turns it into a daily briefing that keeps you ahead of what matters most.
+            Most professionals spend 5 or more hours every month manually searching for news, tracking competitors, and piecing together what changed in their industry. Watchloom's AI agents do all of that automatically, crawling the internet continuously so you wake up every morning already knowing what matters.
           </p>
+
+          <div
+            className="max-w-[640px] mx-auto mb-10"
+            style={{
+              borderTop: "1px solid #e2e8f0",
+              borderBottom: "1px solid #e2e8f0",
+              padding: "32px 0",
+            }}
+            data-testid="stats-bar"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-6 md:gap-0">
+              <div className="text-center">
+                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-hours">5+ hours</div>
+                <div className="text-sm mt-1" style={{ color: "#64748b" }}>saved every month per user</div>
+              </div>
+              <div className="hidden md:block" style={{ width: 1, height: 48, backgroundColor: "#e2e8f0" }} />
+              <div className="text-center">
+                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-schedule">Daily, weekly or monthly</div>
+                <div className="text-sm mt-1" style={{ color: "#64748b" }}>briefings on your schedule</div>
+              </div>
+              <div className="hidden md:block" style={{ width: 1, height: 48, backgroundColor: "#e2e8f0" }} />
+              <div className="text-center">
+                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-topic">Any topic</div>
+                <div className="text-sm mt-1" style={{ color: "#64748b" }}>set up in plain English</div>
+              </div>
+            </div>
+          </div>
 
           <div className="flex items-center justify-center gap-4 mb-6">
             <Link href="/signup">
@@ -224,7 +251,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-sm" style={{ color: "#94a3b8" }} data-testid="text-hero-context">
-            Track competitors, trends, news, industries, topics, people — anything at all.
+            Track competitors, trends, news, industries, topics, people and anything at all.
           </p>
         </div>
 
@@ -233,7 +260,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 2 — SCROLLING TAG STRIP */}
+      {/* SECTION 2 - SCROLLING TAG STRIP */}
       <section
         className="w-full overflow-hidden"
         style={{ backgroundColor: "#f8fafc", padding: "40px 0" }}
@@ -261,7 +288,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 3 — HOW IT WORKS */}
+      {/* SECTION 3 - HOW IT WORKS */}
       <section className="w-full px-6" style={{ backgroundColor: "#ffffff", padding: "80px 24px" }}>
         <div className="max-w-[960px] mx-auto">
           <div className="text-center mb-16">
@@ -301,7 +328,7 @@ export default function LandingPage() {
                 Capture anything
               </h3>
               <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
-                Heard something interesting in a meeting? Spotted an article? Had a thought in the shower? Drop it in — voice, text, link, or file.
+                Heard something interesting in a meeting? Spotted an article? Had a thought in the shower? Drop it in, voice, text, link, or file.
               </p>
             </div>
 
@@ -376,7 +403,79 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 4 — TRACK ANYTHING SHOWCASE */}
+      {/* SECTION 3.5 - SOCIAL PROOF */}
+      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 24px" }}>
+        <div className="mx-auto" style={{ maxWidth: 860 }}>
+          <p
+            className="text-center text-xs font-semibold uppercase tracking-widest mb-8"
+            style={{ color: "#64748b" }}
+            data-testid="text-social-proof-label"
+          >
+            Trusted by professionals who need to stay ahead
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5" data-testid="social-proof-grid">
+            <div
+              className="flex flex-col"
+              style={{
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: 24,
+              }}
+              data-testid="card-testimonial-1"
+            >
+              <p className="text-sm leading-relaxed italic flex-1" style={{ color: "#64748b" }}>
+                "I used to spend half a Sunday catching up on what happened in my industry that week. Now it is waiting for me Monday morning."
+              </p>
+              <div>
+                <div style={{ width: 32, height: 2, backgroundColor: "#1e3a5f", marginTop: 16, marginBottom: 12 }} />
+                <p className="text-xs" style={{ color: "#64748b" }}>Senior Product Manager, SaaS company</p>
+              </div>
+            </div>
+
+            <div
+              className="flex flex-col"
+              style={{
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: 24,
+              }}
+              data-testid="card-testimonial-2"
+            >
+              <p className="text-sm leading-relaxed italic flex-1" style={{ color: "#64748b" }}>
+                "The daily brief is the first thing I open. It has genuinely changed how prepared I feel going into client meetings."
+              </p>
+              <div>
+                <div style={{ width: 32, height: 2, backgroundColor: "#1e3a5f", marginTop: 16, marginBottom: 12 }} />
+                <p className="text-xs" style={{ color: "#64748b" }}>Strategy Consultant, professional services</p>
+              </div>
+            </div>
+
+            <div
+              className="flex flex-col"
+              style={{
+                backgroundColor: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 8,
+                padding: 24,
+              }}
+              data-testid="card-testimonial-3"
+            >
+              <p className="text-sm leading-relaxed italic flex-1" style={{ color: "#64748b" }}>
+                "I track six different topics across two industries. Watchloom files everything and I never miss a thing."
+              </p>
+              <div>
+                <div style={{ width: 32, height: 2, backgroundColor: "#1e3a5f", marginTop: 16, marginBottom: 12 }} />
+                <p className="text-xs" style={{ color: "#64748b" }}>Market Analyst, financial services</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 4 - TRACK ANYTHING SHOWCASE */}
       <section className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 24px" }}>
         <div className="max-w-[1000px] mx-auto">
           <div className="text-center mb-16">
@@ -392,7 +491,7 @@ export default function LandingPage() {
               style={{ color: "#1e3a5f" }}
               data-testid="text-track-headline"
             >
-              Whatever you need to stay on top of — Watchloom's got it
+              Whatever you need to stay on top of, Watchloom's got it
             </h2>
             <p
               className="text-base mt-3"
@@ -440,14 +539,14 @@ export default function LandingPage() {
                 Anything You Define
               </h3>
               <p className="text-sm leading-relaxed text-white">
-                You tell us what matters in plain English. We build your tracking workspace automatically — no setup, no configuration, no IT required.
+                You tell us what matters in plain English. We build your tracking workspace automatically, no setup, no configuration, no IT required.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 5 — FINAL CTA */}
+      {/* SECTION 5 - FINAL CTA */}
       <section className="w-full px-6 py-24" style={{ backgroundColor: "#ffffff" }}>
         <div className="max-w-[640px] mx-auto text-center">
           <h2
@@ -462,7 +561,7 @@ export default function LandingPage() {
             style={{ color: "#64748b" }}
             data-testid="text-cta-subtext"
           >
-            Professionals who use Watchloom start every day already knowing what changed — so they can focus on what to do about it.
+            Join professionals who have stopped wasting hours on manual research. Watchloom tracks everything, briefs you on schedule, and gives you that time back.
           </p>
           <Link href="/signup">
             <button
@@ -470,11 +569,11 @@ export default function LandingPage() {
               style={{ backgroundColor: "#1e3a5f" }}
               data-testid="button-cta-get-started"
             >
-              Get Started Free
+              Start Your Free 14-Day Trial
             </button>
           </Link>
           <p className="text-sm mt-4" style={{ color: "#94a3b8" }}>
-            Free to start. No credit card required. Set up in under 3 minutes.
+            Free for 14 days. No credit card required. Set up in under 3 minutes.
           </p>
         </div>
       </section>
