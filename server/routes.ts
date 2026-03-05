@@ -510,7 +510,7 @@ Always return valid JSON only, no other text.`
       const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
 
       const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
-      const suggestedTypeChange = (typeof parsed.suggested_type_change === "string" && validTopicTypes.includes(parsed.suggested_type_change)) ? parsed.suggested_type_change : null;
+      const suggestedTypeChange = (typeof parsed.suggested_type_change === "string" && validTopicTypes.includes(parsed.suggested_type_change.toLowerCase())) ? parsed.suggested_type_change.toLowerCase() : null;
 
       if (parsed.matched === true && confidence >= 70 && parsed.matchedEntity && parsed.matchedCategory) {
         return res.json({
@@ -774,7 +774,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       const safeEntityType = (typeof entityType === "string" && allowedEntityTypes.includes(entityType)) ? entityType : "topic";
 
       const validTopicTypesForCategory = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
-      const safeTopicType = (typeof topicType === "string" && validTopicTypesForCategory.includes(topicType)) ? topicType : "general";
+      const safeTopicType = (typeof topicType === "string" && validTopicTypesForCategory.includes(topicType.toLowerCase())) ? topicType.toLowerCase() : "general";
 
       const newCategory: ExtractedCategory = {
         name: categoryName,
@@ -818,10 +818,11 @@ Return only the summary paragraph, no JSON, no formatting.`
 
       const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
       if (topic_type !== undefined) {
-        if (typeof topic_type !== "string" || !validTopicTypes.includes(topic_type)) {
+        const normalizedType = typeof topic_type === "string" ? topic_type.toLowerCase() : topic_type;
+        if (typeof normalizedType !== "string" || !validTopicTypes.includes(normalizedType)) {
           return res.status(400).json({ message: "Invalid topic_type" });
         }
-        entity.topic_type = topic_type;
+        entity.topic_type = normalizedType;
       }
 
       const validPriorities = ["high", "medium", "low", "watch"];
@@ -868,7 +869,7 @@ Return only the summary paragraph, no JSON, no formatting.`
         ...cat,
         entities: (cat.entities || []).map((entity: any) => ({
           ...entity,
-          topic_type: entity.topic_type || 'general',
+          topic_type: (entity.topic_type || 'general').toLowerCase(),
           related_topic_ids: entity.related_topic_ids || [],
           priority: entity.priority || 'medium',
         })),

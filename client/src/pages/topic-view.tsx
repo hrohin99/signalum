@@ -88,8 +88,9 @@ export default function TopicViewPage({ params }: { params: { category: string; 
   const entityCaptures = captures.filter((c) => c.matchedEntity === entityName);
   const allTopics = categories.flatMap((c) => c.entities.map((e) => ({ ...e, categoryName: c.name })));
 
+  const entityTopicType = (entity?.topic_type || "general").toLowerCase();
   const widgetConfig = topicTypesData?.topicTypes?.find(
-    (t) => t.typeKey === (entity?.topic_type || "general")
+    (t) => t.typeKey === entityTopicType
   )?.widgetConfig as { widgets: string[] } | undefined;
 
   const loading = wsLoading || capLoading;
@@ -162,7 +163,7 @@ function TopicViewContent({
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const currentTopicType = entity.topic_type || "general";
+  const currentTopicType = (entity.topic_type || "general").toLowerCase();
   const currentPriority = entity.priority || "medium";
   const typeInfo = topicTypeMap[currentTopicType] || topicTypeMap.general;
   const priInfo = priorityConfig[currentPriority] || priorityConfig.medium;
@@ -648,6 +649,28 @@ function BattlecardWidget({
 
   const bc = bcData?.battlecard;
   const lastUpdated = bc?.updatedAt ? new Date(bc.updatedAt) : null;
+  const hasData = !!(bc?.whatTheyDo || (bc?.strengths as string[])?.length || (bc?.weaknesses as string[])?.length || (bc?.howToBeat as string[])?.length);
+
+  const autofillButton = (
+    <Button
+      className="w-full bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+      onClick={() => autofillMutation.mutate()}
+      disabled={autofillMutation.isPending}
+      data-testid="button-battlecard-autofill"
+    >
+      {autofillMutation.isPending ? (
+        <>
+          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          Generating with AI...
+        </>
+      ) : (
+        <>
+          <Sparkles className="w-4 h-4 mr-2" />
+          Auto-fill with AI
+        </>
+      )}
+    </Button>
+  );
 
   return (
     <Card data-testid="widget-battlecard">
@@ -673,6 +696,8 @@ function BattlecardWidget({
           </div>
         ) : (
           <div className="space-y-4">
+            {!hasData && autofillButton}
+
             <div className="rounded-lg bg-slate-50 p-3">
               <p className="text-xs font-medium text-slate-600 mb-1.5 flex items-center gap-1">
                 <span>📝</span> What they do
@@ -728,24 +753,7 @@ function BattlecardWidget({
               </p>
             </div>
 
-            <Button
-              className="w-full bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
-              onClick={() => autofillMutation.mutate()}
-              disabled={autofillMutation.isPending}
-              data-testid="button-battlecard-autofill"
-            >
-              {autofillMutation.isPending ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Generating with AI...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Auto-fill with AI
-                </>
-              )}
-            </Button>
+            {hasData && autofillButton}
           </div>
         )}
       </CardContent>

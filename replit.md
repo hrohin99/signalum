@@ -78,7 +78,7 @@ AI-powered personal intelligence workspace.
 - `client/src/pages/capture.tsx` - Full capture page with 4 input types + AI classification
 - `client/src/pages/inbox.tsx` - Inbox page (empty state)
 - `client/src/pages/map.tsx` - My Workspace page (category/topic list view with empty category nudge and welcome modal). Clicking a topic navigates to full-screen topic view
-- `client/src/pages/topic-view.tsx` - Full-screen topic view with two-column layout: left (AI summary, widgets, updates feed) and right (topic details, inline capture, AI insights). Supports type/priority editing, related topic linking, battlecard/quick_stats widgets for competitor type, placeholder widgets for unbuilt types
+- `client/src/pages/topic-view.tsx` - Full-screen topic view with two-column layout: left (AI summary, widgets, updates feed) and right (topic details, inline capture, AI insights). Supports type/priority editing, related topic linking, battlecard/quick_stats widgets for competitor type, placeholder widgets for unbuilt types. Topic type matching is case-insensitive (normalized to lowercase). BattlecardWidget shows Auto-fill with AI button at top when no data exists, at bottom when data is present
 - `client/src/pages/brief.tsx` - Daily Brief page (empty state)
 - `client/src/pages/settings.tsx` - Settings/account page
 - `client/src/components/app-sidebar.tsx` - Sidebar navigation component
