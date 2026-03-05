@@ -281,26 +281,28 @@ export default function MapPage() {
   const categories = wsData?.workspace?.categories ?? [];
   const loading = wsLoading || capLoading;
 
+  const effectiveCategory = selectedCategory ?? (categories.length > 0 ? categories[0].name : null);
+
   useEffect(() => {
     if (categories.length > 0 && !selectedCategory) {
       setSelectedCategory(categories[0].name);
     }
   }, [categories, selectedCategory]);
 
-  const activeCategory = categories.find((c) => c.name === selectedCategory);
+  const activeCategory = categories.find((c) => c.name === effectiveCategory);
   const activeEntity = activeCategory?.entities.find((e) => e.name === selectedEntity);
   const entityCaptures = captures.filter((c) => c.matchedEntity === selectedEntity);
 
   const { data: summaryData, isLoading: summaryLoading, isError: summaryError } = useQuery<{ summary: string }>({
-    queryKey: ["/api/entity-summary", selectedEntity, selectedCategory],
+    queryKey: ["/api/entity-summary", selectedEntity, effectiveCategory],
     queryFn: async () => {
       const res = await apiRequest("POST", "/api/entity-summary", {
         entityName: selectedEntity,
-        categoryName: selectedCategory,
+        categoryName: effectiveCategory,
       });
       return res.json();
     },
-    enabled: !!selectedEntity && !!selectedCategory && !!activeEntity,
+    enabled: !!selectedEntity && !!effectiveCategory && !!activeEntity,
     retry: false,
   });
 
@@ -318,9 +320,9 @@ export default function MapPage() {
   });
 
   const handleNudgeAdd = (name: string) => {
-    if (!selectedCategory) return;
+    if (!effectiveCategory) return;
     addEntityMutation.mutate({
-      categoryName: selectedCategory,
+      categoryName: effectiveCategory,
       entityName: name,
       entityType: "other",
     });
@@ -393,7 +395,7 @@ export default function MapPage() {
         <div className="space-y-2">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3 px-1">Categories</p>
           {categories.map((cat) => {
-            const isActive = selectedCategory === cat.name;
+            const isActive = effectiveCategory === cat.name;
             const count = getCaptureCountForCategory(cat.name);
             return (
               <button
@@ -455,7 +457,7 @@ export default function MapPage() {
           {selectedEntity && activeEntity ? (
             <EntityDetail
               entity={activeEntity}
-              categoryName={selectedCategory!}
+              categoryName={effectiveCategory!}
               captures={entityCaptures}
               summary={summaryData?.summary}
               summaryLoading={summaryLoading}
