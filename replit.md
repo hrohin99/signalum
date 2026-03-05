@@ -78,8 +78,11 @@ AI-powered personal intelligence workspace.
 - 3-step signup at `/signup`: Step 1 (8 role cards in 2x4 grid, "Other" reveals text input) → Step 2 (tracking text) → Step 3 (account creation)
 - Sign-in at `/signin`: simple email/password form
 - Users who complete the 3-step signup have their role + tracking text saved to the `user_profiles` database table at account creation (before email confirmation), and also stored in localStorage as `pendingOnboarding` as a fast-path fallback
-- After email verification and sign-in, App.tsx first checks localStorage, then falls back to checking the server via `GET /api/onboarding-context/:userId`. If onboarding data exists from either source, it auto-runs AI extraction and workspace creation, skipping the manual onboarding page
+- After email verification, the server auto-signs users in via a Supabase magic link redirect (no manual sign-in needed). Fallback: if magic link generation fails, shows verification success page with link to sign-in
+- After sign-in (or auto-sign-in), App.tsx redirects authenticated users away from /signin and /signup to / automatically
+- App.tsx first checks localStorage, then falls back to checking the server via `GET /api/onboarding-context/:userId`. If onboarding data exists from either source, it auto-runs AI extraction and workspace creation, skipping the manual onboarding page
 - Only users who genuinely have no onboarding data (no localStorage AND no server-side profile) see the standard onboarding question page
+- Loading state shows centered Watchloom logo + spinner while auth/onboarding state is being resolved
 
 ## UI Terminology (Plain English)
 - "Intelligence Map" → "My Workspace" (sidebar + page headers)

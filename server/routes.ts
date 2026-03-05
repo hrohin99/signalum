@@ -6,7 +6,7 @@ import { randomUUID, createHmac } from "crypto";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
-import { sendVerificationEmail } from "./email";
+import { sendVerificationEmail, getAppUrl } from "./email";
 import type { ExtractionResult, ExtractedCategory } from "@shared/schema";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -188,6 +188,24 @@ export async function registerRoutes(
           console.error("Failed to confirm email in Supabase:", error);
           return res.status(500).send(verificationResultPage("Something went wrong confirming your email. Please try again.", false));
         }
+      }
+
+      const appUrl = getAppUrl();
+
+      try {
+        const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+          type: "magiclink",
+          email: decoded.email,
+          options: {
+            redirectTo: appUrl,
+          },
+        });
+
+        if (!linkError && linkData?.properties?.action_link) {
+          return res.redirect(linkData.properties.action_link);
+        }
+      } catch (linkErr) {
+        console.error("Failed to generate magic link for auto-sign-in:", linkErr);
       }
 
       return res.send(verificationResultPage("Your email has been verified! You can now sign in.", true));

@@ -2,7 +2,7 @@ import { Resend } from "resend";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-function getAppUrl(): string {
+export function getAppUrl(): string {
   const replitDomains = process.env.REPLIT_DOMAINS;
   if (replitDomains) {
     const domain = replitDomains.split(",")[0].trim();

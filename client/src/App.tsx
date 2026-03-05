@@ -9,14 +9,24 @@ import SignupPage from "@/pages/signup";
 import SigninPage from "@/pages/signin";
 import OnboardingPage from "@/pages/onboarding";
 import Dashboard from "@/pages/dashboard";
-import { Loader2 } from "lucide-react";
-import { Switch, Route } from "wouter";
+import { Loader2, Shield } from "lucide-react";
+import { Switch, Route, useLocation } from "wouter";
 
 function AppContent() {
   const { user, session, loading } = useAuth();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [autoOnboarding, setAutoOnboarding] = useState(false);
+  const [location, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (user && session) {
+      const authRoutes = ["/signin", "/signup"];
+      if (authRoutes.includes(location)) {
+        setLocation("/");
+      }
+    }
+  }, [user, session, location, setLocation]);
 
   useEffect(() => {
     if (!user || !session) {
@@ -138,6 +148,17 @@ function AppContent() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <div
+              className="w-8 h-8 rounded-md flex items-center justify-center"
+              style={{ backgroundColor: "#1e3a5f" }}
+            >
+              <Shield className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-lg font-semibold" style={{ color: "#1e3a5f" }}>
+              Watchloom
+            </span>
+          </div>
           <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin mx-auto" />
           {autoOnboarding && (
             <p className="text-sm text-muted-foreground">
