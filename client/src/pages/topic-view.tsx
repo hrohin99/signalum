@@ -30,7 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig } from "@shared/schema";
+import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard } from "@shared/schema";
 
 const topicTypeMap: Record<string, { icon: string; displayName: string }> = {
   competitor: { icon: "🎯", displayName: "Competitor" },
@@ -494,6 +494,100 @@ function WidgetsSection({
   );
 }
 
+function EditableText({
+  value,
+  onSave,
+  placeholder,
+  testId,
+}: {
+  value: string;
+  onSave: (val: string) => void;
+  placeholder: string;
+  testId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { setDraft(value); }, [value]);
+  useEffect(() => { if (editing && ref.current) ref.current.focus(); }, [editing]);
+
+  return editing ? (
+    <textarea
+      ref={ref}
+      className="w-full text-sm bg-white border border-border rounded px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]/30 min-h-[60px]"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => { setEditing(false); if (draft !== value) onSave(draft); }}
+      data-testid={testId}
+    />
+  ) : (
+    <p
+      className="text-sm text-foreground leading-relaxed cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5 min-h-[24px] transition-colors"
+      onClick={() => setEditing(true)}
+      data-testid={testId}
+    >
+      {value || <span className="text-slate-400 italic">{placeholder}</span>}
+    </p>
+  );
+}
+
+function EditableBulletList({
+  items,
+  onSave,
+  placeholder,
+  testId,
+}: {
+  items: string[];
+  onSave: (items: string[]) => void;
+  placeholder: string;
+  testId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(items.join("\n"));
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => { setDraft(items.join("\n")); }, [items]);
+  useEffect(() => { if (editing && ref.current) ref.current.focus(); }, [editing]);
+
+  const handleBlur = () => {
+    setEditing(false);
+    const newItems = draft.split("\n").map(s => s.replace(/^[\s•\-*]+/, "").trim()).filter(Boolean);
+    if (JSON.stringify(newItems) !== JSON.stringify(items)) onSave(newItems);
+  };
+
+  return editing ? (
+    <textarea
+      ref={ref}
+      className="w-full text-sm bg-white border border-border rounded px-2 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]/30 min-h-[80px]"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={handleBlur}
+      placeholder="One item per line"
+      data-testid={testId}
+    />
+  ) : (
+    <div
+      className="cursor-pointer hover:bg-slate-50 rounded px-1 py-0.5 transition-colors min-h-[24px]"
+      onClick={() => setEditing(true)}
+      data-testid={testId}
+    >
+      {items.length > 0 ? (
+        <ul className="space-y-1">
+          {items.map((item, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-foreground leading-relaxed">
+              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-current shrink-0 opacity-40" />
+              <span>{item}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-400 italic">{placeholder}</p>
+      )}
+    </div>
+  );
+}
+
 function BattlecardWidget({
   entity,
   categoryName,
@@ -503,35 +597,155 @@ function BattlecardWidget({
   categoryName: string;
   captures: Capture[];
 }) {
+  const { toast } = useToast();
+  const entityId = entity.name;
+
+  const { data: bcData, isLoading } = useQuery<{ battlecard: Battlecard | null }>({
+    queryKey: ["/api/battlecard", entityId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/battlecard/${encodeURIComponent(entityId)}`);
+      return res.json();
+    },
+  });
+
+  const { data: prodCtxData } = useQuery<{ battlecard: any }>({
+    queryKey: ["/api/product-context-check"],
+    queryFn: async () => {
+      return { battlecard: null };
+    },
+    enabled: false,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: { whatTheyDo?: string; strengths?: string[]; weaknesses?: string[]; howToBeat?: string[] }) => {
+      const res = await apiRequest("PUT", `/api/battlecard/${encodeURIComponent(entityId)}`, data);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/battlecard", entityId], data);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error saving", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const autofillMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/battlecard/${encodeURIComponent(entityId)}/autofill`, {
+        entityName: entity.name,
+        categoryName,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/battlecard", entityId], data);
+      toast({ title: "Battlecard auto-filled with AI." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Auto-fill failed", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const bc = bcData?.battlecard;
+  const lastUpdated = bc?.updatedAt ? new Date(bc.updatedAt) : null;
+
   return (
     <Card data-testid="widget-battlecard">
       <CardContent className="p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <span className="text-lg">🎯</span>
-          <span className="text-sm font-semibold text-[#1e3a5f]">Battlecard</span>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚔️</span>
+            <span className="text-sm font-semibold text-[#1e3a5f]">Battlecard</span>
+          </div>
+          {lastUpdated && (
+            <span className="text-[11px] text-slate-400" data-testid="text-battlecard-timestamp">
+              Updated {lastUpdated.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at{" "}
+              {lastUpdated.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+            </span>
+          )}
         </div>
-        {captures.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Add updates about {entity.name} to build a competitive battlecard.
-          </p>
-        ) : (
+
+        {isLoading ? (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg bg-emerald-50 p-3">
-                <p className="text-xs font-medium text-emerald-700 mb-1">Strengths</p>
-                <p className="text-sm text-emerald-900">Analyze updates to identify strengths.</p>
-              </div>
-              <div className="rounded-lg bg-red-50 p-3">
-                <p className="text-xs font-medium text-red-700 mb-1">Weaknesses</p>
-                <p className="text-sm text-red-900">Analyze updates to identify weaknesses.</p>
-              </div>
+            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-lg bg-slate-50 p-3">
+              <p className="text-xs font-medium text-slate-600 mb-1.5 flex items-center gap-1">
+                <span>📝</span> What they do
+                <Pencil className="w-3 h-3 ml-auto opacity-40" />
+              </p>
+              <EditableText
+                value={bc?.whatTheyDo || ""}
+                onSave={(val) => updateMutation.mutate({ whatTheyDo: val })}
+                placeholder="Click to describe what this competitor does..."
+                testId="input-battlecard-what"
+              />
             </div>
+
+            <div className="rounded-lg bg-emerald-50 p-3">
+              <p className="text-xs font-medium text-emerald-700 mb-1.5 flex items-center gap-1">
+                <span>💪</span> Their strengths
+                <Pencil className="w-3 h-3 ml-auto opacity-40" />
+              </p>
+              <EditableBulletList
+                items={(bc?.strengths as string[]) || []}
+                onSave={(items) => updateMutation.mutate({ strengths: items })}
+                placeholder="Click to add their strengths..."
+                testId="input-battlecard-strengths"
+              />
+            </div>
+
+            <div className="rounded-lg bg-red-50 p-3">
+              <p className="text-xs font-medium text-red-700 mb-1.5 flex items-center gap-1">
+                <span>🎯</span> Their weaknesses
+                <Pencil className="w-3 h-3 ml-auto opacity-40" />
+              </p>
+              <EditableBulletList
+                items={(bc?.weaknesses as string[]) || []}
+                onSave={(items) => updateMutation.mutate({ weaknesses: items })}
+                placeholder="Click to add their weaknesses..."
+                testId="input-battlecard-weaknesses"
+              />
+            </div>
+
             <div className="rounded-lg bg-blue-50 p-3">
-              <p className="text-xs font-medium text-blue-700 mb-1">Recent Activity</p>
-              <p className="text-sm text-blue-900">
-                {captures.length} update{captures.length !== 1 ? "s" : ""} captured
+              <p className="text-xs font-medium text-blue-700 mb-1.5 flex items-center gap-1">
+                <span>🏆</span> How to beat them
+                <Pencil className="w-3 h-3 ml-auto opacity-40" />
+              </p>
+              <EditableBulletList
+                items={(bc?.howToBeat as string[]) || []}
+                onSave={(items) => updateMutation.mutate({ howToBeat: items })}
+                placeholder="Click to add competitive strategies..."
+                testId="input-battlecard-howtobeat"
+              />
+              <p className="text-[11px] text-blue-500 mt-2 italic" data-testid="text-product-context-hint">
+                Add your product details in Settings for personalised advice.
               </p>
             </div>
+
+            <Button
+              className="w-full bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+              onClick={() => autofillMutation.mutate()}
+              disabled={autofillMutation.isPending}
+              data-testid="button-battlecard-autofill"
+            >
+              {autofillMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating with AI...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Auto-fill with AI
+                </>
+              )}
+            </Button>
           </div>
         )}
       </CardContent>
@@ -548,11 +762,17 @@ function QuickStatsWidget({
   captures: Capture[];
   allCaptures: Capture[];
 }) {
-  const lastDate = captures.length > 0 ? new Date(captures[0].createdAt) : null;
-  const typeCounts = captures.reduce((acc, c) => {
-    acc[c.type] = (acc[c.type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const updatesThisMonth = captures.filter(c => new Date(c.createdAt) >= thirtyDaysAgo).length;
+
+  const firstTracked = captures.length > 0
+    ? new Date(captures[captures.length - 1].createdAt)
+    : null;
+
+  const lastActivity = captures.length > 0
+    ? new Date(captures[0].createdAt)
+    : null;
 
   return (
     <Card data-testid="widget-quick-stats">
@@ -562,23 +782,25 @@ function QuickStatsWidget({
           <span className="text-sm font-semibold text-[#1e3a5f]">Quick Stats</span>
         </div>
         <div className="grid grid-cols-3 gap-4">
-          <div>
-            <p className="text-2xl font-bold text-[#1e3a5f]">{captures.length}</p>
-            <p className="text-xs text-slate-500">Total updates</p>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-[#1e3a5f]" data-testid="stat-updates-month">{updatesThisMonth}</p>
+            <p className="text-xs text-slate-500">Updates this month</p>
           </div>
-          <div>
-            <p className="text-2xl font-bold text-[#1e3a5f]">
-              {Object.keys(typeCounts).length}
-            </p>
-            <p className="text-xs text-slate-500">Source types</p>
-          </div>
-          <div>
-            <p className="text-sm font-medium text-[#1e3a5f]">
-              {lastDate
-                ? lastDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          <div className="text-center">
+            <p className="text-sm font-medium text-[#1e3a5f]" data-testid="stat-first-tracked">
+              {firstTracked
+                ? firstTracked.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                 : "—"}
             </p>
-            <p className="text-xs text-slate-500">Last update</p>
+            <p className="text-xs text-slate-500">First tracked</p>
+          </div>
+          <div className="text-center">
+            <p className="text-sm font-medium text-[#1e3a5f]" data-testid="stat-last-activity">
+              {lastActivity
+                ? lastActivity.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+                : "—"}
+            </p>
+            <p className="text-xs text-slate-500">Last activity</p>
           </div>
         </div>
       </CardContent>

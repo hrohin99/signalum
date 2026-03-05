@@ -1149,6 +1149,151 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
     }
   });
 
+  app.get("/api/battlecard/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { entityId } = req.params;
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const card = await storage.getBattlecard(tenantId, entityId);
+      return res.json({ battlecard: card || null });
+    } catch (error: any) {
+      console.error("Get battlecard error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/battlecard/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { entityId } = req.params;
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { whatTheyDo, strengths, weaknesses, howToBeat } = req.body;
+
+      const data: any = {};
+      if (whatTheyDo !== undefined) {
+        if (typeof whatTheyDo !== "string") return res.status(400).json({ message: "whatTheyDo must be a string" });
+        data.whatTheyDo = whatTheyDo;
+      }
+      if (strengths !== undefined) {
+        if (!Array.isArray(strengths) || !strengths.every((s: any) => typeof s === "string")) return res.status(400).json({ message: "strengths must be an array of strings" });
+        data.strengths = strengths;
+      }
+      if (weaknesses !== undefined) {
+        if (!Array.isArray(weaknesses) || !weaknesses.every((s: any) => typeof s === "string")) return res.status(400).json({ message: "weaknesses must be an array of strings" });
+        data.weaknesses = weaknesses;
+      }
+      if (howToBeat !== undefined) {
+        if (!Array.isArray(howToBeat) || !howToBeat.every((s: any) => typeof s === "string")) return res.status(400).json({ message: "howToBeat must be an array of strings" });
+        data.howToBeat = howToBeat;
+      }
+
+      const card = await storage.upsertBattlecard(tenantId, entityId, data);
+      return res.json({ battlecard: card });
+    } catch (error: any) {
+      console.error("Update battlecard error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/battlecard/:entityId/autofill", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { entityId } = req.params;
+      const { entityName, categoryName } = req.body;
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+
+      if (!entityName) {
+        return res.status(400).json({ message: "Missing entityName" });
+      }
+
+      const allCaptures = await storage.getCapturesByUserId(userId);
+      const entityCaptures = allCaptures.filter(c => c.matchedEntity === entityName);
+
+      const captureContext = entityCaptures.length > 0
+        ? entityCaptures.slice(0, 20).map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`).join("\n\n")
+        : "No captured intel available yet.";
+
+      const prodContext = await storage.getProductContext(tenantId);
+      let productInfo = "";
+      if (prodContext) {
+        productInfo = `\n\nYOUR PRODUCT CONTEXT (use this to generate specific "How to beat them" advice):
+- Product: ${prodContext.productName}
+- Description: ${prodContext.description || "N/A"}
+- Target Customer: ${prodContext.targetCustomer || "N/A"}
+- Your Strengths: ${prodContext.strengths || "N/A"}
+- Your Weaknesses: ${prodContext.weaknesses || "N/A"}`;
+      }
+
+      const existingCard = await storage.getBattlecard(tenantId, entityId);
+      let existingContext = "";
+      if (existingCard) {
+        existingContext = `\n\nEXISTING BATTLECARD DATA (improve upon this if present):
+- What they do: ${existingCard.whatTheyDo || "Empty"}
+- Strengths: ${JSON.stringify(existingCard.strengths || [])}
+- Weaknesses: ${JSON.stringify(existingCard.weaknesses || [])}
+- How to beat them: ${JSON.stringify(existingCard.howToBeat || [])}`;
+      }
+
+      const client = getAnthropicClient();
+
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        messages: [
+          {
+            role: "user",
+            content: `You are a competitive intelligence analyst. Generate a comprehensive battlecard for the competitor "${entityName}" (category: "${categoryName}").
+
+Based on the captured intel and any existing battlecard data below, fill out all four sections of the battlecard.
+
+Captured intel about ${entityName}:
+${captureContext}${productInfo}${existingContext}
+
+Return ONLY valid JSON with this exact structure:
+{
+  "whatTheyDo": "A concise 1-3 sentence description of what this competitor does, their core offering, and market position.",
+  "strengths": ["strength 1", "strength 2", "strength 3"],
+  "weaknesses": ["weakness 1", "weakness 2", "weakness 3"],
+  "howToBeat": ["strategy 1", "strategy 2", "strategy 3"]
+}
+
+Rules:
+- Each array should have 3-5 items
+- Keep each item concise (one sentence max)
+- Be specific and actionable, not generic
+- For "howToBeat": ${prodContext ? "Use the product context provided to generate specific, personalized competitive strategies" : "Provide general competitive strategies since no product context is available"}
+- If there's limited intel, use your general knowledge about the competitor but note that analysis is based on limited data
+- No markdown, no extra text, just the JSON object`
+          }
+        ]
+      });
+
+      const textContent = message.content.find(block => block.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      let parsed: any;
+      try {
+        const jsonStr = textContent.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        return res.status(500).json({ message: "Failed to parse AI response" });
+      }
+
+      const card = await storage.upsertBattlecard(tenantId, entityId, {
+        whatTheyDo: parsed.whatTheyDo || null,
+        strengths: parsed.strengths || [],
+        weaknesses: parsed.weaknesses || [],
+        howToBeat: parsed.howToBeat || [],
+        lastAiGeneratedAt: new Date(),
+      });
+
+      return res.json({ battlecard: card });
+    } catch (error: any) {
+      console.error("Autofill battlecard error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/workspace/current", requireAuth, async (req: Request, res: Response) => {
     const userId = (req as any).userId;
     const workspace = await storage.getWorkspaceByUserId(userId);

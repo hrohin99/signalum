@@ -1,7 +1,7 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -24,6 +24,8 @@ export interface IStorage {
   createTopicTypeConfig(config: InsertTopicTypeConfig): Promise<TopicTypeConfig>;
   getProductContext(tenantId: string): Promise<ProductContext | undefined>;
   upsertProductContext(context: InsertProductContext): Promise<ProductContext>;
+  getBattlecard(tenantId: string, entityId: string): Promise<Battlecard | undefined>;
+  upsertBattlecard(tenantId: string, entityId: string, data: Partial<InsertBattlecard>): Promise<Battlecard>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -144,6 +146,31 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db
       .insert(productContext)
       .values(context)
+      .returning();
+    return created;
+  }
+
+  async getBattlecard(tenantId: string, entityId: string): Promise<Battlecard | undefined> {
+    const [card] = await db
+      .select()
+      .from(battlecards)
+      .where(and(eq(battlecards.tenantId, tenantId), eq(battlecards.entityId, entityId)));
+    return card;
+  }
+
+  async upsertBattlecard(tenantId: string, entityId: string, data: Partial<InsertBattlecard>): Promise<Battlecard> {
+    const existing = await this.getBattlecard(tenantId, entityId);
+    if (existing) {
+      const [updated] = await db
+        .update(battlecards)
+        .set({ ...data, updatedAt: new Date() })
+        .where(and(eq(battlecards.tenantId, tenantId), eq(battlecards.entityId, entityId)))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(battlecards)
+      .values({ tenantId, entityId, ...data })
       .returning();
     return created;
   }

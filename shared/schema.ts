@@ -116,6 +116,28 @@ export const insertTopicTypeConfigSchema = createInsertSchema(topicTypeConfigs).
 export type InsertTopicTypeConfig = z.infer<typeof insertTopicTypeConfigSchema>;
 export type TopicTypeConfig = typeof topicTypeConfigs.$inferSelect;
 
+export const battlecards = pgTable("battlecards", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  entityId: text("entity_id").notNull(),
+  whatTheyDo: text("what_they_do"),
+  strengths: jsonb("strengths").$type<string[]>().default([]),
+  weaknesses: jsonb("weaknesses").$type<string[]>().default([]),
+  howToBeat: jsonb("how_to_beat").$type<string[]>().default([]),
+  lastAiGeneratedAt: timestamp("last_ai_generated_at"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  unique("battlecards_tenant_entity").on(table.tenantId, table.entityId),
+]);
+
+export const insertBattlecardSchema = createInsertSchema(battlecards).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertBattlecard = z.infer<typeof insertBattlecardSchema>;
+export type Battlecard = typeof battlecards.$inferSelect;
+
 export const productContext = pgTable("product_context", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull(),

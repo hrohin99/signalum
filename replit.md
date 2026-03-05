@@ -53,6 +53,9 @@ AI-powered personal intelligence workspace.
 - `GET /api/briefs` - List all briefs for authenticated user (auth required)
 - `GET /api/welcome-status` - Check if user has dismissed the welcome modal (auth required)
 - `POST /api/dismiss-welcome` - Mark welcome modal as dismissed for the user (auth required)
+- `GET /api/battlecard/:entityId` - Get battlecard data for a competitor entity (auth required)
+- `PUT /api/battlecard/:entityId` - Upsert battlecard sections (whatTheyDo, strengths, weaknesses, howToBeat) with auto-save on blur (auth required)
+- `POST /api/battlecard/:entityId/autofill` - AI auto-fill all battlecard sections using captures + product_context (auth required)
 
 ## Database Tables
 - `user_profiles` - User role, onboarding context (tracking text from signup Step 2), and welcome_dismissed flag. Saved at account creation before email confirmation
@@ -61,6 +64,7 @@ AI-powered personal intelligence workspace.
 - `briefs` - AI-generated daily intelligence briefs with content, capture/entity counts
 - `topic_type_configs` - Configurable topic types per tenant (uuid PK, tenant_id, type_key, display_name, icon, description, ai_prompt_hint, widget_config jsonb, created_at). Seeded with 11 system defaults (competitor, project, regulation, person, trend, account, technology, event, deal, risk, general) under system tenant 00000000-0000-0000-0000-000000000000
 - `product_context` - Product context per tenant (uuid PK, tenant_id, product_name, description, target_customer, strengths, weaknesses, updated_at)
+- `battlecards` - Competitive battlecard data per entity (uuid PK, tenant_id, entity_id text, what_they_do text, strengths jsonb, weaknesses jsonb, how_to_beat jsonb, last_ai_generated_at, updated_at). Unique on (tenant_id, entity_id)
 
 ## File Structure
 - `client/src/lib/supabase.ts` - Supabase client initialization
