@@ -50,8 +50,11 @@ AI-powered personal intelligence workspace.
 ## File Structure
 - `client/src/lib/supabase.ts` - Supabase client initialization
 - `client/src/lib/auth-context.tsx` - Auth provider with Supabase auth hooks
-- `client/src/pages/auth.tsx` - Login/signup page
-- `client/src/pages/onboarding.tsx` - Onboarding flow with AI extraction
+- `client/src/pages/landing.tsx` - Public landing page (hero, features, social proof, footer)
+- `client/src/pages/signup.tsx` - 3-step signup flow (role → tracking text → account creation)
+- `client/src/pages/signin.tsx` - Simple sign-in page
+- `client/src/pages/auth.tsx` - Legacy auth page (no longer routed, kept for reference)
+- `client/src/pages/onboarding.tsx` - Onboarding flow with AI extraction (shown to users who skip 3-step signup)
 - `client/src/pages/dashboard.tsx` - Main dashboard layout with sidebar
 - `client/src/pages/capture.tsx` - Full capture page with 4 input types + AI classification
 - `client/src/pages/inbox.tsx` - Inbox page (empty state)
@@ -64,7 +67,15 @@ AI-powered personal intelligence workspace.
 - `server/storage.ts` - Database storage layer with Drizzle
 - `shared/schema.ts` - Drizzle schemas and shared TypeScript types
 
+## Pre-Auth Flow
+- Landing page at `/` for unauthenticated users with hero section, features, and social proof
+- 3-step signup at `/signup`: Step 1 (role selection) → Step 2 (tracking text) → Step 3 (account creation)
+- Sign-in at `/signin`: simple email/password form
+- Users who complete the 3-step signup have their role + tracking text stored in localStorage as `pendingOnboarding`
+- After email verification and sign-in, App.tsx auto-runs AI extraction and workspace creation from the stored context, skipping the manual onboarding page
+- Users who sign in without prior signup context (e.g. Google OAuth without going through signup flow) see the standard onboarding page
+
 ## Visual Style
 - White background, deep navy blue #1e3a5f accent
-- Inter font
+- DM Sans font for landing/signup/signin pages, Inter font for authenticated dashboard
 - Clean and minimal with lots of white space
