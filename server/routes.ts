@@ -416,28 +416,53 @@ User's description: ${description}`
 
       const client = getAnthropicClient();
 
+      const categories = workspace.categories as ExtractedCategory[];
+      const categoryList = categories.map(c => `- "${c.name}": ${c.description}`).join("\n");
+
       const message = await client.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 8192,
         messages: [
           {
             role: "user",
-            content: `You are an intelligence routing assistant. A user captured the following ${type} content. Match it to the most relevant entity from their workspace.
+            content: `You are an intelligence routing assistant. A user captured the following ${type} content. Match it to the most relevant entity from their workspace, but ONLY if the match is genuinely appropriate.
 
 Available entities:
 ${entityList}
 
+Available categories:
+${categoryList}
+
 Captured content:
 ${content}
 
-Return a JSON object with this exact structure (no other text):
+IMPORTANT: Evaluate how well the content fits any existing entity and category. Assign a confidence score from 0 to 100.
+
+If your confidence is 70 or above, return this JSON:
 {
+  "matched": true,
+  "confidence": <number>,
   "matchedEntity": "Entity Name",
   "matchedCategory": "Category Name",
   "reason": "One sentence explaining why this content matches this entity."
 }
 
-If no entity is a good match, pick the closest one and explain why. Always return valid JSON only.`
+If your confidence is below 70 — meaning no existing category or entity is a genuinely good fit — do NOT force a match. Instead, suggest a new category. Return this JSON:
+{
+  "matched": false,
+  "confidence": <number>,
+  "reason": "One sentence explaining why no existing category fits.",
+  "suggestedCategory": {
+    "name": "Suggested Category Name",
+    "description": "A short description of what this category would track."
+  },
+  "suggestedEntity": {
+    "name": "Suggested Topic Name",
+    "type": "topic"
+  }
+}
+
+Always return valid JSON only, no other text.`
           }
         ]
       });
@@ -447,7 +472,7 @@ If no entity is a good match, pick the closest one and explain why. Always retur
         return res.status(500).json({ message: "No text response from AI" });
       }
 
-      let parsed: { matchedEntity: string; matchedCategory: string; reason: string };
+      let parsed: any;
       try {
         const jsonStr = textContent.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         parsed = JSON.parse(jsonStr);
@@ -455,7 +480,41 @@ If no entity is a good match, pick the closest one and explain why. Always retur
         return res.status(500).json({ message: "Failed to parse AI classification" });
       }
 
-      return res.json(parsed);
+      const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
+
+      if (parsed.matched === true && confidence >= 70 && parsed.matchedEntity && parsed.matchedCategory) {
+        return res.json({
+          matched: true,
+          confidence,
+          matchedEntity: parsed.matchedEntity,
+          matchedCategory: parsed.matchedCategory,
+          reason: parsed.reason || "",
+        });
+      }
+
+      if (parsed.suggestedCategory?.name && parsed.suggestedEntity?.name) {
+        return res.json({
+          matched: false,
+          confidence,
+          reason: parsed.reason || "No existing category is a strong match for this content.",
+          suggestedCategory: parsed.suggestedCategory,
+          suggestedEntity: parsed.suggestedEntity,
+        });
+      }
+
+      return res.json({
+        matched: false,
+        confidence,
+        reason: parsed.reason || "No existing category is a strong match for this content.",
+        suggestedCategory: {
+          name: "Uncategorized",
+          description: "Items that don't fit existing categories",
+        },
+        suggestedEntity: {
+          name: "General",
+          type: "topic",
+        },
+      });
     } catch (error: any) {
       console.error("Classify error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
@@ -660,6 +719,44 @@ Return only the summary paragraph, no JSON, no formatting.`
     }
   });
 
+  app.post("/api/add-category", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { categoryName, categoryDescription, entityName, entityType } = req.body;
+
+      if (!categoryName || typeof categoryName !== "string" || categoryName.length > 200) {
+        return res.status(400).json({ message: "Invalid or missing category name" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const exists = categories.some(c => c.name.toLowerCase() === categoryName.toLowerCase());
+      if (exists) {
+        return res.status(400).json({ message: "Category already exists" });
+      }
+
+      const allowedEntityTypes = ["person", "company", "topic", "technology", "regulation", "event", "location", "other"];
+      const safeEntityType = (typeof entityType === "string" && allowedEntityTypes.includes(entityType)) ? entityType : "topic";
+
+      const newCategory: ExtractedCategory = {
+        name: categoryName,
+        description: typeof categoryDescription === "string" ? categoryDescription : "",
+        entities: entityName ? [{ name: entityName, type: safeEntityType }] : [],
+      };
+
+      categories.push(newCategory);
+      const updated = await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, workspace: updated, newCategory });
+    } catch (error: any) {
+      console.error("Add category error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/workspace", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
@@ -850,6 +947,17 @@ Total entities tracked: ${entities.length}`
       console.error("Get onboarding context error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
+  });
+
+  app.get("/api/workspace/current", requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
+    const workspace = await storage.getWorkspaceByUserId(userId);
+
+    if (workspace) {
+      return res.json({ exists: true, workspace });
+    }
+
+    return res.json({ exists: false });
   });
 
   app.get("/api/workspace/:userId", requireAuth, async (req: Request, res: Response) => {

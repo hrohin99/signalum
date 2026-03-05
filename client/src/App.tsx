@@ -47,6 +47,10 @@ function AppContent() {
       return;
     }
 
+    if (hasCompletedOnboarding === true) {
+      return;
+    }
+
     setCheckingOnboarding(true);
     fetch(`/api/workspace/${user.id}`, {
       credentials: "include",

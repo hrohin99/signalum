@@ -1,21 +1,41 @@
-import { useState, useRef, useCallback } from "react";
-import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen } from "lucide-react";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
+import { useQuery } from "@tanstack/react-query";
+import type { ExtractedCategory } from "@shared/schema";
 
 type CaptureType = "text" | "voice" | "url" | "document" | null;
 
-interface ClassificationResult {
+interface ClassificationMatch {
+  matched: true;
+  confidence: number;
   matchedEntity: string;
   matchedCategory: string;
   reason: string;
 }
+
+interface ClassificationNewCategory {
+  matched: false;
+  confidence: number;
+  reason: string;
+  suggestedCategory: {
+    name: string;
+    description: string;
+  };
+  suggestedEntity: {
+    name: string;
+    type: string;
+  };
+}
+
+type ClassificationResult = ClassificationMatch | ClassificationNewCategory;
 
 const captureTypes = [
   { key: "text" as const, icon: PenLine, title: "Text Note", description: "Type or paste text to capture" },
@@ -39,11 +59,19 @@ export default function CapturePage() {
   const [pendingContent, setPendingContent] = useState("");
   const [pendingType, setPendingType] = useState<string>("");
   const [isSaving, setIsSaving] = useState(false);
+  const [showManualPicker, setShowManualPicker] = useState(false);
+  const [selectedManualCategory, setSelectedManualCategory] = useState<string>("");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: workspaceData } = useQuery<{ exists: boolean; workspace: { categories: ExtractedCategory[] } }>({
+    queryKey: ["/api/workspace/current"],
+    enabled: showManualPicker,
+  });
 
   const resetState = useCallback(() => {
     setTextContent("");
@@ -55,6 +83,9 @@ export default function CapturePage() {
     setPendingContent("");
     setPendingType("");
     setRecordingTime(0);
+    setShowManualPicker(false);
+    setSelectedManualCategory("");
+    setIsCreatingCategory(false);
   }, []);
 
   const handleSelectType = (type: CaptureType) => {
@@ -72,11 +103,23 @@ export default function CapturePage() {
     setPendingContent(content);
     setPendingType(type);
     setClassification(null);
+    setShowManualPicker(false);
 
     try {
       const res = await apiRequest("POST", "/api/classify", { content, type });
       const data: ClassificationResult = await res.json();
-      setClassification(data);
+      if (typeof data.matched === "undefined") {
+        const legacyData = data as any;
+        setClassification({
+          matched: true,
+          confidence: 100,
+          matchedEntity: legacyData.matchedEntity,
+          matchedCategory: legacyData.matchedCategory,
+          reason: legacyData.reason,
+        });
+      } else {
+        setClassification(data);
+      }
     } catch (err: any) {
       toast({
         title: "Classification failed",
@@ -88,22 +131,26 @@ export default function CapturePage() {
     }
   };
 
-  const handleConfirmCapture = async () => {
-    if (!classification || !pendingContent) return;
+  const handleConfirmCapture = async (entity?: string, category?: string) => {
+    if (!pendingContent) return;
+    const matchedEntity = entity || (classification?.matched ? classification.matchedEntity : "");
+    const matchedCategory = category || (classification?.matched ? classification.matchedCategory : "");
+    const reason = classification?.reason || "";
+
     setIsSaving(true);
 
     try {
       await apiRequest("POST", "/api/captures", {
         type: pendingType,
         content: pendingContent,
-        matchedEntity: classification.matchedEntity,
-        matchedCategory: classification.matchedCategory,
-        matchReason: classification.reason,
+        matchedEntity,
+        matchedCategory,
+        matchReason: reason,
       });
 
       toast({
         title: "Captured",
-        description: `Saved to ${classification.matchedEntity} in ${classification.matchedCategory}.`,
+        description: `Saved to ${matchedEntity} in ${matchedCategory}.`,
       });
 
       resetState();
@@ -117,6 +164,58 @@ export default function CapturePage() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleCreateCategoryAndConfirm = async () => {
+    if (!classification || classification.matched) return;
+    setIsCreatingCategory(true);
+
+    try {
+      await apiRequest("POST", "/api/add-category", {
+        categoryName: classification.suggestedCategory.name,
+        categoryDescription: classification.suggestedCategory.description,
+        entityName: classification.suggestedEntity.name,
+        entityType: classification.suggestedEntity.type,
+      });
+
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
+
+      await handleConfirmCapture(
+        classification.suggestedEntity.name,
+        classification.suggestedCategory.name
+      );
+
+      toast({
+        title: "New category created and note filed",
+        description: `Created "${classification.suggestedCategory.name}" with topic "${classification.suggestedEntity.name}".`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed to create category",
+        description: err.message || "Could not create the category.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const handleManualCategorySelect = async () => {
+    if (!selectedManualCategory || !pendingContent) return;
+
+    const categories = workspaceData?.workspace?.categories || [];
+    const category = categories.find(c => c.name === selectedManualCategory);
+
+    if (!category?.entities?.length) {
+      toast({
+        title: "No topics in this category",
+        description: "This category has no topics yet. Please choose a category with existing topics or create a new category instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    await handleConfirmCapture(category.entities[0].name, selectedManualCategory);
   };
 
   const handleTextSubmit = () => {
@@ -439,7 +538,7 @@ export default function CapturePage() {
         </div>
       )}
 
-      {classification && !isClassifying && (
+      {classification && !isClassifying && classification.matched && (
         <div className="mt-6 border border-border rounded-md p-6 space-y-5">
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-3">AI Classification</p>
@@ -477,10 +576,125 @@ export default function CapturePage() {
               Cancel
             </Button>
             <Button
-              onClick={handleConfirmCapture}
+              onClick={() => handleConfirmCapture()}
               disabled={isSaving}
               className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
               data-testid="button-confirm-capture"
+            >
+              {isSaving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Check className="w-4 h-4" />
+                  Confirm
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {classification && !isClassifying && !classification.matched && !showManualPicker && (
+        <div className="mt-6 border border-border rounded-md p-6 space-y-5">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground mb-3">AI Classification</p>
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-md bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                <Plus className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-foreground" data-testid="text-no-category-match">
+                  No existing category fits this note
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm text-muted-foreground">We suggest creating a new category:</span>
+                  <Badge className="bg-[#1e3a5f] text-white hover:bg-[#1e3a5f]/90" data-testid="badge-suggested-category">
+                    {classification.suggestedCategory.name}
+                  </Badge>
+                </div>
+                {classification.suggestedEntity?.name && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-muted-foreground">With topic:</span>
+                    <Badge variant="secondary" data-testid="badge-suggested-entity">
+                      <Tag className="w-3 h-3 mr-1" />
+                      {classification.suggestedEntity.name}
+                    </Badge>
+                  </div>
+                )}
+                <p className="text-sm italic text-muted-foreground" data-testid="text-classification-reason">
+                  {classification.reason}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowManualPicker(true)}
+              data-testid="button-choose-different"
+            >
+              <ChevronDown className="w-4 h-4 mr-1" />
+              Choose different category
+            </Button>
+            <Button
+              onClick={handleCreateCategoryAndConfirm}
+              disabled={isCreatingCategory || isSaving}
+              className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+              data-testid="button-create-category-confirm"
+            >
+              {isCreatingCategory || isSaving ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Create category and confirm
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {showManualPicker && (
+        <div className="mt-6 border border-border rounded-md p-6 space-y-5">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground mb-3">Choose a category</p>
+            <p className="text-sm text-muted-foreground mb-4">Select an existing category to file this note under.</p>
+            <select
+              value={selectedManualCategory}
+              onChange={(e) => setSelectedManualCategory(e.target.value)}
+              className="w-full h-11 px-3 rounded-md border border-border bg-background text-foreground text-sm"
+              data-testid="select-manual-category"
+            >
+              <option value="">Select a category...</option>
+              {(workspaceData?.workspace?.categories || []).map((cat) => (
+                <option key={cat.name} value={cat.name}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowManualPicker(false)}
+              data-testid="button-back-to-suggestion"
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleManualCategorySelect}
+              disabled={!selectedManualCategory || isSaving}
+              className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+              data-testid="button-confirm-manual-category"
             >
               {isSaving ? (
                 <span className="flex items-center gap-2">

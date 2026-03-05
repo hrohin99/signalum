@@ -34,12 +34,14 @@ AI-powered personal intelligence workspace.
 - `POST /api/auth/resend-verification` - Resend verification email to an unconfirmed user. Accepts `email` and `emailRedirectTo`
 - `GET /api/auth/verify-email` - Email verification link handler, validates JWT token and confirms email in Supabase. On success redirects to `APP_BASE_URL/workspace` (with magic link auto-sign-in). On failure/expiry redirects to `APP_BASE_URL/login?error=invalid-token`. Uses `APP_BASE_URL` env var for redirect base URL
 - `POST /api/extract` - Onboarding: extract categories/entities from user description (auth required)
-- `POST /api/classify` - Classify captured content and match to workspace entity (auth required)
+- `POST /api/classify` - Classify captured content and match to workspace entity (auth required). Returns `matched: true` with entity/category or `matched: false` with `suggestedCategory` and `suggestedEntity` when confidence is below 70%
 - `POST /api/transcribe` - Transcribe audio via Claude (auth required, multipart form)
 - `POST /api/captures` - Save a confirmed capture (auth required)
 - `GET /api/captures` - List all captures for authenticated user (auth required)
 - `POST /api/entity-summary` - AI-generated summary for an entity based on captured intel (auth required)
 - `POST /api/add-entity` - Add a new entity to an existing category (auth required)
+- `POST /api/add-category` - Create a new category with optional initial entity (auth required)
+- `GET /api/workspace/current` - Get workspace for authenticated user (auth required)
 - `POST /api/workspace` - Create user workspace (auth required)
 - `GET /api/onboarding-context/:userId` - Check if user has onboarding context saved from 3-step signup (auth required)
 - `GET /api/workspace/:userId` - Check if workspace exists (auth required)
