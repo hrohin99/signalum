@@ -1,38 +1,37 @@
 import { Link } from "wouter";
 
 const SCROLLING_TAGS = [
-  "Competitors", "Industry News", "Regulations", "Procurement Notices",
-  "Funding Rounds", "Policy Changes", "Websites", "Court Rulings",
-  "Technology Trends", "Market Signals", "Patent Filings", "Company Announcements",
-  "Standards Bodies", "Legislative Updates", "Analyst Reports", "Press Releases",
-  "Pricing Changes", "Partnership Deals",
+  "Competitors", "Industry Trends", "News Articles", "Meeting Notes",
+  "Market Shifts", "Company Updates", "Product Launches", "Policy Changes",
+  "Pricing Moves", "Research Papers", "Social Signals", "Technology Shifts",
+  "People to Watch", "Funding News", "Emerging Topics",
 ];
 
 const TRACK_CARDS = [
   {
     emoji: "🏢",
-    title: "Competitors",
-    text: "Rival raised $40M Series B. Updated enterprise pricing and added a new compliance module this week.",
-  },
-  {
-    emoji: "⚖️",
-    title: "Regulations & Law",
-    text: "New guidance issued on data localisation requirements. Compliance deadline confirmed for Q3 2026.",
+    title: "Your Competitors",
+    text: "A rival just updated their pricing and launched a new feature. You found out this morning — before your next customer call.",
   },
   {
     emoji: "📰",
-    title: "Industry News",
-    text: "Three major outlets covered shifts in your product category this week. Sentiment is cautiously positive.",
+    title: "News & Trends",
+    text: "Three major stories broke in your industry this week. Watchloom pulled them together so you did not have to.",
+  },
+  {
+    emoji: "💡",
+    title: "Ideas & Research",
+    text: "That article you bookmarked at midnight is now part of your morning brief, filed under the right topic automatically.",
   },
   {
     emoji: "🌐",
-    title: "Websites & Pricing",
-    text: "Competitor pricing page changed overnight. New enterprise tier added. Trial CTA removed from homepage.",
+    title: "Websites & Products",
+    text: "A competitor's website changed overnight. New pricing, new messaging. You noticed before your sales team had to ask.",
   },
   {
-    emoji: "🏛️",
-    title: "Policy & Government",
-    text: "Parliamentary committee published recommendations affecting your sector. Second reading scheduled for April.",
+    emoji: "📢",
+    title: "Topics You Care About",
+    text: "Anything happening in a space you follow gets captured, summarised, and waiting for you each morning.",
   },
 ];
 
@@ -184,7 +183,7 @@ export default function LandingPage() {
             style={{ backgroundColor: "#1e3a5f" }}
             data-testid="badge-hero-pill"
           >
-            AI-Powered Intelligence Workspace
+            Your AI intelligence workspace
           </div>
 
           <h1
@@ -192,7 +191,7 @@ export default function LandingPage() {
             style={{ color: "#1e3a5f" }}
             data-testid="text-hero-headline"
           >
-            Stop losing the intelligence you already have
+            Know more. Miss nothing.
           </h1>
 
           <p
@@ -200,7 +199,7 @@ export default function LandingPage() {
             style={{ color: "#64748b", fontSize: "20px" }}
             data-testid="text-hero-subheadline"
           >
-            Every day you hear things, read things, and notice things that matter — and most of it disappears. Watchloom captures everything, routes it automatically, and delivers a daily briefing every morning.
+            Watchloom captures everything you come across — articles, ideas, meetings, news — and turns it into a daily briefing that keeps you ahead of what matters most.
           </p>
 
           <div className="flex items-center justify-center gap-4 mb-6">
@@ -225,7 +224,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-sm" style={{ color: "#94a3b8" }} data-testid="text-hero-context">
-            Works with competitors, regulations, news, websites, laws, procurement notices — or anything you need to track
+            Track competitors, trends, news, industries, topics, people — anything at all.
           </p>
         </div>
 
@@ -278,7 +277,7 @@ export default function LandingPage() {
               style={{ color: "#1e3a5f" }}
               data-testid="text-how-headline"
             >
-              Three steps from chaos to clarity
+              Simple by design. Powerful by default.
             </h2>
           </div>
 
@@ -302,7 +301,7 @@ export default function LandingPage() {
                 Capture anything
               </h3>
               <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
-                Drop in a voice note, paste a URL, upload a document, or type a quick note. No formatting, no filing, no thinking required.
+                Heard something interesting in a meeting? Spotted an article? Had a thought in the shower? Drop it in — voice, text, link, or file.
               </p>
             </div>
 
@@ -334,7 +333,7 @@ export default function LandingPage() {
                 AI finds where it belongs
               </h3>
               <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
-                Our AI reads your input, matches it to the right topic in your workspace, and files it automatically — with a one-line explanation of why.
+                Watchloom reads what you captured, figures out where it belongs, and files it automatically. You never have to think about organisation again.
               </p>
             </div>
 
@@ -370,7 +369,7 @@ export default function LandingPage() {
                 Briefed every morning
               </h3>
               <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
-                At 7am, a narrative intelligence briefing lands in your workspace — summarising everything that changed across your tracked topics overnight.
+                Every morning, a crisp summary of everything that changed across your topics lands in your workspace. Like having a researcher on your team.
               </p>
             </div>
           </div>
@@ -393,8 +392,15 @@ export default function LandingPage() {
               style={{ color: "#1e3a5f" }}
               data-testid="text-track-headline"
             >
-              If it matters to your work, Watchloom tracks it
+              Whatever you need to stay on top of — Watchloom's got it
             </h2>
+            <p
+              className="text-base mt-3"
+              style={{ color: "#64748b" }}
+              data-testid="text-track-subheadline"
+            >
+              You define what matters. We track it, file it, and brief you on it every morning.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5" style={{ gridAutoRows: "1fr" }}>
@@ -434,7 +440,7 @@ export default function LandingPage() {
                 Anything You Define
               </h3>
               <p className="text-sm leading-relaxed text-white">
-                You decide what matters. Describe it in plain English and our AI builds your tracking workspace automatically.
+                You tell us what matters in plain English. We build your tracking workspace automatically — no setup, no configuration, no IT required.
               </p>
             </div>
           </div>
@@ -449,14 +455,14 @@ export default function LandingPage() {
             style={{ color: "#1e3a5f" }}
             data-testid="text-cta-headline"
           >
-            Be the most informed person in the room
+            Stay ahead of everything that matters to you
           </h2>
           <p
             className="text-base mb-10"
             style={{ color: "#64748b" }}
             data-testid="text-cta-subtext"
           >
-            Join professionals who use Watchloom to stay ahead of their market, their competition, and their industry — every single day.
+            Professionals who use Watchloom start every day already knowing what changed — so they can focus on what to do about it.
           </p>
           <Link href="/signup">
             <button
@@ -468,7 +474,7 @@ export default function LandingPage() {
             </button>
           </Link>
           <p className="text-sm mt-4" style={{ color: "#94a3b8" }}>
-            Free to start. No credit card required.
+            Free to start. No credit card required. Set up in under 3 minutes.
           </p>
         </div>
       </section>
