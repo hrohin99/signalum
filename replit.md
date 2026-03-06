@@ -52,12 +52,24 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **Flow:** When a topic is created via `/api/add-entity` or `/api/add-category`, the system:
   1. Checks `workspace_context` table for the tenant's domain context (primary_domain, relevant_subtopics, domain_keywords).
   2. If no workspace_context exists, falls back to the 3 most recently confirmed entities (those with `disambiguation_confirmed: true` and `company_industry` or `domain_keywords` set) from the workspace JSONB.
-  3. Sends context + new entity name to Claude for domain inference.
-  4. Applies result based on confidence: high → auto-confirms with `disambiguation_context`; medium → sets context but leaves unconfirmed (for future lightweight confirmation UI); low → skips.
+  3. If no confirmed entities exist either, uses the **category name** as a fallback context signal (e.g., "IDV Competitors" provides strong domain signal).
+  4. Sends context + new entity name to Claude for domain inference.
+  5. Applies result based on confidence: high → auto-confirms with `disambiguation_context`; medium → sets context but leaves unconfirmed; low → skips.
+- **Category Name Context:** The category name is always passed to the inference prompt as supplementary context. When it's the only signal available, it serves as the primary inference context.
 - **Entity Fields (JSONB in workspaces.categories):** `disambiguation_confirmed`, `disambiguation_context`, `company_industry`, `domain_keywords` added to `ExtractedEntity` interface.
 - **DB Table:** `workspace_context` (id, tenant_id, primary_domain, relevant_subtopics JSONB, domain_keywords JSONB, updated_at).
 - **API Routes:** `GET /api/workspace-context`, `PUT /api/workspace-context` — CRUD for workspace context.
 - **Response:** Both `/api/add-entity` and `/api/add-category` now return `siblingInference` field with `inferred_domain`, `confidence`, and `reasoning`.
+
+## Confidence Indicator (Part 5)
+- **Location:** AI Summary card in `AISummarySection` component (`client/src/pages/topic-view.tsx`).
+- **Position:** Same line as "Last updated" timestamp, right-aligned.
+- **Three states:**
+  - **State 1 (green dot):** `disambiguation_confirmed=true` AND `workspace_context` exists with `primaryDomain`. Shows "Scoped to [primary_domain]".
+  - **State 2 (amber dot):** `disambiguation_confirmed=true` but no workspace context (inferred via medium confidence). Shows "Based on your workspace focus" + thumbs down icon.
+  - **State 3 (grey dot):** `disambiguation_confirmed=false` or no context. Shows "General summary" + pencil icon that opens AspectSelectionModal.
+- **Thumbs Down Popover:** Two options: "wrong part of company" → opens AspectSelectionModal; "irrelevant info" → text input for custom focus → saves as `disambiguation_context` via `POST /api/entity/confirm-disambiguation`, regenerates summary, shows green toast.
+- **Data:** Fetches `GET /api/workspace-context` to determine workspace context availability.
 
 ## Disambiguation UI (Parts 2-4)
 - **DisambiguationBanner** (`client/src/pages/topic-view.tsx`): Amber confirmation banner shown when entity has `disambiguation_context` but `disambiguation_confirmed` is false (medium confidence). "Yes, that is right" confirms; "No, change this" opens AspectSelectionModal. Auto-dismisses after 24 hours via localStorage tracking.

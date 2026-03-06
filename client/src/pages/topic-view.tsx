@@ -41,7 +41,13 @@ import {
   XCircle,
   Trash2,
   Globe,
+  ThumbsDown,
 } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
@@ -290,7 +296,7 @@ function TopicViewContent({
 
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
-          <AISummarySection entity={entity} categoryName={categoryName} />
+          <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
           <WidgetsSection
             entity={entity}
             categoryName={categoryName}
@@ -442,7 +448,13 @@ function TopBar({
   );
 }
 
-function AISummarySection({ entity, categoryName }: { entity: ExtractedEntity; categoryName: string }) {
+function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity: ExtractedEntity; categoryName: string; onOpenAspectModal: () => void }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [thumbsDownOpen, setThumbsDownOpen] = useState(false);
+  const [showFeedbackInput, setShowFeedbackInput] = useState(false);
+  const [feedbackText, setFeedbackText] = useState("");
+
   const { data: summaryData, isLoading, isError, dataUpdatedAt } = useQuery<{ summary: string }>({
     queryKey: ["/api/entity-summary", entity.name, categoryName],
     queryFn: async () => {
@@ -453,6 +465,11 @@ function AISummarySection({ entity, categoryName }: { entity: ExtractedEntity; c
       return res.json();
     },
     retry: false,
+  });
+
+  const { data: wsContextData } = useQuery<{ workspaceContext: { primaryDomain?: string } | null }>({
+    queryKey: ["/api/workspace-context"],
+    enabled: !!user,
   });
 
   const regenerateMutation = useMutation({
@@ -468,6 +485,51 @@ function AISummarySection({ entity, categoryName }: { entity: ExtractedEntity; c
     },
   });
 
+  const feedbackMutation = useMutation({
+    mutationFn: async (feedback: string) => {
+      await apiRequest("POST", "/api/entity/confirm-disambiguation", {
+        entityName: entity.name,
+        categoryName,
+        disambiguation_context: feedback,
+      });
+      const res = await apiRequest("POST", "/api/entity-summary", {
+        entityName: entity.name,
+        categoryName,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/entity-summary", entity.name, categoryName], data);
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      toast({
+        title: "Summary updated.",
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+      setThumbsDownOpen(false);
+      setShowFeedbackInput(false);
+      setFeedbackText("");
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to update summary",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const wsContext = wsContextData?.workspaceContext;
+  const hasWorkspaceContext = !!(wsContext && wsContext.primaryDomain);
+
+  let confidenceState: 1 | 2 | 3 = 3;
+  if (entity.disambiguation_confirmed && hasWorkspaceContext) {
+    confidenceState = 1;
+  } else if (entity.disambiguation_confirmed) {
+    confidenceState = 2;
+  } else {
+    confidenceState = 3;
+  }
+
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   return (
@@ -477,7 +539,7 @@ function AISummarySection({ entity, categoryName }: { entity: ExtractedEntity; c
           <Sparkles className="w-4 h-4 text-[#1e3a5f]" />
           <span className="text-sm font-semibold text-[#1e3a5f]">AI Summary</span>
         </div>
-        {isLoading || regenerateMutation.isPending ? (
+        {isLoading || regenerateMutation.isPending || feedbackMutation.isPending ? (
           <div className="space-y-2">
             <Skeleton className="h-4 w-full" />
             <Skeleton className="h-4 w-3/4" />
@@ -492,21 +554,107 @@ function AISummarySection({ entity, categoryName }: { entity: ExtractedEntity; c
             {summaryData?.summary || `No updates available for ${entity.name} yet.`}
           </p>
         )}
-        <div className="flex items-center gap-4 mt-3">
-          {lastUpdated && (
-            <span className="text-xs text-slate-400" data-testid="text-summary-timestamp">
-              Last updated {lastUpdated.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-            </span>
-          )}
-          <button
-            className="text-xs text-[#1e3a5f] hover:underline font-medium"
-            onClick={() => regenerateMutation.mutate()}
-            disabled={regenerateMutation.isPending}
-            data-testid="button-regenerate-summary"
-          >
-            <RefreshCw className={`w-3 h-3 inline mr-1 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
-            Regenerate
-          </button>
+        <div className="flex items-center justify-between mt-3">
+          <div className="flex items-center gap-4">
+            {lastUpdated && (
+              <span className="text-xs text-slate-400" data-testid="text-summary-timestamp">
+                Last updated {lastUpdated.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+              </span>
+            )}
+            <button
+              className="text-xs text-[#1e3a5f] hover:underline font-medium"
+              onClick={() => regenerateMutation.mutate()}
+              disabled={regenerateMutation.isPending}
+              data-testid="button-regenerate-summary"
+            >
+              <RefreshCw className={`w-3 h-3 inline mr-1 ${regenerateMutation.isPending ? "animate-spin" : ""}`} />
+              Regenerate
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5" data-testid="confidence-indicator">
+            {confidenceState === 1 && (
+              <>
+                <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                <span className="text-xs text-slate-500">Scoped to {wsContext?.primaryDomain}</span>
+              </>
+            )}
+            {confidenceState === 2 && (
+              <>
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                <span className="text-xs text-slate-500">Based on your workspace focus</span>
+                <Popover open={thumbsDownOpen} onOpenChange={(open) => { setThumbsDownOpen(open); if (!open) { setShowFeedbackInput(false); setFeedbackText(""); } }}>
+                  <PopoverTrigger asChild>
+                    <button className="ml-1 text-slate-400 hover:text-slate-600 transition-colors" data-testid="button-thumbs-down">
+                      <ThumbsDown className="w-3.5 h-3.5" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80 p-3" align="end">
+                    {!showFeedbackInput ? (
+                      <div className="space-y-1">
+                        <button
+                          className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-slate-100 transition-colors"
+                          onClick={() => { setThumbsDownOpen(false); onOpenAspectModal(); }}
+                          data-testid="button-wrong-aspect"
+                        >
+                          This summary is about the wrong part of the company
+                        </button>
+                        <button
+                          className="w-full text-left text-sm px-3 py-2 rounded-md hover:bg-slate-100 transition-colors"
+                          onClick={() => setShowFeedbackInput(true)}
+                          data-testid="button-irrelevant-info"
+                        >
+                          This summary contains irrelevant information
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-sm text-slate-600">What should this summary focus on instead?</p>
+                        <Input
+                          value={feedbackText}
+                          onChange={(e) => setFeedbackText(e.target.value)}
+                          placeholder="e.g. their cloud infrastructure products"
+                          className="text-sm"
+                          data-testid="input-feedback-text"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => { setShowFeedbackInput(false); setFeedbackText(""); }}
+                            data-testid="button-feedback-cancel"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={!feedbackText.trim() || feedbackMutation.isPending}
+                            onClick={() => feedbackText.trim() && feedbackMutation.mutate(feedbackText.trim())}
+                            data-testid="button-feedback-submit"
+                          >
+                            {feedbackMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                            Update
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </PopoverContent>
+                </Popover>
+              </>
+            )}
+            {confidenceState === 3 && (
+              <>
+                <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
+                <span className="text-xs text-slate-500">General summary</span>
+                <button
+                  className="ml-1 text-slate-400 hover:text-slate-600 transition-colors"
+                  onClick={onOpenAspectModal}
+                  data-testid="button-scope-summary"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

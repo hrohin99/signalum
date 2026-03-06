@@ -61,12 +61,14 @@ function flattenEntities(categories: ExtractedCategory[]) {
 async function performSiblingInference(
   entityName: string,
   tenantId: string,
-  workspace: { categories: ExtractedCategory[] }
+  workspace: { categories: ExtractedCategory[] },
+  categoryName?: string
 ): Promise<SiblingInferenceResult | null> {
   try {
     const wsContext = await storage.getWorkspaceContext(tenantId);
 
     let inferenceContext = "";
+    let usingCategoryFallback = false;
 
     if (wsContext && (wsContext.primaryDomain || (wsContext.domainKeywords && (wsContext.domainKeywords as string[]).length > 0))) {
       const parts: string[] = [];
@@ -76,6 +78,9 @@ async function performSiblingInference(
       }
       if (wsContext.domainKeywords && (wsContext.domainKeywords as string[]).length > 0) {
         parts.push(`Domain keywords: ${(wsContext.domainKeywords as string[]).join(", ")}`);
+      }
+      if (categoryName) {
+        parts.push(`This topic is being added to a category called "${categoryName}". Use this as additional context when determining the relevant aspect of this company`);
       }
       inferenceContext = parts.join(". ");
     } else {
@@ -90,21 +95,30 @@ async function performSiblingInference(
       }
 
       if (confirmedEntities.length === 0) {
-        console.log(`[SiblingInference] No confirmed entities or workspace context found for tenant ${tenantId}. Skipping inference.`);
-        return null;
-      }
-
-      const recentConfirmed = confirmedEntities.slice(-3);
-      const parts: string[] = [];
-      for (const entity of recentConfirmed) {
-        const entityParts: string[] = [`${entity.name}`];
-        if (entity.company_industry) entityParts.push(`industry: ${entity.company_industry}`);
-        if (entity.domain_keywords && entity.domain_keywords.length > 0) {
-          entityParts.push(`keywords: ${entity.domain_keywords.join(", ")}`);
+        if (categoryName) {
+          inferenceContext = `This topic is being added to a category called "${categoryName}". Use this as additional context when determining the relevant aspect of this company.`;
+          usingCategoryFallback = true;
+          console.log(`[SiblingInference] No confirmed entities or workspace context found for tenant ${tenantId}. Using category name "${categoryName}" as fallback context.`);
+        } else {
+          console.log(`[SiblingInference] No confirmed entities or workspace context found for tenant ${tenantId}. Skipping inference.`);
+          return null;
         }
-        parts.push(entityParts.join(" (") + (entityParts.length > 1 ? ")" : ""));
+      } else {
+        const recentConfirmed = confirmedEntities.slice(-3);
+        const parts: string[] = [];
+        for (const entity of recentConfirmed) {
+          const entityParts: string[] = [`${entity.name}`];
+          if (entity.company_industry) entityParts.push(`industry: ${entity.company_industry}`);
+          if (entity.domain_keywords && entity.domain_keywords.length > 0) {
+            entityParts.push(`keywords: ${entity.domain_keywords.join(", ")}`);
+          }
+          parts.push(entityParts.join(" (") + (entityParts.length > 1 ? ")" : ""));
+        }
+        inferenceContext = `Existing tracked entities: ${parts.join("; ")}`;
+        if (categoryName) {
+          inferenceContext += `. This topic is being added to a category called "${categoryName}".`;
+        }
       }
-      inferenceContext = `Existing tracked entities: ${parts.join("; ")}`;
     }
 
     if (!inferenceContext) {
@@ -890,7 +904,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       const newEntity: ExtractedEntity = { name: entityName, type: safeEntityType, topic_type: 'general', related_topic_ids: [], priority: 'medium' };
 
       const tenantId = "00000000-0000-0000-0000-000000000000";
-      const inferenceResult = await performSiblingInference(entityName, tenantId, { categories });
+      const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName);
 
       let siblingInference: SiblingInferenceResult | null = null;
 
@@ -947,7 +961,7 @@ Return only the summary paragraph, no JSON, no formatting.`
 
       if (newEntityObj) {
         const tenantId = "00000000-0000-0000-0000-000000000000";
-        const inferenceResult = await performSiblingInference(entityName, tenantId, { categories });
+        const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName);
 
         if (inferenceResult) {
           siblingInference = inferenceResult;
