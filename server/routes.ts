@@ -1507,5 +1507,41 @@ Rules:
     return res.json({ exists: false });
   });
 
+  app.get("/api/product-context", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const context = await storage.getProductContext(tenantId);
+      return res.json({ productContext: context || null });
+    } catch (error: any) {
+      console.error("Get product context error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/product-context", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { productName, description, targetCustomer, strengths, weaknesses } = req.body;
+
+      if (!productName || typeof productName !== "string" || productName.trim().length === 0) {
+        return res.status(400).json({ message: "Product name is required" });
+      }
+
+      const context = await storage.upsertProductContext({
+        tenantId,
+        productName: productName.trim(),
+        description: description?.trim() || null,
+        targetCustomer: targetCustomer?.trim() || null,
+        strengths: strengths?.trim() || null,
+        weaknesses: weaknesses?.trim() || null,
+      });
+
+      return res.json({ productContext: context });
+    } catch (error: any) {
+      console.error("Upsert product context error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

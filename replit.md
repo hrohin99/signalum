@@ -59,6 +59,8 @@ AI-powered personal intelligence workspace.
 - `GET /api/battlecard/:entityId` - Get battlecard data for a competitor entity (auth required)
 - `PUT /api/battlecard/:entityId` - Upsert battlecard sections (whatTheyDo, strengths, weaknesses, howToBeat) with auto-save on blur (auth required)
 - `POST /api/battlecard/:entityId/autofill` - AI auto-fill all battlecard sections using captures + product_context (auth required)
+- `GET /api/product-context` - Get product context for the current tenant (auth required)
+- `PUT /api/product-context` - Upsert product context (productName, description, targetCustomer, strengths, weaknesses) for the current tenant (auth required)
 
 ## Database Tables
 - `user_profiles` - User role, onboarding context (tracking text from signup Step 2), and welcome_dismissed flag. Saved at account creation before email confirmation
@@ -83,7 +85,7 @@ AI-powered personal intelligence workspace.
 - `client/src/pages/map.tsx` - My Workspace page (category/topic list view with empty category nudge and welcome modal). Clicking a topic navigates to full-screen topic view
 - `client/src/pages/topic-view.tsx` - Full-screen topic view with two-column layout: left (AI summary, widgets, updates feed) and right (topic details, inline capture, AI insights). Supports type/priority editing, related topic linking, battlecard/quick_stats widgets for competitor type, placeholder widgets for unbuilt types. Topic type matching is case-insensitive (normalized to lowercase). BattlecardWidget shows Auto-fill with AI button at top when no data exists, at bottom when data is present. Widget config uses fallback defaults for competitor and general types when API data hasn't loaded
 - `client/src/pages/brief.tsx` - Daily Brief page (empty state)
-- `client/src/pages/settings.tsx` - Settings/account page
+- `client/src/pages/settings.tsx` - Settings/account page with My Product section (product context form for personalised competitive insights)
 - `client/src/components/app-sidebar.tsx` - Sidebar navigation component
 - `server/routes.ts` - API routes (including auth signup/verification)
 - `server/email.ts` - Resend email sending (branded verification emails)
