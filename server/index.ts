@@ -114,6 +114,13 @@ app.use((req, res, next) => {
 
       (async () => {
         try {
+          const { ensureDatabaseSchema } = await import("./dbSafety");
+          await ensureDatabaseSchema();
+        } catch (error) {
+          console.error("[startup] Database schema safety check failed:", error);
+        }
+
+        try {
           const { runRetroactiveMigration } = await import("./retroactiveMigration");
           await runRetroactiveMigration();
         } catch (error) {

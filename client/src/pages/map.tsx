@@ -340,15 +340,16 @@ export default function MapPage() {
   const [seedingChecked, setSeedingChecked] = useState(false);
   const [pollingState, setPollingState] = useState<"idle" | "polling" | "timeout">("idle");
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const pollingStartRef = useRef<number | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { data: wsData, isLoading: wsLoading } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
+  const { data: wsData, isLoading: wsLoading, error: wsError } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
     enabled: !!user,
   });
 
-  const { data: captures = [], isLoading: capLoading } = useQuery<Capture[]>({
+  const { data: captures = [], isLoading: capLoading, error: capError } = useQuery<Capture[]>({
     queryKey: ["/api/captures"],
     enabled: !!user,
   });
@@ -359,6 +360,36 @@ export default function MapPage() {
   });
 
   const allTopicDates = topicDatesData?.dates ?? [];
+  const categories = (wsData?.workspace?.categories ?? []).map(cat => ({
+    ...cat,
+    entities: (cat.entities ?? []).map(e => ({
+      ...e,
+      disambiguation_confirmed: e.disambiguation_confirmed ?? false,
+      disambiguation_context: e.disambiguation_context ?? undefined,
+      company_industry: e.company_industry ?? undefined,
+      domain_keywords: e.domain_keywords ?? [],
+      needs_aspect_review: e.needs_aspect_review ?? false,
+      auto_search_enabled: e.auto_search_enabled ?? true,
+      alert_on_high_signal: e.alert_on_high_signal ?? false,
+    })),
+  }));
+  const loading = wsLoading || capLoading;
+
+  useEffect(() => {
+    try {
+      const tenantId = user?.id ?? "unknown";
+      const wsContextFound = !!(wsData?.workspace);
+      const entityCount = (wsData?.workspace?.categories ?? []).reduce((a, c) => a + (c.entities?.length ?? 0), 0);
+      const errors: string[] = [];
+      if (wsError) errors.push(`workspace: ${wsError.message}`);
+      if (capError) errors.push(`captures: ${capError.message}`);
+      if (loadError) errors.push(`load: ${loadError}`);
+
+      console.log(`[MyWorkspace] Mount diagnostics — tenant_id: ${tenantId}, workspace_context_found: ${wsContextFound}, entities_loaded: ${entityCount}, errors: ${errors.length > 0 ? errors.join("; ") : "none"}`);
+    } catch (e) {
+      console.error("[MyWorkspace] Diagnostic logging failed:", e);
+    }
+  }, [user?.id, wsData, wsError, capError, loadError]);
 
   const getEntityDeadline = (entityName: string): TopicDateWithDaysUntil | null => {
     const dates = allTopicDates.filter(d => d.entityId === entityName && d.days_until <= 30);
@@ -403,11 +434,11 @@ export default function MapPage() {
     try {
       const res = await apiRequest("GET", "/api/historical-seeding/status");
       const data = await res.json();
-      if (data.running) {
+      if (data?.running) {
         setSeedingActive(true);
-      } else if (seedingActive && !data.running) {
+      } else if (seedingActive && !data?.running) {
         setSeedingActive(false);
-        if (data.totalFindings > 0) {
+        if (data?.totalFindings > 0) {
           queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
           queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
           toast({
@@ -418,8 +449,10 @@ export default function MapPage() {
         }
       }
       setSeedingChecked(true);
-    } catch {
+    } catch (err) {
+      console.error("[MyWorkspace] Seeding status check failed:", err);
       setSeedingChecked(true);
+      setLoadError("Seeding status check failed");
     }
   }, [user, seedingActive, toast]);
 
@@ -434,9 +467,6 @@ export default function MapPage() {
     return () => clearInterval(interval);
   }, [seedingActive, checkSeedingStatus]);
 
-  const categories = wsData?.workspace?.categories ?? [];
-  const loading = wsLoading || capLoading;
-
   const pollWorkspaceReady = useCallback(async () => {
     if (!user) return false;
     try {
@@ -446,7 +476,9 @@ export default function MapPage() {
         queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
         return true;
       }
-    } catch {}
+    } catch (err) {
+      console.error("[MyWorkspace] Poll workspace ready failed:", err);
+    }
     return false;
   }, [user]);
 

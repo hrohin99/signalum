@@ -30,7 +30,7 @@ function findEntitiesNeedingMigration(
 
   for (const category of categories) {
     for (const entity of category.entities) {
-      if (entity.disambiguation_confirmed && !entity.disambiguation_context && !entity.needs_aspect_review) {
+      if ((entity.disambiguation_confirmed ?? false) && !entity.disambiguation_context && !(entity.needs_aspect_review ?? false)) {
         results.push({
           entity,
           categoryName: category.name,
@@ -54,20 +54,24 @@ async function inferDomainForEntity(
   try {
     let inferenceContext = "";
 
-    if (workspaceContextData && (workspaceContextData.primaryDomain || (workspaceContextData.domainKeywords && workspaceContextData.domainKeywords.length > 0))) {
+    const wsPrimaryDomain = workspaceContextData?.primaryDomain ?? null;
+    const wsSubtopics: string[] = Array.isArray(workspaceContextData?.relevantSubtopics) ? workspaceContextData.relevantSubtopics : [];
+    const wsKeywords: string[] = Array.isArray(workspaceContextData?.domainKeywords) ? workspaceContextData.domainKeywords : [];
+
+    if (workspaceContextData && (wsPrimaryDomain || wsKeywords.length > 0)) {
       const parts: string[] = [];
-      if (workspaceContextData.primaryDomain) parts.push(`Primary domain: ${workspaceContextData.primaryDomain}`);
-      if (workspaceContextData.relevantSubtopics && workspaceContextData.relevantSubtopics.length > 0) {
-        parts.push(`Relevant subtopics: ${workspaceContextData.relevantSubtopics.join(", ")}`);
+      if (wsPrimaryDomain) parts.push(`Primary domain: ${wsPrimaryDomain}`);
+      if (wsSubtopics.length > 0) {
+        parts.push(`Relevant subtopics: ${wsSubtopics.join(", ")}`);
       }
-      if (workspaceContextData.domainKeywords && workspaceContextData.domainKeywords.length > 0) {
-        parts.push(`Domain keywords: ${workspaceContextData.domainKeywords.join(", ")}`);
+      if (wsKeywords.length > 0) {
+        parts.push(`Domain keywords: ${wsKeywords.join(", ")}`);
       }
       parts.push(`This topic is in a category called "${categoryName}".`);
       inferenceContext = parts.join(". ");
     } else {
-      const confirmedSiblings = siblingEntities.filter(
-        e => e.disambiguation_confirmed && (e.company_industry || (e.domain_keywords && e.domain_keywords.length > 0))
+      const confirmedSiblings = (siblingEntities || []).filter(
+        e => (e.disambiguation_confirmed ?? false) && ((e.company_industry) || (Array.isArray(e.domain_keywords) && e.domain_keywords.length > 0))
       );
 
       if (confirmedSiblings.length > 0) {
@@ -76,8 +80,9 @@ async function inferDomainForEntity(
         for (const entity of recentConfirmed) {
           const entityParts: string[] = [`${entity.name}`];
           if (entity.company_industry) entityParts.push(`industry: ${entity.company_industry}`);
-          if (entity.domain_keywords && entity.domain_keywords.length > 0) {
-            entityParts.push(`keywords: ${entity.domain_keywords.join(", ")}`);
+          const entKeywords = Array.isArray(entity.domain_keywords) ? entity.domain_keywords : [];
+          if (entKeywords.length > 0) {
+            entityParts.push(`keywords: ${entKeywords.join(", ")}`);
           }
           parts.push(entityParts.join(" (") + (entityParts.length > 1 ? ")" : ""));
         }
@@ -200,7 +205,12 @@ export async function runRetroactiveMigration(): Promise<void> {
       console.log(`[RetroactiveMigration] Found ${entitiesToMigrate.length} entities needing migration for user ${workspace.userId}`);
 
       const tenantId = workspace.id;
-      const wsContext = await storage.getWorkspaceContext(tenantId);
+      let wsContext = null;
+      try {
+        wsContext = await storage.getWorkspaceContext(tenantId);
+      } catch (err) {
+        console.error(`[RetroactiveMigration] Failed to fetch workspace context for tenant ${tenantId}:`, err);
+      }
 
       for (const item of entitiesToMigrate) {
         try {

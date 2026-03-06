@@ -94,3 +94,11 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
   7. Regenerates AI summaries for competitor entities with updated context (sequential, 1s delay between each).
 - **Non-blocking:** Runs as a fire-and-forget async task after server listen callback. Errors are caught and logged, never crash the server.
 - **Entity Field:** `needs_aspect_review` (boolean) on `ExtractedEntity` — triggers the DisambiguationBanner when user opens topic view.
+
+## Null Safety & Error Handling
+- **ErrorBoundary** (`client/src/components/ErrorBoundary.tsx`): Top-level React error boundary wrapping the entire app in `App.tsx`. Shows branded "Something went wrong" page with "Reload workspace" and "Clear and retry" buttons instead of blank white screen.
+- **DB Schema Safety** (`server/dbSafety.ts`): Runs on server start to ensure `workspace_context`, `topic_dates`, and `monitored_urls` tables exist using `CREATE TABLE IF NOT EXISTS`. Called before retroactive migration.
+- **Null Safety Patterns**: All entity JSONB fields (`disambiguation_confirmed`, `disambiguation_context`, `needs_aspect_review`, `company_industry`, `domain_keywords`, `auto_search_enabled`, `alert_on_high_signal`) are accessed with `?? false`, `?? []`, or `?? undefined` fallbacks throughout client and server code.
+- **Workspace Context Safety**: All `workspaceContext` references use optional chaining (`wsContext?.primaryDomain ?? null`). `GET /api/workspace-context` returns `{ workspaceContext: null }` on error instead of 500. `performSiblingInference()` wraps context fetch in try/catch.
+- **Diagnostic Logging**: MapPage outputs mount diagnostics (`tenant_id`, `workspace_context_found`, `entities_loaded`, errors) to console on load.
+- **Background Job Safety**: All background jobs (retroactive migration, historical seeding, ambient search) are wrapped in try/catch and never block the UI render.

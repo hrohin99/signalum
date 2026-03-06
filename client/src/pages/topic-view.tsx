@@ -272,7 +272,7 @@ function TopicViewContent({
         </div>
       )}
 
-      {((entity.disambiguation_context && !entity.disambiguation_confirmed) || entity.needs_aspect_review) && (
+      {((entity.disambiguation_context && !(entity.disambiguation_confirmed ?? false)) || (entity.needs_aspect_review ?? false)) && (
         <DisambiguationBanner
           entity={entity}
           categoryName={categoryName}
@@ -280,7 +280,7 @@ function TopicViewContent({
         />
       )}
 
-      {!entity.disambiguation_confirmed && !entity.disambiguation_context && !entity.needs_aspect_review && (
+      {!(entity.disambiguation_confirmed ?? false) && !entity.disambiguation_context && !(entity.needs_aspect_review ?? false) && (
         <DisambiguationCard
           entity={entity}
           categoryName={categoryName}
@@ -518,13 +518,15 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
     },
   });
 
-  const wsContext = wsContextData?.workspaceContext;
+  const wsContext = wsContextData?.workspaceContext ?? null;
   const hasWorkspaceContext = !!(wsContext && wsContext.primaryDomain);
 
+  const disambiguationConfirmed = entity.disambiguation_confirmed ?? false;
+
   let confidenceState: 1 | 2 | 3 = 3;
-  if (entity.disambiguation_confirmed && hasWorkspaceContext) {
+  if (disambiguationConfirmed && hasWorkspaceContext) {
     confidenceState = 1;
-  } else if (entity.disambiguation_confirmed) {
+  } else if (disambiguationConfirmed) {
     confidenceState = 2;
   } else {
     confidenceState = 3;
@@ -575,7 +577,7 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
             {confidenceState === 1 && (
               <>
                 <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
-                <span className="text-xs text-slate-500">Scoped to {wsContext?.primaryDomain}</span>
+                <span className="text-xs text-slate-500">Scoped to {wsContext?.primaryDomain ?? "your domain"}</span>
               </>
             )}
             {confidenceState === 2 && (
@@ -2417,13 +2419,13 @@ function DisambiguationBanner({
   const [dismissed, setDismissed] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  const isReviewBanner = entity.needs_aspect_review && !entity.disambiguation_context;
-  const isContextBanner = !!entity.disambiguation_context && !entity.disambiguation_confirmed;
-  const isNeedsReviewWithContext = entity.needs_aspect_review && !!entity.disambiguation_context;
+  const isReviewBanner = (entity.needs_aspect_review ?? false) && !entity.disambiguation_context;
+  const isContextBanner = !!entity.disambiguation_context && !(entity.disambiguation_confirmed ?? false);
+  const isNeedsReviewWithContext = (entity.needs_aspect_review ?? false) && !!entity.disambiguation_context;
 
   useEffect(() => {
     if (isReviewBanner || isNeedsReviewWithContext) return;
-    if (!entity.disambiguation_context || entity.disambiguation_confirmed) return;
+    if (!entity.disambiguation_context || (entity.disambiguation_confirmed ?? false)) return;
 
     const storageKey = `disambiguation_banner_shown_${entity.name}`;
     const shownAt = localStorage.getItem(storageKey);
@@ -2453,7 +2455,7 @@ function DisambiguationBanner({
       };
       autoConfirm();
     }
-  }, [entity.name, entity.disambiguation_context, entity.disambiguation_confirmed, entity.needs_aspect_review, categoryName, user?.id, isReviewBanner]);
+  }, [entity.name, entity.disambiguation_context, entity.disambiguation_confirmed ?? false, entity.needs_aspect_review ?? false, categoryName, user?.id, isReviewBanner]);
 
   if (dismissed) return null;
   if (!isReviewBanner && !isContextBanner && !isNeedsReviewWithContext) return null;
@@ -2471,7 +2473,7 @@ function DisambiguationBanner({
       setDismissed(true);
       toast({
         title: entity.disambiguation_context
-          ? `Got it. All searches will focus on ${entity.disambiguation_context}.`
+          ? `Got it. All searches will focus on ${entity.disambiguation_context ?? ""}.`
           : "Confirmed. We'll keep tracking this topic as-is.",
         className: "bg-green-50 border-green-200 text-green-800",
       });
@@ -2493,7 +2495,7 @@ function DisambiguationBanner({
           ) : (
             <>
               We are tracking <span className="font-semibold">{entity.name}</span> for their{" "}
-              <span className="font-semibold">{entity.disambiguation_context}</span> products based on your workspace focus. Is that right?
+              <span className="font-semibold">{entity.disambiguation_context ?? ""}</span> products based on your workspace focus. Is that right?
             </>
           )}
         </p>
@@ -2540,7 +2542,7 @@ function DisambiguationCard({
   const [modalOpen, setModalOpen] = useState(false);
 
   useEffect(() => {
-    if (entity.disambiguation_confirmed || entity.disambiguation_context) return;
+    if ((entity.disambiguation_confirmed ?? false) || entity.disambiguation_context) return;
 
     const fetchCompanies = async () => {
       try {
@@ -2562,7 +2564,7 @@ function DisambiguationCard({
       }
     };
     fetchCompanies();
-  }, [entity.name, entity.disambiguation_confirmed, entity.disambiguation_context]);
+  }, [entity.name, entity.disambiguation_confirmed ?? false, entity.disambiguation_context]);
 
   const loadAspects = async (companyContext?: string) => {
     setAspectsLoading(true);
@@ -2619,7 +2621,7 @@ function DisambiguationCard({
     }
   };
 
-  if (entity.disambiguation_confirmed || entity.disambiguation_context) {
+  if ((entity.disambiguation_confirmed ?? false) || entity.disambiguation_context) {
     return null;
   }
 

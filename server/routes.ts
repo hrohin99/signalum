@@ -65,19 +65,28 @@ async function performSiblingInference(
   categoryName?: string
 ): Promise<SiblingInferenceResult | null> {
   try {
-    const wsContext = await storage.getWorkspaceContext(tenantId);
+    let wsContext: any = null;
+    try {
+      wsContext = await storage.getWorkspaceContext(tenantId);
+    } catch (err) {
+      console.error(`[SiblingInference] Failed to fetch workspace context for tenant ${tenantId}:`, err);
+    }
+
+    const primaryDomain = wsContext?.primaryDomain ?? null;
+    const relevantSubtopics: string[] = Array.isArray(wsContext?.relevantSubtopics) ? wsContext.relevantSubtopics : [];
+    const domainKeywords: string[] = Array.isArray(wsContext?.domainKeywords) ? wsContext.domainKeywords : [];
 
     let inferenceContext = "";
     let usingCategoryFallback = false;
 
-    if (wsContext && (wsContext.primaryDomain || (wsContext.domainKeywords && (wsContext.domainKeywords as string[]).length > 0))) {
+    if (wsContext && (primaryDomain || domainKeywords.length > 0)) {
       const parts: string[] = [];
-      if (wsContext.primaryDomain) parts.push(`Primary domain: ${wsContext.primaryDomain}`);
-      if (wsContext.relevantSubtopics && (wsContext.relevantSubtopics as string[]).length > 0) {
-        parts.push(`Relevant subtopics: ${(wsContext.relevantSubtopics as string[]).join(", ")}`);
+      if (primaryDomain) parts.push(`Primary domain: ${primaryDomain}`);
+      if (relevantSubtopics.length > 0) {
+        parts.push(`Relevant subtopics: ${relevantSubtopics.join(", ")}`);
       }
-      if (wsContext.domainKeywords && (wsContext.domainKeywords as string[]).length > 0) {
-        parts.push(`Domain keywords: ${(wsContext.domainKeywords as string[]).join(", ")}`);
+      if (domainKeywords.length > 0) {
+        parts.push(`Domain keywords: ${domainKeywords.join(", ")}`);
       }
       if (categoryName) {
         parts.push(`This topic is being added to a category called "${categoryName}". Use this as additional context when determining the relevant aspect of this company`);
@@ -86,9 +95,9 @@ async function performSiblingInference(
     } else {
       const confirmedEntities: ExtractedEntity[] = [];
       const categories = workspace.categories as ExtractedCategory[];
-      for (const cat of categories) {
-        for (const entity of cat.entities) {
-          if (entity.disambiguation_confirmed && (entity.company_industry || (entity.domain_keywords && entity.domain_keywords.length > 0))) {
+      for (const cat of (categories || [])) {
+        for (const entity of (cat.entities || [])) {
+          if ((entity.disambiguation_confirmed ?? false) && ((entity.company_industry) || (Array.isArray(entity.domain_keywords) && entity.domain_keywords.length > 0))) {
             confirmedEntities.push(entity);
           }
         }
@@ -109,8 +118,9 @@ async function performSiblingInference(
         for (const entity of recentConfirmed) {
           const entityParts: string[] = [`${entity.name}`];
           if (entity.company_industry) entityParts.push(`industry: ${entity.company_industry}`);
-          if (entity.domain_keywords && entity.domain_keywords.length > 0) {
-            entityParts.push(`keywords: ${entity.domain_keywords.join(", ")}`);
+          const entKeywords = Array.isArray(entity.domain_keywords) ? entity.domain_keywords : [];
+          if (entKeywords.length > 0) {
+            entityParts.push(`keywords: ${entKeywords.join(", ")}`);
           }
           parts.push(entityParts.join(" (") + (entityParts.length > 1 ? ")" : ""));
         }
@@ -2002,11 +2012,16 @@ Rules:
   app.get("/api/workspace-context", requireAuth, async (req: Request, res: Response) => {
     try {
       const tenantId = "00000000-0000-0000-0000-000000000000";
-      const context = await storage.getWorkspaceContext(tenantId);
+      let context = null;
+      try {
+        context = await storage.getWorkspaceContext(tenantId);
+      } catch (err) {
+        console.error("[workspace-context] Failed to fetch workspace context:", err);
+      }
       return res.json({ workspaceContext: context || null });
     } catch (error: any) {
       console.error("Get workspace context error:", error);
-      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+      return res.json({ workspaceContext: null });
     }
   });
 
