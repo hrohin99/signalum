@@ -44,3 +44,4 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **Scheduler:** node-cron in `server/index.ts` runs daily at 6:00 AM UTC.
 - **Flow:** Fetches all workspaces → for each entity, searches Perplexity with 7-day lookback → deduplicates against 30-day capture window → creates captures, updates entity AI summaries, flags for daily brief, creates high-signal notifications.
 - **DB Tables:** `notifications` (high-signal alerts), `ambient_search_logs` (run history/metrics).
+- **Manual Search:** `POST /api/search/manual` (auth required) — per-topic manual Perplexity search with 30-day lookback, 3 searches/topic/day limit. Frontend `ManualSearchButton` component in `TopicDetailsCard` shows last searched time, loading state, limit reached message, and remaining searches count.

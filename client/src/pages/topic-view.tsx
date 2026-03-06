@@ -857,6 +857,123 @@ function QuickStatsWidget({
   );
 }
 
+function ManualSearchButton({
+  entity,
+  categoryName,
+  captures,
+}: {
+  entity: ExtractedEntity;
+  categoryName: string;
+  captures: Capture[];
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const webSearchCaptures = captures
+    .filter((c) => c.type === "web_search")
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+  const lastSearched = webSearchCaptures.length > 0 ? new Date(webSearchCaptures[0].createdAt) : null;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayManualCount = captures.filter(
+    (c) => c.type === "web_search" && c.matchReason?.includes("Manual web search") && new Date(c.createdAt) >= today
+  ).length;
+  const limitReached = todayManualCount >= 3;
+
+  const formatRelativeTime = (date: Date) => {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    if (diffMins < 1) return "just now";
+    if (diffMins < 60) return `${diffMins} min${diffMins !== 1 ? "s" : ""} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+    if (diffDays === 1) return "yesterday";
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const searchMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/search/manual", {
+        entityName: entity.name,
+        categoryName,
+        topicType: entity.topic_type || "general",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Search failed");
+      }
+      return res.json();
+    },
+    onSuccess: (data: { newFindings: number; message: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      toast({
+        title: data.newFindings > 0 ? "New updates found" : "Search complete",
+        description: data.message,
+      });
+    },
+    onError: (err: Error) => {
+      if (err.message.includes("limit reached")) {
+        queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      }
+      toast({
+        title: "Search failed",
+        description: err.message,
+        variant: err.message.includes("limit reached") ? "default" : "destructive",
+      });
+    },
+  });
+
+  return (
+    <div className="pt-2 border-t border-border/50" data-testid="section-manual-search">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs text-slate-500">Web search</p>
+        {lastSearched && (
+          <p className="text-[11px] text-slate-400" data-testid="text-last-searched">
+            {formatRelativeTime(lastSearched)}
+          </p>
+        )}
+      </div>
+      {limitReached ? (
+        <p className="text-[11px] text-slate-400 italic" data-testid="text-search-limit">
+          Search limit reached for today. Watchloom will automatically search again tomorrow.
+        </p>
+      ) : (
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full text-xs h-8 gap-1.5"
+          onClick={() => searchMutation.mutate()}
+          disabled={searchMutation.isPending}
+          data-testid="button-search-web"
+        >
+          {searchMutation.isPending ? (
+            <>
+              <Loader2 className="w-3 h-3 animate-spin" />
+              Searching...
+            </>
+          ) : (
+            <>
+              <Globe className="w-3 h-3" />
+              Search web now
+            </>
+          )}
+        </Button>
+      )}
+      {!limitReached && !searchMutation.isPending && (
+        <p className="text-[10px] text-slate-400 mt-1 text-center" data-testid="text-searches-remaining">
+          {3 - todayManualCount} search{3 - todayManualCount !== 1 ? "es" : ""} remaining today
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CaptureSourceIndicator({ capture }: { capture: Capture }) {
   const sourceUrlMatch = capture.content.match(/\n\nSource: (https?:\/\/[^\s]+)/);
   const sourceUrl = sourceUrlMatch ? sourceUrlMatch[1] : null;
@@ -1075,6 +1192,12 @@ function TopicDetailsCard({
             label="Updates"
             value={`${captures.length}`}
             testId="detail-updates"
+          />
+
+          <ManualSearchButton
+            entity={entity}
+            categoryName={categoryName}
+            captures={captures}
           />
 
           <div className="pt-2 border-t border-border/50">

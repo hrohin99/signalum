@@ -1790,6 +1790,83 @@ Rules:
     }
   });
 
+  app.post("/api/search/manual", requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
+    const { entityName, categoryName, topicType } = req.body;
+
+    if (!entityName) {
+      return res.status(400).json({ message: "entityName is required" });
+    }
+
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const userCaptures = await storage.getCapturesByUserId(userId);
+      const todayManualSearches = userCaptures.filter(
+        c => c.matchedEntity === entityName &&
+          c.type === "web_search" &&
+          c.matchReason?.includes("Manual web search") &&
+          new Date(c.createdAt) >= today
+      );
+
+      if (todayManualSearches.length >= 3) {
+        return res.status(429).json({
+          message: "Search limit reached for today. Watchloom will automatically search again tomorrow.",
+          limitReached: true,
+        });
+      }
+
+      const { searchCompetitorNews, searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
+
+      const type = (topicType || "general").toLowerCase();
+      let findings;
+      if (type === "competitor") {
+        findings = await searchCompetitorNews(entityName, categoryName || "General", 30);
+      } else {
+        findings = await searchTopicUpdates(entityName, type, 30);
+      }
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const existingCaptures = await storage.getCapturesByEntitySince(userId, entityName, thirtyDaysAgo);
+      const deduplicated = deduplicateFindings(findings, existingCaptures);
+
+      if (deduplicated.length > 0) {
+        const captureRecords = findingsToCaptures(deduplicated, entityName, userId, categoryName || "General")
+          .map(c => ({ ...c, matchReason: `Manual web search [${deduplicated.find(f => c.content.includes(f.summary))?.signal_strength || "medium"}]` }));
+        const created = await storage.createCaptures(captureRecords);
+        await storage.flagCapturesForBrief(created.map(c => c.id));
+
+        const summaryParts = deduplicated.map(f => f.summary);
+        const aiSummary = `Latest updates (${new Date().toLocaleDateString()}): ${summaryParts.slice(0, 3).join("; ")}`;
+        await storage.updateEntityAiSummary(userId, entityName, aiSummary);
+
+        const tenantId = "00000000-0000-0000-0000-000000000000";
+        const highSignalFindings = deduplicated.filter(f => f.signal_strength === "high");
+        for (const finding of highSignalFindings) {
+          await storage.createNotification({
+            tenantId,
+            userId,
+            entityName,
+            categoryName: categoryName || null,
+            type: "high_signal",
+            title: `High-priority update: ${entityName}`,
+            content: finding.summary,
+            signalStrength: "high",
+            read: 0,
+          });
+        }
+
+        return res.json({ newFindings: created.length, message: `${created.length} new update${created.length !== 1 ? "s" : ""} found` });
+      }
+
+      return res.json({ newFindings: 0, message: "No new developments found since last search" });
+    } catch (error: any) {
+      console.error("Manual search error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/search/run-ambient", async (req: Request, res: Response) => {
     try {
       const { runAmbientSearchForAllTenants } = await import("./ambientSearch");
