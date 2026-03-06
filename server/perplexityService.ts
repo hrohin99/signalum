@@ -65,23 +65,52 @@ function parseFindings(response: PerplexityResponse): PerplexityFinding[] {
   if (!content) return [];
 
   const citations = response.citations || [];
+
+  const jsonMatch = content.match(/\[[\s\S]*\]/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]) as Array<{
+        summary?: string;
+        source_url?: string;
+        approximate_date?: string;
+        signal_strength?: string;
+      }>;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed
+          .filter((item) => item.summary && item.summary.length > 0)
+          .map((item) => ({
+            summary: item.summary!,
+            source_url: item.source_url || null,
+            approximate_date: item.approximate_date || null,
+            signal_strength: (["high", "medium", "low"].includes(item.signal_strength || "")
+              ? item.signal_strength
+              : classifySignalStrength(item.summary!)) as "high" | "medium" | "low",
+          }));
+      }
+    } catch {
+    }
+  }
+
   const lines = content.split("\n").filter((l) => l.trim().length > 0);
   const findings: PerplexityFinding[] = [];
 
   for (const line of lines) {
     const trimmed = line.replace(/^[-*•\d.)\s]+/, "").trim();
-    if (!trimmed || trimmed.length < 15) continue;
+    if (!trimmed || trimmed.length < 10) continue;
 
     let sourceUrl: string | null = null;
     const urlMatch = trimmed.match(/https?:\/\/[^\s)]+/);
     if (urlMatch) {
       sourceUrl = urlMatch[0];
-    } else {
-      const citationMatch = trimmed.match(/\[(\d+)\]/);
-      if (citationMatch) {
-        const idx = parseInt(citationMatch[1], 10) - 1;
+    }
+
+    const allCitationMatches = trimmed.matchAll(/\[(\d+)\]/g);
+    if (!sourceUrl) {
+      for (const match of allCitationMatches) {
+        const idx = parseInt(match[1], 10) - 1;
         if (idx >= 0 && idx < citations.length) {
           sourceUrl = citations[idx];
+          break;
         }
       }
     }
@@ -93,7 +122,7 @@ function parseFindings(response: PerplexityResponse): PerplexityFinding[] {
     ) || trimmed.match(/\b\d{4}-\d{2}-\d{2}\b/);
 
     findings.push({
-      summary: trimmed.replace(/\[(\d+)\]/g, "").trim(),
+      summary: trimmed.replace(/\[(\d+)\]/g, "").replace(/https?:\/\/[^\s)]+/g, "").trim(),
       source_url: sourceUrl,
       approximate_date: dateMatch ? dateMatch[0] : null,
       signal_strength: signalStrength,
@@ -152,7 +181,7 @@ export async function searchCompetitorNews(
   lookbackDays: number
 ): Promise<PerplexityFinding[]> {
   const systemPrompt =
-    "You are a competitive intelligence analyst. Return only factual, sourced information. Be concise and focus on commercially relevant developments.";
+    "You are a competitive intelligence analyst. Return only factual, sourced information. Be concise and focus on commercially relevant developments. Return your findings as a JSON array with objects containing: summary (string), source_url (string or null), approximate_date (string or null), signal_strength (high/medium/low). Return ONLY the JSON array, no other text.";
   const userPrompt = `Find news, product updates, pricing changes, funding announcements, leadership changes, and notable developments about ${competitorName} in the ${category} space from the last ${lookbackDays} days. Return each finding as a separate item with: a one sentence summary, the source URL if available, and the approximate date. Focus on information that would be relevant to a competitor tracking this company.`;
 
   const response = await callPerplexity(systemPrompt, userPrompt);
@@ -165,7 +194,7 @@ export async function searchTopicUpdates(
   lookbackDays: number
 ): Promise<PerplexityFinding[]> {
   const systemPrompt =
-    "You are an intelligence analyst. Return only factual, sourced information relevant to professional monitoring.";
+    "You are an intelligence analyst. Return only factual, sourced information relevant to professional monitoring. Return your findings as a JSON array with objects containing: summary (string), source_url (string or null), approximate_date (string or null), signal_strength (high/medium/low). Return ONLY the JSON array, no other text.";
 
   const promptMap: Record<string, string> = {
     regulation: `Find updates, amendments, enforcement actions, compliance deadlines, and notable developments regarding ${topicName} from the last ${lookbackDays} days.`,
@@ -206,13 +235,22 @@ function wordOverlapSimilarity(a: string, b: string): number {
   return overlap / minSize;
 }
 
+function stripSourceMetadata(text: string): string {
+  return text
+    .replace(/\n\nSource:.*$/s, "")
+    .replace(/https?:\/\/[^\s)]+/g, "")
+    .trim();
+}
+
 export function deduplicateFindings(
   newFindings: PerplexityFinding[],
   existingCaptures: Capture[]
 ): PerplexityFinding[] {
+  const cleanedCaptures = existingCaptures.map((c) => stripSourceMetadata(c.content));
+
   return newFindings.filter((finding) => {
-    for (const capture of existingCaptures) {
-      if (wordOverlapSimilarity(finding.summary, capture.content) > 0.7) {
+    for (const captureContent of cleanedCaptures) {
+      if (wordOverlapSimilarity(finding.summary, captureContent) > 0.7) {
         return false;
       }
     }
@@ -223,7 +261,7 @@ export function deduplicateFindings(
 export function findingsToCaptures(
   findings: PerplexityFinding[],
   entityId: string,
-  tenantId: string,
+  userId: string,
   source: string
 ): InsertCapture[] {
   return findings.map((finding) => {
@@ -232,7 +270,7 @@ export function findingsToCaptures(
       : finding.summary;
 
     return {
-      userId: tenantId,
+      userId,
       type: "web_search",
       content: rawContent,
       matchedEntity: entityId,

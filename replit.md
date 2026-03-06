@@ -34,4 +34,5 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **Supabase:** Authentication and user management.
 - **Resend:** Transactional email services for user verification.
 - **Replit AI Integrations (Anthropic Claude):** AI capabilities for content extraction, classification, transcription, and insight generation.
+- **Perplexity AI:** Web research layer for automated competitor and topic intelligence gathering. Service at `server/perplexityService.ts`. Uses `PERPLEXITY_API_KEY` secret. Provides `searchCompetitorNews`, `searchTopicUpdates`, `deduplicateFindings`, and `findingsToCaptures` functions.
 - **PostgreSQL:** Primary database.
