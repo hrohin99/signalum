@@ -1,0 +1,52 @@
+"We are integrating Perplexity AI as a web research layer into Watchloom. This touches the backend service layer, onboarding flow, and a new background search system. Build carefully and do not break existing functionality.
+PART 1 — PERPLEXITY SERVICE
+Create a new backend service file called perplexityService.js or perplexityService.ts in the server services folder.
+This service handles all Perplexity API calls. It uses the PERPLEXITY_API_KEY environment variable.
+The Perplexity API endpoint is: https://api.perplexity.ai/chat/completions
+The request format is:
+POST https://api.perplexity.ai/chat/completions
+Headers: Authorization: Bearer PERPLEXITY_API_KEY, Content-Type: application/json
+Body: {
+  model: "sonar",
+  messages: [
+    { role: "system", content: "..." },
+    { role: "user", content: "..." }
+  ],
+  max_tokens: 1000,
+  return_citations: true,
+  search_recency_filter: "month"
+}
+Build the following functions in the service:
+Function 1 — searchCompetitorNews(competitorName, category, lookbackDays)
+Searches for recent news and developments about a specific competitor.
+System prompt: "You are a competitive intelligence analyst. Return only factual, sourced information. Be concise and focus on commercially relevant developments."
+User prompt: "Find news, product updates, pricing changes, funding announcements, leadership changes, and notable developments about [competitorName] in the [category] space from the last [lookbackDays] days. Return each finding as a separate item with: a one sentence summary, the source URL if available, and the approximate date. Focus on information that would be relevant to a competitor tracking this company."
+Returns: array of findings, each with summary, source_url, approximate_date, signal_strength (high/medium/low based on content type)
+Function 2 — searchTopicUpdates(topicName, topicType, lookbackDays)
+Searches for updates about any topic type — regulations, trends, technologies, people.
+System prompt: "You are an intelligence analyst. Return only factual, sourced information relevant to professional monitoring."
+User prompt based on topicType:
+- regulation: "Find updates, amendments, enforcement actions, compliance deadlines, and notable developments regarding [topicName] from the last [lookbackDays] days."
+- trend: "Find signals, data points, notable developments, and emerging examples related to [topicName] from the last [lookbackDays] days."
+- person: "Find public statements, role changes, publications, appearances, and notable activities by [topicName] from the last [lookbackDays] days."
+- technology: "Find product updates, adoption news, pricing changes, new use cases, and competitive developments related to [topicName] from the last [lookbackDays] days."
+- default: "Find recent news and notable developments related to [topicName] from the last [lookbackDays] days."
+Returns: same structure as searchCompetitorNews
+Function 3 — deduplicateFindings(newFindings, existingCaptures)
+Takes new findings from Perplexity and existing captures for a topic.
+Uses simple similarity checking — if the summary of a new finding is more than 70% similar to an existing capture content, discard it.
+Use basic word overlap for similarity — no need for embeddings at this stage.
+Returns: only findings that are genuinely new.
+Function 4 — findingsToCaptures(findings, entityId, tenantId, source)
+Converts Perplexity findings into capture records.
+Each finding becomes a capture with:
+- input_type: "web_search"
+- raw_content: the finding summary plus source URL
+- processed_content: the finding summary
+- status: "confirmed" — web search results are auto-confirmed, no manual review needed
+- ai_reasoning: "Automatically discovered via Perplexity web search"
+- source_url: the citation URL from Perplexity
+- signal_strength: from the finding
+- suggested_entity_id: entityId
+- confirmed_at: now
+Returns: array of capture objects ready to insert
