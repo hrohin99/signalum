@@ -17,7 +17,45 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, Capture } from "@shared/schema";
+import type { ExtractedCategory, Capture, TopicDate } from "@shared/schema";
+
+interface TopicDateWithDaysUntil extends TopicDate {
+  days_until: number;
+}
+
+type DeadlineUrgency = "red" | "amber" | "yellow" | null;
+
+function getDeadlineUrgency(daysUntil: number): DeadlineUrgency {
+  if (daysUntil < 0) return "red";
+  if (daysUntil <= 7) return "amber";
+  if (daysUntil <= 30) return "yellow";
+  return null;
+}
+
+function getMostUrgent(urgencies: DeadlineUrgency[]): DeadlineUrgency {
+  if (urgencies.includes("red")) return "red";
+  if (urgencies.includes("amber")) return "amber";
+  if (urgencies.includes("yellow")) return "yellow";
+  return null;
+}
+
+const urgencyDotColors: Record<string, string> = {
+  red: "bg-red-500",
+  amber: "bg-amber-500",
+  yellow: "bg-yellow-400",
+};
+
+function formatDeadlinePill(daysUntil: number, dateStr: string): { label: string; className: string } {
+  if (daysUntil < 0) {
+    return { label: "Overdue", className: "bg-red-500 text-white" };
+  }
+  if (daysUntil <= 7) {
+    return { label: `Due in ${daysUntil} day${daysUntil !== 1 ? "s" : ""}`, className: "bg-red-500 text-white" };
+  }
+  const d = new Date(dateStr + "T00:00:00");
+  const formatted = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return { label: `Due ${formatted}`, className: "bg-amber-500 text-white" };
+}
 
 const topicTypeMap: Record<string, { icon: string; displayName: string }> = {
   competitor: { icon: "🎯", displayName: "Competitor" },
@@ -251,6 +289,29 @@ export default function MapPage() {
     enabled: !!user,
   });
 
+  const { data: topicDatesData } = useQuery<{ dates: TopicDateWithDaysUntil[] }>({
+    queryKey: ["/api/topic-dates/all"],
+    enabled: !!user,
+  });
+
+  const allTopicDates = topicDatesData?.dates ?? [];
+
+  const getEntityDeadline = (entityName: string): TopicDateWithDaysUntil | null => {
+    const dates = allTopicDates.filter(d => d.entityId === entityName && d.days_until <= 30);
+    if (dates.length === 0) return null;
+    return dates.reduce((most, d) => (d.days_until < most.days_until ? d : most), dates[0]);
+  };
+
+  const getCategoryUrgency = (cat: ExtractedCategory): DeadlineUrgency => {
+    const urgencies = cat.entities
+      .map(e => {
+        const dl = getEntityDeadline(e.name);
+        return dl ? getDeadlineUrgency(dl.days_until) : null;
+      })
+      .filter((u): u is DeadlineUrgency => u !== null);
+    return getMostUrgent(urgencies);
+  };
+
   const { data: welcomeStatus } = useQuery<{ dismissed: boolean }>({
     queryKey: ["/api/welcome-status"],
     enabled: !!user,
@@ -377,6 +438,7 @@ export default function MapPage() {
           {categories.map((cat) => {
             const isActive = effectiveCategory === cat.name;
             const count = getCaptureCountForCategory(cat.name);
+            const catUrgency = getCategoryUrgency(cat);
             return (
               <button
                 key={cat.name}
@@ -404,6 +466,12 @@ export default function MapPage() {
                       {cat.entities.length} topics{count > 0 ? ` · ${count} updates` : ""}
                     </p>
                   </div>
+                  {catUrgency && (
+                    <span
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${urgencyDotColors[catUrgency]}`}
+                      data-testid={`dot-deadline-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                    />
+                  )}
                   <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isActive ? "text-white/70" : "text-muted-foreground group-hover:translate-x-0.5"}`} />
                 </div>
                 {cat.entities.length > 0 && (
@@ -458,6 +526,8 @@ export default function MapPage() {
                   <div className="space-y-2">
                     {activeCategory.entities.map((entity) => {
                       const count = getCaptureCountForEntity(entity.name);
+                      const entityDeadline = getEntityDeadline(entity.name);
+                      const pill = entityDeadline ? formatDeadlinePill(entityDeadline.days_until, String(entityDeadline.date)) : null;
                       return (
                         <button
                           key={entity.name}
@@ -474,6 +544,14 @@ export default function MapPage() {
                               {topicTypeMap[(entity.topic_type || "general").toLowerCase()]?.displayName || entityTypeLabels[entity.type] || entity.type}
                               {count > 0 ? ` · ${count} update${count !== 1 ? "s" : ""}` : ""}
                             </p>
+                            {pill && (
+                              <span
+                                className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-1.5 ${pill.className}`}
+                                data-testid={`pill-deadline-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
+                              >
+                                {pill.label}
+                              </span>
+                            )}
                           </div>
                           <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform" />
                         </button>

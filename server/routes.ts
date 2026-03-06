@@ -1570,6 +1570,23 @@ Rules:
     notes: z.string().trim().nullable().optional().transform(v => v || null),
   });
 
+  app.get("/api/topic-dates/all", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const dates = await storage.getAllTopicDates(tenantId);
+      const datesWithDaysUntil = dates
+        .filter(d => d.status !== "completed" && d.status !== "dismissed")
+        .map(d => ({
+          ...d,
+          days_until: computeDaysUntil(d.date),
+        }));
+      return res.json({ dates: datesWithDaysUntil });
+    } catch (error: any) {
+      console.error("Get all topic dates error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/topics/:entityId/dates", requireAuth, async (req: Request, res: Response) => {
     try {
       const tenantId = "00000000-0000-0000-0000-000000000000";

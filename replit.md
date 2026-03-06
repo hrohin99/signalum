@@ -17,6 +17,7 @@ AI-powered personal intelligence workspace.
 4. **Capture System** - Four capture types (Text, Voice, URL, Document) with AI classification and topic routing
 5. **Welcome Modal** - One-time welcome overlay for new users after onboarding, dismissed state stored in user_profiles
 6. **Empty Category Nudge** - Inline add-topic form shown when clicking a category with 0 topics
+7. **Deadline Indicators** - Category rows show colored dots (red=overdue, amber=within 7 days, yellow=within 30 days) based on most urgent topic deadline. Topic rows show date pills below the name for upcoming/overdue deadlines
 
 ## Environment Variables
 - `SUPABASE_URL` - Supabase project URL
@@ -61,6 +62,7 @@ AI-powered personal intelligence workspace.
 - `POST /api/battlecard/:entityId/autofill` - AI auto-fill all battlecard sections using captures + product_context (auth required)
 - `GET /api/product-context` - Get product context for the current tenant (auth required)
 - `PUT /api/product-context` - Upsert product context (productName, description, targetCustomer, strengths, weaknesses) for the current tenant (auth required)
+- `GET /api/topic-dates/all` - Get all topic dates for the tenant (auth required). Filters out completed/dismissed. Returns computed `days_until` field. Used by workspace deadline indicators
 - `GET /api/topics/:entityId/dates` - Get all topic dates for an entity (auth required). Auto-updates overdue status on fetch. Returns computed `days_until` field (negative if overdue)
 - `POST /api/topics/:entityId/dates` - Create a topic date (auth required). Accepts label, date, dateType (hard_deadline|soft_deadline|watch_date), notes. Sets source=manual, auto-detects status (overdue if date is in the past)
 - `PATCH /api/topics/:entityId/dates/:dateId` - Update a topic date (auth required). Accepts partial: label, date, dateType, status (upcoming|overdue|completed|dismissed), notes

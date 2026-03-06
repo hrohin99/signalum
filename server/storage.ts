@@ -28,6 +28,7 @@ export interface IStorage {
   upsertBattlecard(tenantId: string, entityId: string, data: Partial<InsertBattlecard>): Promise<Battlecard>;
   deleteCapturesByEntity(userId: string, entityName: string, categoryName: string): Promise<number>;
   getTopicDatesByEntity(tenantId: string, entityId: string): Promise<TopicDate[]>;
+  getAllTopicDates(tenantId: string): Promise<TopicDate[]>;
   createTopicDate(data: InsertTopicDate): Promise<TopicDate>;
   updateTopicDate(id: string, tenantId: string, entityId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined>;
   deleteTopicDate(id: string, tenantId: string, entityId: string): Promise<boolean>;
@@ -204,6 +205,25 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(topicDates)
       .where(and(eq(topicDates.tenantId, tenantId), eq(topicDates.entityId, entityId)))
+      .orderBy(topicDates.date);
+  }
+
+  async getAllTopicDates(tenantId: string): Promise<TopicDate[]> {
+    await db
+      .update(topicDates)
+      .set({ status: "overdue", updatedAt: new Date() })
+      .where(
+        and(
+          eq(topicDates.tenantId, tenantId),
+          eq(topicDates.status, "upcoming"),
+          lt(topicDates.date, sql`CURRENT_DATE`)
+        )
+      );
+
+    return db
+      .select()
+      .from(topicDates)
+      .where(eq(topicDates.tenantId, tenantId))
       .orderBy(topicDates.date);
   }
 
