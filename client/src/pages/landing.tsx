@@ -62,7 +62,7 @@ function HeroTrackingInput() {
   };
 
   return (
-    <div className="mx-auto mt-6" style={{ maxWidth: 600 }}>
+    <div className="mx-auto mt-6" style={{ maxWidth: 700 }}>
       <div
         style={{
           border: "2px solid #1e3a5f",
@@ -78,23 +78,25 @@ function HeroTrackingInput() {
           onChange={(e) => setTrackingInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleBuildWorkspace(); }}
           placeholder="What do you want to track? e.g. competitors, industry news, regulations..."
-          className="w-full text-sm outline-none"
+          className="w-full outline-none"
           style={{
             border: "none",
             padding: "4px 0",
             color: "#334155",
             backgroundColor: "transparent",
+            fontSize: 15,
           }}
           data-testid="input-hero-tracking"
         />
         <button
           onClick={handleBuildWorkspace}
           disabled={!trackingInput.trim()}
-          className="w-full flex items-center justify-center gap-2 mt-3 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 mt-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
           style={{
             backgroundColor: "#1e3a5f",
             color: "#ffffff",
             padding: "12px 0",
+            fontSize: 16,
           }}
           data-testid="button-build-workspace"
         >
@@ -114,7 +116,7 @@ function ProductMockup() {
     <div
       className="mx-auto"
       style={{
-        maxWidth: 860,
+        maxWidth: 960,
         marginTop: 48,
         marginBottom: 48,
         borderRadius: 12,
@@ -512,24 +514,24 @@ export default function LandingPage() {
         <div className="hidden md:flex items-center gap-8">
           <a
             href="#how-it-works"
-            className="text-sm font-medium transition-opacity hover:opacity-70"
-            style={{ color: "#64748b" }}
+            className="font-medium transition-opacity hover:opacity-70"
+            style={{ color: "#64748b", fontSize: 15 }}
             data-testid="link-nav-how"
           >
             How it works
           </a>
           <a
             href="#what-you-can-track"
-            className="text-sm font-medium transition-opacity hover:opacity-70"
-            style={{ color: "#64748b" }}
+            className="font-medium transition-opacity hover:opacity-70"
+            style={{ color: "#64748b", fontSize: 15 }}
             data-testid="link-nav-track"
           >
             What you can track
           </a>
           <a
             href="#coming-soon"
-            className="text-sm font-medium transition-opacity hover:opacity-70"
-            style={{ color: "#64748b" }}
+            className="font-medium transition-opacity hover:opacity-70"
+            style={{ color: "#64748b", fontSize: 15 }}
             data-testid="link-nav-coming-soon"
           >
             Coming soon
@@ -539,8 +541,8 @@ export default function LandingPage() {
         <div className="flex items-center gap-2">
           <Link href="/signin">
             <button
-              className="px-4 py-2 rounded-lg text-sm font-medium border transition-opacity hover:opacity-80"
-              style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "#ffffff" }}
+              className="px-4 py-2 rounded-lg font-medium border transition-opacity hover:opacity-80"
+              style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "#ffffff", fontSize: 16 }}
               data-testid="button-nav-signin"
             >
               Sign In
@@ -548,8 +550,8 @@ export default function LandingPage() {
           </Link>
           <Link href="/signup">
             <button
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#1e3a5f" }}
+              className="px-4 py-2 rounded-lg font-medium text-white transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#1e3a5f", fontSize: 16 }}
               data-testid="button-nav-start-trial"
             >
               Start Free Trial
@@ -559,8 +561,8 @@ export default function LandingPage() {
       </nav>
 
       {/* SECTION 1 - HERO */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "120px 24px 0 24px", marginTop: 68 }}>
-        <div className="max-w-[720px] mx-auto text-center">
+      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "120px 40px 0 40px", marginTop: 68 }}>
+        <div className="max-w-[900px] mx-auto text-center">
           <div
             className="inline-block rounded-full px-4 py-1.5 text-xs font-medium mb-8"
             style={{ backgroundColor: "#f0f4f8", color: "#1e3a5f" }}
@@ -570,23 +572,23 @@ export default function LandingPage() {
           </div>
 
           <h1
-            className="text-4xl md:text-5xl lg:text-[56px] font-bold tracking-tight leading-tight mb-6"
-            style={{ color: "#1e3a5f" }}
+            className="tracking-tight leading-tight mb-6"
+            style={{ color: "#1e3a5f", fontSize: 72, fontWeight: 800 }}
             data-testid="text-hero-headline"
           >
             Know more. Miss nothing.
           </h1>
 
           <p
-            className="leading-relaxed max-w-[640px] mx-auto mb-10"
-            style={{ color: "#64748b", fontSize: "20px" }}
+            className="max-w-[640px] mx-auto mb-10"
+            style={{ color: "#64748b", fontSize: 20, lineHeight: 1.7 }}
             data-testid="text-hero-subheadline"
           >
             Most professionals spend 5 or more hours every month manually searching for news, tracking competitors, and piecing together what changed in their industry. Watchloom's AI agents do all of that automatically, crawling the internet continuously so you wake up every morning already knowing what matters.
           </p>
 
           <div
-            className="max-w-[640px] mx-auto mb-10 rounded-lg"
+            className="max-w-[860px] mx-auto mb-10 rounded-lg"
             style={{
               backgroundColor: "#f8fafc",
               padding: "32px 0",
@@ -599,37 +601,37 @@ export default function LandingPage() {
             >
               <div className="flex-1 flex items-center justify-center text-center px-4">
                 <div>
-                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-hours">5+ hours</div>
-                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>saved every month per user</div>
+                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-hours">5+ hours</div>
+                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>saved every month per user</div>
                 </div>
               </div>
               <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
               <div className="flex-1 flex items-center justify-center text-center px-4">
                 <div>
-                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-schedule">Daily, weekly or monthly</div>
-                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>briefings on your schedule</div>
+                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-schedule">Daily, weekly or monthly</div>
+                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>briefings on your schedule</div>
                 </div>
               </div>
               <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
               <div className="flex-1 flex items-center justify-center text-center px-4">
                 <div>
-                  <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }} data-testid="stat-topic">Any topic</div>
-                  <div className="text-sm mt-1" style={{ color: "#64748b" }}>set up in plain English</div>
+                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-topic">Any topic</div>
+                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>set up in plain English</div>
                 </div>
               </div>
             </div>
             <div className="flex flex-col items-center gap-6 md:hidden">
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>5+ hours</div>
-                <div className="text-sm mt-1" style={{ color: "#64748b" }}>saved every month per user</div>
+                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>5+ hours</div>
+                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>saved every month per user</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>Daily, weekly or monthly</div>
-                <div className="text-sm mt-1" style={{ color: "#64748b" }}>briefings on your schedule</div>
+                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>Daily, weekly or monthly</div>
+                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>briefings on your schedule</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold" style={{ color: "#1e3a5f" }}>Any topic</div>
-                <div className="text-sm mt-1" style={{ color: "#64748b" }}>set up in plain English</div>
+                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>Any topic</div>
+                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>set up in plain English</div>
               </div>
             </div>
           </div>
@@ -637,8 +639,8 @@ export default function LandingPage() {
           <div className="flex items-center justify-center gap-4 mb-6">
             <Link href="/signup">
               <button
-                className="px-8 py-3 rounded-lg text-base font-semibold transition-opacity hover:opacity-90"
-                style={{ backgroundColor: "#1e3a5f", color: "#ffffff" }}
+                className="px-8 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90"
+                style={{ backgroundColor: "#1e3a5f", color: "#ffffff", fontSize: 16 }}
                 data-testid="button-get-started"
               >
                 Get Started Free
@@ -646,8 +648,8 @@ export default function LandingPage() {
             </Link>
             <Link href="/signin">
               <button
-                className="px-8 py-3 rounded-lg text-base font-semibold border-2 transition-opacity hover:opacity-80"
-                style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "#ffffff" }}
+                className="px-8 py-3 rounded-lg font-semibold border-2 transition-opacity hover:opacity-80"
+                style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "#ffffff", fontSize: 16 }}
                 data-testid="button-sign-in-hero"
               >
                 Sign In
@@ -658,36 +660,36 @@ export default function LandingPage() {
           <HeroTrackingInput />
         </div>
 
-        <div className="max-w-[860px] mx-auto px-4">
+        <div className="max-w-[960px] mx-auto px-4">
           <ProductMockup />
         </div>
       </section>
 
       {/* SECTION 1.5 - THE REAL PROBLEM */}
-      <section className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 24px" }}>
-        <div className="mx-auto flex flex-col md:flex-row items-start gap-10" style={{ maxWidth: 860 }}>
+      <section className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 40px" }}>
+        <div className="mx-auto flex flex-col md:flex-row items-start gap-10" style={{ maxWidth: 1040 }}>
           <div className="w-full md:w-[55%]">
             <p
-              className="text-xs font-semibold uppercase tracking-widest mb-4"
-              style={{ color: "#64748b" }}
+              className="font-semibold uppercase mb-4"
+              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
               data-testid="text-problem-label"
             >
               The real problem
             </p>
             <h2
-              className="text-2xl md:text-3xl font-bold leading-tight mb-6"
-              style={{ color: "#1e3a5f" }}
+              className="leading-tight mb-6"
+              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
               data-testid="text-problem-headline"
             >
               You are not short on information. You are short on clarity.
             </h2>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: "#64748b" }} data-testid="text-problem-p1">
+            <p style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }} className="mb-4" data-testid="text-problem-p1">
               Every day you get hit with newsletters, alerts, articles, Slack messages, and LinkedIn posts. The information is everywhere. The problem is none of it connects.
             </p>
-            <p className="text-sm leading-relaxed mb-4" style={{ color: "#64748b" }} data-testid="text-problem-p2">
+            <p style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }} className="mb-4" data-testid="text-problem-p2">
               You bookmark things you never revisit. You save articles you forget about. You take notes that sit in a folder nobody opens. Storing information is not the same as understanding it.
             </p>
-            <p className="text-sm leading-relaxed" style={{ color: "#64748b" }} data-testid="text-problem-p3">
+            <p style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }} data-testid="text-problem-p3">
               Watchloom does not just store what you capture. It reads it, connects it to everything else you track, and turns it into a clear picture of what is actually happening in your world.
             </p>
           </div>
@@ -768,19 +770,18 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 3 - HOW IT WORKS */}
-      <section id="how-it-works" className="w-full px-6" style={{ backgroundColor: "#ffffff", padding: "80px 24px", scrollMarginTop: 80 }}>
-        <div className="max-w-[960px] mx-auto">
+      <section id="how-it-works" className="w-full" style={{ backgroundColor: "#ffffff", padding: "80px 40px", scrollMarginTop: 80 }}>
+        <div className="max-w-[1040px] mx-auto">
           <div className="text-center mb-16">
             <p
-              className="text-xs font-semibold uppercase tracking-widest mb-3"
-              style={{ color: "#64748b" }}
+              className="font-semibold uppercase mb-3"
+              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
               data-testid="text-how-label"
             >
               How it works
             </p>
             <h2
-              className="text-3xl md:text-4xl font-bold"
-              style={{ color: "#1e3a5f" }}
+              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
               data-testid="text-how-headline"
             >
               Simple by design. Powerful by default.
@@ -800,13 +801,13 @@ export default function LandingPage() {
                 </svg>
               </div>
               <h3
-                className="text-lg font-semibold mb-2"
-                style={{ color: "#1e3a5f" }}
+                className="mb-2"
+                style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}
                 data-testid="text-step-capture"
               >
                 Capture anything
               </h3>
-              <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
+              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
                 Heard something interesting in a meeting? Spotted an article? Had a thought in the shower? Drop it in, voice, text, link, or file.
               </p>
             </div>
@@ -832,13 +833,13 @@ export default function LandingPage() {
                 </svg>
               </div>
               <h3
-                className="text-lg font-semibold mb-2"
-                style={{ color: "#1e3a5f" }}
+                className="mb-2"
+                style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}
                 data-testid="text-step-route"
               >
                 AI finds where it belongs
               </h3>
-              <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
+              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
                 Watchloom reads what you captured, figures out where it belongs, and files it automatically. You never have to think about organisation again.
               </p>
             </div>
@@ -868,13 +869,13 @@ export default function LandingPage() {
                 </svg>
               </div>
               <h3
-                className="text-lg font-semibold mb-2"
-                style={{ color: "#1e3a5f" }}
+                className="mb-2"
+                style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}
                 data-testid="text-step-brief"
               >
                 Briefed every morning
               </h3>
-              <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
+              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
                 Every morning, a crisp summary of everything that changed across your topics lands in your workspace. Like having a researcher on your team.
               </p>
             </div>
@@ -883,11 +884,11 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 3.5 - SOCIAL PROOF */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 24px" }}>
-        <div className="mx-auto" style={{ maxWidth: 860 }}>
+      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 40px" }}>
+        <div className="mx-auto" style={{ maxWidth: 1040 }}>
           <p
-            className="text-center text-xs font-semibold uppercase tracking-widest mb-8"
-            style={{ color: "#64748b" }}
+            className="text-center font-semibold uppercase mb-8"
+            style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
             data-testid="text-social-proof-label"
           >
             Trusted by professionals who need to stay ahead
@@ -904,7 +905,7 @@ export default function LandingPage() {
               }}
               data-testid="card-testimonial-1"
             >
-              <p className="text-sm leading-relaxed italic flex-1" style={{ color: "#64748b" }}>
+              <p className="italic flex-1" style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
                 "I used to spend half a Sunday catching up on what happened in my industry that week. Now it is waiting for me Monday morning."
               </p>
               <div>
@@ -923,7 +924,7 @@ export default function LandingPage() {
               }}
               data-testid="card-testimonial-2"
             >
-              <p className="text-sm leading-relaxed italic flex-1" style={{ color: "#64748b" }}>
+              <p className="italic flex-1" style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
                 "The daily brief is the first thing I open. It has genuinely changed how prepared I feel going into client meetings."
               </p>
               <div>
@@ -942,7 +943,7 @@ export default function LandingPage() {
               }}
               data-testid="card-testimonial-3"
             >
-              <p className="text-sm leading-relaxed italic flex-1" style={{ color: "#64748b" }}>
+              <p className="italic flex-1" style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
                 "I track six different topics across two industries. Watchloom files everything and I never miss a thing."
               </p>
               <div>
@@ -955,26 +956,25 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 4 - TRACK ANYTHING SHOWCASE */}
-      <section id="what-you-can-track" className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 24px", scrollMarginTop: 80 }}>
-        <div className="max-w-[1000px] mx-auto">
+      <section id="what-you-can-track" className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 40px", scrollMarginTop: 80 }}>
+        <div className="max-w-[1100px] mx-auto">
           <div className="text-center mb-16">
             <p
-              className="text-xs font-semibold uppercase tracking-widest mb-3"
-              style={{ color: "#64748b" }}
+              className="font-semibold uppercase mb-3"
+              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
               data-testid="text-track-label"
             >
               What can you track?
             </p>
             <h2
-              className="text-3xl md:text-4xl font-bold"
-              style={{ color: "#1e3a5f" }}
+              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
               data-testid="text-track-headline"
             >
               Whatever you need to stay on top of, Watchloom's got it
             </h2>
             <p
-              className="text-base mt-3"
-              style={{ color: "#64748b" }}
+              className="mt-3"
+              style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
               data-testid="text-track-subheadline"
             >
               You define what matters. We track it, file it, and brief you on it every morning.
@@ -995,10 +995,10 @@ export default function LandingPage() {
                 data-testid={`card-track-${card.title.toLowerCase().replace(/[^a-z]/g, "-")}`}
               >
                 <div className="text-2xl mb-3">{card.emoji}</div>
-                <h3 className="text-base font-semibold mb-2" style={{ color: "#1e3a5f" }}>
+                <h3 className="mb-2" style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}>
                   {card.title}
                 </h3>
-                <p className="text-sm leading-relaxed" style={{ color: "#64748b" }}>
+                <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
                   {card.text}
                 </p>
               </div>
@@ -1014,10 +1014,10 @@ export default function LandingPage() {
               data-testid="card-track-anything"
             >
               <div className="text-2xl mb-3">✳️</div>
-              <h3 className="text-base font-semibold mb-2 text-white">
+              <h3 className="mb-2 text-white" style={{ fontSize: 18, fontWeight: 600 }}>
                 Anything You Define
               </h3>
-              <p className="text-sm leading-relaxed text-white">
+              <p className="text-white" style={{ fontSize: 15, lineHeight: 1.6 }}>
                 You tell us what matters in plain English. We build your tracking workspace automatically, no setup, no configuration, no IT required.
               </p>
             </div>
@@ -1026,8 +1026,8 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 4.5 - COMING SOON TEASER */}
-      <section id="coming-soon" className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 24px", scrollMarginTop: 80 }}>
-        <div className="mx-auto" style={{ maxWidth: 760 }}>
+      <section id="coming-soon" className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 40px", scrollMarginTop: 80 }}>
+        <div className="mx-auto" style={{ maxWidth: 860 }}>
           <div
             style={{
               border: "1px solid #1e3a5f",
@@ -1046,16 +1046,16 @@ export default function LandingPage() {
             </span>
 
             <h3
-              className="text-xl md:text-2xl font-bold mb-4"
-              style={{ color: "#1e3a5f" }}
+              className="mb-4"
+              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
               data-testid="text-coming-soon-headline"
             >
               Ask Watchloom anything about your tracked topics
             </h3>
 
             <p
-              className="text-sm leading-relaxed mb-6"
-              style={{ color: "#64748b" }}
+              className="mb-6"
+              style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
               data-testid="text-coming-soon-description"
             >
               Soon you will be able to ask Watchloom questions in plain English and get instant answers from everything it has captured for you. What has changed with a competitor this month? What are the biggest themes across your industry right now? What did I capture about pricing changes last week? Watchloom will search its own knowledge of your workspace and answer in seconds.
@@ -1117,8 +1117,8 @@ export default function LandingPage() {
                         setWaitlistSubmitted(true);
                       }
                     }}
-                    className="text-sm font-semibold text-white rounded-lg px-5 py-2.5 transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: "#1e3a5f" }}
+                    className="font-semibold text-white rounded-lg px-5 py-2.5 transition-opacity hover:opacity-90"
+                    style={{ backgroundColor: "#1e3a5f", fontSize: 16 }}
                     data-testid="button-join-waitlist"
                   >
                     Join Waitlist
@@ -1140,26 +1140,26 @@ export default function LandingPage() {
       </section>
 
       {/* SECTION 5 - FINAL CTA */}
-      <section className="w-full px-6 py-24" style={{ backgroundColor: "#ffffff" }}>
-        <div className="max-w-[640px] mx-auto text-center">
+      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "96px 40px" }}>
+        <div className="max-w-[860px] mx-auto text-center">
           <h2
-            className="text-3xl md:text-4xl font-bold mb-4"
-            style={{ color: "#1e3a5f" }}
+            className="mb-4"
+            style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
             data-testid="text-cta-headline"
           >
             Stay ahead of everything that matters to you
           </h2>
           <p
-            className="text-base mb-10"
-            style={{ color: "#64748b" }}
+            className="mb-10"
+            style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
             data-testid="text-cta-subtext"
           >
             Join professionals who have stopped wasting hours on manual research. Watchloom tracks everything, briefs you on schedule, and gives you that time back.
           </p>
           <Link href="/signup">
             <button
-              className="px-10 py-4 rounded-lg text-base font-semibold transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#1e3a5f", color: "#ffffff" }}
+              className="px-10 py-4 rounded-lg font-semibold transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#1e3a5f", color: "#ffffff", fontSize: 16 }}
               data-testid="button-cta-get-started"
             >
               Start Your Free 14-Day Trial
@@ -1173,8 +1173,8 @@ export default function LandingPage() {
 
       {/* FOOTER */}
       <footer
-        className="w-full px-6 py-8"
-        style={{ backgroundColor: "#f8fafc" }}
+        className="w-full py-8"
+        style={{ backgroundColor: "#f8fafc", padding: "32px 40px" }}
       >
         <div className="max-w-[1000px] mx-auto">
           <div className="flex items-center justify-between mb-6">
