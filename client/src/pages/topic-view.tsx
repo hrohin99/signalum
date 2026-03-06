@@ -202,6 +202,7 @@ function TopicViewContent({
 
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
+  const [showAspectModal, setShowAspectModal] = useState(false);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -264,6 +265,28 @@ function TopicViewContent({
           </p>
         </div>
       )}
+
+      {entity.disambiguation_context && !entity.disambiguation_confirmed && (
+        <DisambiguationBanner
+          entity={entity}
+          categoryName={categoryName}
+          onChangeRequest={() => setShowAspectModal(true)}
+        />
+      )}
+
+      {!entity.disambiguation_confirmed && !entity.disambiguation_context && (
+        <DisambiguationCard
+          entity={entity}
+          categoryName={categoryName}
+        />
+      )}
+
+      <AspectSelectionModal
+        open={showAspectModal}
+        onOpenChange={setShowAspectModal}
+        entityName={entity.name}
+        categoryName={categoryName}
+      />
 
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
@@ -2089,5 +2112,472 @@ function AIInsightsCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function AspectSelectionModal({
+  open,
+  onOpenChange,
+  entityName,
+  categoryName,
+  companyContext,
+  onBack,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  entityName: string;
+  categoryName: string;
+  companyContext?: string;
+  onBack?: () => void;
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [aspects, setAspects] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [customText, setCustomText] = useState("");
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setAspects([]);
+    setCustomText("");
+    setLoading(true);
+
+    const fetchAspects = async () => {
+      try {
+        const res = await apiRequest("POST", "/api/entity/aspect-pills", {
+          entityName,
+          companyContext: companyContext || undefined,
+        });
+        const data = await res.json();
+        setAspects(data.aspects || []);
+      } catch {
+        setAspects([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAspects();
+  }, [open, entityName, companyContext]);
+
+  const handleSelect = async (aspect: string) => {
+    setConfirming(true);
+    try {
+      await apiRequest("POST", "/api/entity/confirm-disambiguation", {
+        entityName,
+        categoryName,
+        disambiguation_context: aspect,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      toast({
+        title: `Watchloom will now track ${entityName} for ${aspect}.`,
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+      onOpenChange(false);
+    } catch (err: any) {
+      toast({ title: "Failed to save selection", description: err.message, variant: "destructive" });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={() => {}}>
+      <DialogContent className="sm:max-w-lg" data-testid="modal-aspect-selection" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader>
+          <div className="flex items-center gap-2">
+            {onBack && (
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onBack} data-testid="button-aspect-back">
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            )}
+            <DialogTitle>What do you want to track about {entityName}?</DialogTitle>
+          </div>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground -mt-2">
+          {entityName} operates across multiple areas. Tell us what matters to you so we only surface relevant intelligence.
+        </p>
+        <div className="py-3 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-5 h-5 animate-spin text-[#1e3a5f]" />
+              <span className="ml-2 text-sm text-muted-foreground">Loading business areas...</span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2" data-testid="aspect-pills-container">
+              {aspects.map((aspect, i) => (
+                <button
+                  key={i}
+                  className="px-4 py-2 rounded-full border border-[#1e3a5f]/20 text-sm font-medium text-[#1e3a5f] hover:bg-[#1e3a5f] hover:text-white transition-colors disabled:opacity-50"
+                  onClick={() => handleSelect(aspect)}
+                  disabled={confirming}
+                  data-testid={`button-aspect-pill-${i}`}
+                >
+                  {aspect}
+                </button>
+              ))}
+              <button
+                className="px-4 py-2 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                onClick={() => handleSelect("All business areas")}
+                disabled={confirming}
+                data-testid="button-aspect-all"
+              >
+                All business areas
+              </button>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-border">
+            <label className="text-sm text-muted-foreground mb-1 block">Something else —</label>
+            <div className="flex gap-2">
+              <Input
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                placeholder="Type a specific area..."
+                className="h-9 text-sm"
+                data-testid="input-aspect-custom"
+              />
+              <Button
+                size="sm"
+                className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-9 px-4"
+                onClick={() => handleSelect(customText.trim())}
+                disabled={!customText.trim() || confirming}
+                data-testid="button-aspect-custom-submit"
+              >
+                {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DisambiguationBanner({
+  entity,
+  categoryName,
+  onChangeRequest,
+}: {
+  entity: ExtractedEntity;
+  categoryName: string;
+  onChangeRequest: () => void;
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [dismissed, setDismissed] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  useEffect(() => {
+    if (!entity.disambiguation_context || entity.disambiguation_confirmed) return;
+
+    const storageKey = `disambiguation_banner_shown_${entity.name}`;
+    const shownAt = localStorage.getItem(storageKey);
+
+    if (!shownAt) {
+      localStorage.setItem(storageKey, new Date().toISOString());
+      return;
+    }
+
+    const shownDate = new Date(shownAt);
+    const now = new Date();
+    const hoursSinceShown = (now.getTime() - shownDate.getTime()) / (1000 * 60 * 60);
+
+    if (hoursSinceShown >= 24) {
+      const autoConfirm = async () => {
+        try {
+          await apiRequest("PATCH", "/api/entity", {
+            categoryName,
+            entityName: entity.name,
+            disambiguation_confirmed: true,
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+          setDismissed(true);
+        } catch {
+        }
+      };
+      autoConfirm();
+    }
+  }, [entity.name, entity.disambiguation_context, entity.disambiguation_confirmed, categoryName, user?.id]);
+
+  if (dismissed || !entity.disambiguation_context || entity.disambiguation_confirmed) {
+    return null;
+  }
+
+  const handleConfirm = async () => {
+    setConfirming(true);
+    try {
+      await apiRequest("PATCH", "/api/entity", {
+        categoryName,
+        entityName: entity.name,
+        disambiguation_confirmed: true,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      setDismissed(true);
+      toast({
+        title: `Got it. All searches will focus on ${entity.disambiguation_context}.`,
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  return (
+    <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200" data-testid="banner-disambiguation-confirm">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <p className="text-sm text-amber-900">
+          We are tracking <span className="font-semibold">{entity.name}</span> for their{" "}
+          <span className="font-semibold">{entity.disambiguation_context}</span> products based on your workspace focus. Is that right?
+        </p>
+        <div className="flex items-center gap-3 shrink-0">
+          <Button
+            size="sm"
+            className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-8 px-3 text-xs"
+            onClick={handleConfirm}
+            disabled={confirming}
+            data-testid="button-disambiguation-yes"
+          >
+            {confirming ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+            Yes, that is right
+          </Button>
+          <button
+            className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
+            onClick={onChangeRequest}
+            data-testid="button-disambiguation-no"
+          >
+            No, change this
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DisambiguationCard({
+  entity,
+  categoryName,
+}: {
+  entity: ExtractedEntity;
+  categoryName: string;
+}) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [step, setStep] = useState<"loading" | "companies" | "aspects" | "done">("loading");
+  const [companies, setCompanies] = useState<{ name: string; description: string }[]>([]);
+  const [selectedCompany, setSelectedCompany] = useState<string | null>(null);
+  const [aspects, setAspects] = useState<string[]>([]);
+  const [aspectsLoading, setAspectsLoading] = useState(false);
+  const [customText, setCustomText] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (entity.disambiguation_confirmed || entity.disambiguation_context) return;
+
+    const fetchCompanies = async () => {
+      try {
+        const res = await apiRequest("POST", "/api/entity/disambiguate-companies", {
+          entityName: entity.name,
+        });
+        const data = await res.json();
+
+        if (data.single) {
+          setModalOpen(true);
+          loadAspects(undefined);
+        } else {
+          setCompanies(data.companies || []);
+          setStep("companies");
+          setModalOpen(true);
+        }
+      } catch {
+        setStep("done");
+      }
+    };
+    fetchCompanies();
+  }, [entity.name, entity.disambiguation_confirmed, entity.disambiguation_context]);
+
+  const loadAspects = async (companyContext?: string) => {
+    setAspectsLoading(true);
+    setStep("aspects");
+    try {
+      const res = await apiRequest("POST", "/api/entity/aspect-pills", {
+        entityName: entity.name,
+        companyContext: companyContext || undefined,
+      });
+      const data = await res.json();
+      const pills = data.aspects || [];
+
+      if (pills.length <= 1) {
+        const aspect = pills.length === 1 ? pills[0] : "All business areas";
+        const contextStr = companyContext ? `${companyContext} — ${aspect}` : aspect;
+        await handleConfirm(contextStr);
+        return;
+      }
+
+      setAspects(pills);
+    } catch {
+      setAspects([]);
+    } finally {
+      setAspectsLoading(false);
+    }
+  };
+
+  const handleCompanySelect = (companyName: string) => {
+    setSelectedCompany(companyName);
+    loadAspects(companyName);
+  };
+
+  const handleConfirm = async (aspect: string) => {
+    setConfirming(true);
+    try {
+      const contextStr = selectedCompany ? `${selectedCompany} — ${aspect}` : aspect;
+      await apiRequest("POST", "/api/entity/confirm-disambiguation", {
+        entityName: entity.name,
+        categoryName,
+        disambiguation_context: contextStr,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      toast({
+        title: `Watchloom will now track ${entity.name} for ${aspect}.`,
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+      setModalOpen(false);
+      setStep("done");
+    } catch (err: any) {
+      toast({ title: "Failed to save selection", description: err.message, variant: "destructive" });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  if (entity.disambiguation_confirmed || entity.disambiguation_context) {
+    return null;
+  }
+
+  if (step === "done" && !modalOpen) {
+    return null;
+  }
+
+  if (step === "loading") {
+    return (
+      <Card className="mt-3" data-testid="card-disambiguation-loading">
+        <CardContent className="p-4 flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin text-[#1e3a5f]" />
+          <span className="text-sm text-muted-foreground">Checking disambiguation options...</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Dialog open={modalOpen} onOpenChange={() => {}}>
+      <DialogContent className="sm:max-w-lg" data-testid="modal-disambiguation-card" onPointerDownOutside={(e) => e.preventDefault()}>
+        {step === "companies" && companies.length > 0 && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Which {entity.name} do you mean?</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 py-2">
+              {companies.map((company, i) => (
+                <button
+                  key={i}
+                  className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-[#1e3a5f] hover:bg-[#1e3a5f]/5 transition-colors"
+                  onClick={() => handleCompanySelect(company.name)}
+                  data-testid={`button-company-option-${i}`}
+                >
+                  <p className="text-sm font-medium text-foreground">{company.name}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{company.description}</p>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+
+        {step === "aspects" && (
+          <>
+            <DialogHeader>
+              <div className="flex items-center gap-2">
+                {selectedCompany && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7"
+                    onClick={() => {
+                      setStep("companies");
+                      setSelectedCompany(null);
+                      setAspects([]);
+                    }}
+                    data-testid="button-disambiguation-back"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </Button>
+                )}
+                <DialogTitle>What do you want to track about {entity.name}?</DialogTitle>
+              </div>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground -mt-2">
+              {entity.name} operates across multiple areas. Tell us what matters to you so we only surface relevant intelligence.
+            </p>
+            <div className="py-3 space-y-4">
+              {aspectsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-5 h-5 animate-spin text-[#1e3a5f]" />
+                  <span className="ml-2 text-sm text-muted-foreground">Loading business areas...</span>
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2" data-testid="disambiguation-aspect-pills">
+                  {aspects.map((aspect, i) => (
+                    <button
+                      key={i}
+                      className="px-4 py-2 rounded-full border border-[#1e3a5f]/20 text-sm font-medium text-[#1e3a5f] hover:bg-[#1e3a5f] hover:text-white transition-colors disabled:opacity-50"
+                      onClick={() => handleConfirm(aspect)}
+                      disabled={confirming}
+                      data-testid={`button-disambiguation-aspect-${i}`}
+                    >
+                      {aspect}
+                    </button>
+                  ))}
+                  <button
+                    className="px-4 py-2 rounded-full border border-gray-200 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors disabled:opacity-50"
+                    onClick={() => handleConfirm("All business areas")}
+                    disabled={confirming}
+                    data-testid="button-disambiguation-all"
+                  >
+                    All business areas
+                  </button>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-border">
+                <label className="text-sm text-muted-foreground mb-1 block">Something else —</label>
+                <div className="flex gap-2">
+                  <Input
+                    value={customText}
+                    onChange={(e) => setCustomText(e.target.value)}
+                    placeholder="Type a specific area..."
+                    className="h-9 text-sm"
+                    data-testid="input-disambiguation-custom"
+                  />
+                  <Button
+                    size="sm"
+                    className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-9 px-4"
+                    onClick={() => handleConfirm(customText.trim())}
+                    disabled={!customText.trim() || confirming}
+                    data-testid="button-disambiguation-custom-submit"
+                  >
+                    {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

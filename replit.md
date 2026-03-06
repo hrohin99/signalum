@@ -58,3 +58,13 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **DB Table:** `workspace_context` (id, tenant_id, primary_domain, relevant_subtopics JSONB, domain_keywords JSONB, updated_at).
 - **API Routes:** `GET /api/workspace-context`, `PUT /api/workspace-context` — CRUD for workspace context.
 - **Response:** Both `/api/add-entity` and `/api/add-category` now return `siblingInference` field with `inferred_domain`, `confidence`, and `reasoning`.
+
+## Disambiguation UI (Parts 2-4)
+- **DisambiguationBanner** (`client/src/pages/topic-view.tsx`): Amber confirmation banner shown when entity has `disambiguation_context` but `disambiguation_confirmed` is false (medium confidence). "Yes, that is right" confirms; "No, change this" opens AspectSelectionModal. Auto-dismisses after 24 hours via localStorage tracking.
+- **AspectSelectionModal** (`client/src/pages/topic-view.tsx`): Modal with Claude-generated aspect pills for selecting which business area to track. Calls `POST /api/entity/aspect-pills` for pills, `POST /api/entity/confirm-disambiguation` on selection. Triggers Perplexity search scoped to selected aspect. Includes free-text input and "All business areas" option. No cancel — user must select.
+- **DisambiguationCard** (`client/src/pages/topic-view.tsx`): Two-step card for ambiguous company names. Step 1: calls `POST /api/entity/disambiguate-companies` to check ambiguity, shows company selection cards. Step 2: transitions to AspectSelectionModal scoped to selected company. If name is unambiguous (single: true), skips to aspect selection directly. Back arrow on Step 2.
+- **API Endpoints:**
+  - `POST /api/entity/aspect-pills` — generates 3-5 business area labels via Claude
+  - `POST /api/entity/disambiguate-companies` — checks if entity name is ambiguous, returns company options
+  - `POST /api/entity/confirm-disambiguation` — saves disambiguation_context, confirms entity, triggers Perplexity search
+  - `PATCH /api/entity` — now supports `disambiguation_confirmed` and `disambiguation_context` fields

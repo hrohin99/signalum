@@ -1132,10 +1132,204 @@ Return only the summary paragraph, no JSON, no formatting.`
         entity.priority = priority as 'high' | 'medium' | 'low' | 'watch';
       }
 
+      const { disambiguation_confirmed, disambiguation_context } = req.body;
+      if (disambiguation_confirmed !== undefined) {
+        entity.disambiguation_confirmed = disambiguation_confirmed === true;
+      }
+      if (disambiguation_context !== undefined && typeof disambiguation_context === "string") {
+        entity.disambiguation_context = disambiguation_context.trim();
+      }
+
       const updated = await storage.updateWorkspaceCategories(userId, categories);
       return res.json({ success: true, workspace: updated });
     } catch (error: any) {
       console.error("Update entity error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entity/aspect-pills", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { entityName, companyContext } = req.body;
+
+      if (!entityName || typeof entityName !== "string") {
+        return res.status(400).json({ message: "entityName is required" });
+      }
+
+      const client = getAnthropicClient();
+      const contextNote = companyContext ? ` (specifically ${companyContext})` : "";
+
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: `List the 3-5 main business units or product areas of ${entityName}${contextNote}. Return ONLY a JSON object with this structure:
+{
+  "aspects": ["Business Unit 1", "Business Unit 2", "Business Unit 3"]
+}
+
+Rules:
+- Each label should be maximum 4 words
+- Return between 3 and 5 items
+- Be specific to this company's actual business areas
+- Return ONLY valid JSON, no other text.`
+          }
+        ]
+      });
+
+      const textContent = message.content.find(block => block.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      let parsed: { aspects: string[] };
+      try {
+        const jsonStr = textContent.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        return res.status(500).json({ message: "Failed to parse AI response" });
+      }
+
+      if (!Array.isArray(parsed.aspects)) {
+        return res.status(500).json({ message: "Invalid response format" });
+      }
+
+      return res.json({ aspects: parsed.aspects.slice(0, 6) });
+    } catch (error: any) {
+      console.error("Aspect pills error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entity/disambiguate-companies", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { entityName } = req.body;
+
+      if (!entityName || typeof entityName !== "string") {
+        return res.status(400).json({ message: "entityName is required" });
+      }
+
+      const client = getAnthropicClient();
+
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: `The name "${entityName}" may refer to multiple different companies or organizations. Determine if this name is ambiguous.
+
+If this name clearly refers to only one well-known entity (e.g., "Google", "Tesla"), return:
+{
+  "single": true,
+  "companies": []
+}
+
+If this name could refer to multiple different companies or organizations (e.g., "Mercury" could be Mercury Insurance, Mercury Financial, Mercury Systems), return:
+{
+  "single": false,
+  "companies": [
+    { "name": "Full Company Name", "description": "One-line description of what they do" }
+  ]
+}
+
+Rules:
+- List 3-5 of the most well-known companies/organizations with this name
+- Only include genuinely distinct companies, not divisions of the same company
+- Return ONLY valid JSON, no other text.`
+          }
+        ]
+      });
+
+      const textContent = message.content.find(block => block.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      let parsed: { single: boolean; companies: { name: string; description: string }[] };
+      try {
+        const jsonStr = textContent.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        return res.status(500).json({ message: "Failed to parse AI response" });
+      }
+
+      return res.json({
+        single: parsed.single === true,
+        companies: Array.isArray(parsed.companies) ? parsed.companies : [],
+      });
+    } catch (error: any) {
+      console.error("Disambiguate companies error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entity/confirm-disambiguation", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { entityName, categoryName, disambiguation_context } = req.body;
+
+      if (!entityName || !categoryName || !disambiguation_context) {
+        return res.status(400).json({ message: "entityName, categoryName, and disambiguation_context are required" });
+      }
+
+      if (typeof entityName !== "string" || typeof categoryName !== "string" || typeof disambiguation_context !== "string") {
+        return res.status(400).json({ message: "All fields must be strings" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const entity = category.entities.find(e => e.name === entityName);
+      if (!entity) {
+        return res.status(404).json({ message: "Entity not found" });
+      }
+
+      entity.disambiguation_context = disambiguation_context.trim();
+      entity.disambiguation_confirmed = true;
+
+      await storage.updateWorkspaceCategories(userId, categories);
+
+      try {
+        const { searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
+        const topicType = (entity.topic_type || "general").toLowerCase();
+        const searchQuery = `${entityName} ${disambiguation_context}`;
+        const findings = await searchTopicUpdates(searchQuery, topicType, 30);
+
+        if (findings.length > 0) {
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          const existingCaptures = await storage.getCapturesByEntitySince(userId, entityName, thirtyDaysAgo);
+          const deduplicated = deduplicateFindings(findings, existingCaptures);
+
+          if (deduplicated.length > 0) {
+            const captureRecords = findingsToCaptures(deduplicated, entityName, userId, categoryName)
+              .map(c => ({ ...c, matchReason: `Disambiguation search [${disambiguation_context}]` }));
+            const created = await storage.createCaptures(captureRecords);
+            await storage.flagCapturesForBrief(created.map(c => c.id));
+
+            const summaryParts = deduplicated.map(f => f.summary);
+            const aiSummary = `Focused on ${disambiguation_context}: ${summaryParts.slice(0, 3).join("; ")}`;
+            await storage.updateEntityAiSummary(userId, entityName, aiSummary);
+          }
+        }
+      } catch (searchErr: any) {
+        console.error(`[ConfirmDisambiguation] Perplexity search failed for "${entityName}":`, searchErr?.message || searchErr);
+      }
+
+      return res.json({ success: true, disambiguation_context: disambiguation_context.trim() });
+    } catch (error: any) {
+      console.error("Confirm disambiguation error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
