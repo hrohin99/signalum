@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -13,6 +13,7 @@ import {
   Loader2,
   Shield,
   Check,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -289,6 +290,46 @@ function SeedingBanner() {
   );
 }
 
+function WorkspaceLoadingState() {
+  return (
+    <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-loading-state">
+      <div className="w-12 h-12 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-4">
+        <Shield className="w-6 h-6 text-white" />
+      </div>
+      <div className="flex gap-1.5 mb-4">
+        <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "0ms" }} />
+        <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "300ms" }} />
+        <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "600ms" }} />
+      </div>
+      <h3 className="font-medium text-foreground mb-1" data-testid="text-loading-headline">Setting up your workspace...</h3>
+      <p className="text-sm text-muted-foreground">This only takes a moment.</p>
+    </div>
+  );
+}
+
+function WorkspaceEmptyState({ onRefresh, isRefreshing }: { onRefresh: () => void; isRefreshing: boolean }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-empty-state">
+      <div className="w-12 h-12 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-4">
+        <Shield className="w-6 h-6 text-white" />
+      </div>
+      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-empty-headline">Your workspace is almost ready</h3>
+      <p className="text-sm text-muted-foreground max-w-sm mb-6">
+        We are still setting things up. This usually takes less than a minute.
+      </p>
+      <Button
+        className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-6"
+        onClick={onRefresh}
+        disabled={isRefreshing}
+        data-testid="button-refresh-workspace"
+      >
+        {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+        Refresh workspace
+      </Button>
+    </div>
+  );
+}
+
 export default function MapPage() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -297,6 +338,10 @@ export default function MapPage() {
   const [showWelcome, setShowWelcome] = useState(false);
   const [seedingActive, setSeedingActive] = useState(false);
   const [seedingChecked, setSeedingChecked] = useState(false);
+  const [pollingState, setPollingState] = useState<"idle" | "polling" | "timeout">("idle");
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const pollingStartRef = useRef<number | null>(null);
+  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { data: wsData, isLoading: wsLoading } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
@@ -348,10 +393,10 @@ export default function MapPage() {
   });
 
   useEffect(() => {
-    if (welcomeStatus && !welcomeStatus.dismissed) {
+    if (welcomeStatus && !welcomeStatus.dismissed && categories.length > 0) {
       setShowWelcome(true);
     }
-  }, [welcomeStatus]);
+  }, [welcomeStatus, categories.length]);
 
   const checkSeedingStatus = useCallback(async () => {
     if (!user) return;
@@ -391,6 +436,69 @@ export default function MapPage() {
 
   const categories = wsData?.workspace?.categories ?? [];
   const loading = wsLoading || capLoading;
+
+  const pollWorkspaceReady = useCallback(async () => {
+    if (!user) return false;
+    try {
+      const res = await apiRequest("GET", "/api/workspace-ready");
+      const data = await res.json();
+      if (data.ready) {
+        queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
+        return true;
+      }
+    } catch {}
+    return false;
+  }, [user]);
+
+  useEffect(() => {
+    if (wsLoading || !wsData) return;
+    if (categories.length > 0) {
+      if (pollingState !== "idle") {
+        setPollingState("idle");
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+      }
+      return;
+    }
+
+    if (pollingState !== "idle") return;
+
+    setPollingState("polling");
+    pollingStartRef.current = Date.now();
+
+    const interval = setInterval(async () => {
+      const elapsed = Date.now() - (pollingStartRef.current || 0);
+      if (elapsed >= 10000) {
+        clearInterval(interval);
+        pollingIntervalRef.current = null;
+        setPollingState("timeout");
+        return;
+      }
+      const ready = await pollWorkspaceReady();
+      if (ready) {
+        clearInterval(interval);
+        pollingIntervalRef.current = null;
+      }
+    }, 2000);
+
+    pollingIntervalRef.current = interval;
+
+    return () => {
+      clearInterval(interval);
+      pollingIntervalRef.current = null;
+    };
+  }, [wsLoading, wsData, categories.length, pollingState, pollWorkspaceReady]);
+
+  const handleManualRefresh = async () => {
+    setIsManualRefreshing(true);
+    const ready = await pollWorkspaceReady();
+    if (!ready) {
+      await queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+    }
+    setIsManualRefreshing(false);
+  };
 
   const effectiveCategory = selectedCategory ?? (categories.length > 0 ? categories[0].name : null);
 
@@ -483,22 +591,18 @@ export default function MapPage() {
     );
   }
 
-  if (categories.length === 0) {
+  if (categories.length === 0 && !wsLoading) {
+    if (pollingState === "timeout") {
+      return (
+        <div className="p-8 max-w-4xl mx-auto">
+          <WorkspaceEmptyState onRefresh={handleManualRefresh} isRefreshing={isManualRefreshing} />
+        </div>
+      );
+    }
+
     return (
       <div className="p-8 max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
-          <p className="text-muted-foreground mt-1">Your tracked categories and topics.</p>
-        </div>
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mb-4">
-            <Network className="w-6 h-6 text-muted-foreground" />
-          </div>
-          <h3 className="font-medium text-foreground mb-1">No workspace data yet</h3>
-          <p className="text-sm text-muted-foreground max-w-sm">
-            Complete the onboarding to set up your categories and topics.
-          </p>
-        </div>
+        <WorkspaceLoadingState />
       </div>
     );
   }

@@ -1028,6 +1028,8 @@ Return only the summary paragraph, no JSON, no formatting.`
         categories: categoriesWithDefaults,
       });
 
+      await storage.setWorkspaceReady(userId);
+
       return res.json({ success: true, workspace });
     } catch (error: any) {
       console.error("Create workspace error:", error);
@@ -1590,6 +1592,17 @@ Rules:
       return res.json({ success: true, deletedCaptures });
     } catch (error: any) {
       console.error("Delete entity error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/workspace-ready", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const ready = await storage.isWorkspaceReady(userId);
+      return res.json({ ready });
+    } catch (error: any) {
+      console.error("Workspace ready check error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

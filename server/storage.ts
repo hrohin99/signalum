@@ -42,6 +42,8 @@ export interface IStorage {
   createAmbientSearchLog(log: { tenantId: string; userId: string; entitiesSearched: number; newCapturesCreated: number; notificationsCreated: number; errors: number }): Promise<void>;
   updateEntityAiSummary(userId: string, entityName: string, summary: string): Promise<void>;
   flagCapturesForBrief(captureIds: number[]): Promise<void>;
+  setWorkspaceReady(userId: string): Promise<void>;
+  isWorkspaceReady(userId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -349,6 +351,18 @@ export class DatabaseStorage implements IStorage {
         .set({ matchReason: sql`COALESCE(${captures.matchReason}, '') || ' [FLAGGED_FOR_BRIEF]'` })
         .where(eq(captures.id, id));
     }
+  }
+
+  async setWorkspaceReady(userId: string): Promise<void> {
+    await db
+      .update(userProfiles)
+      .set({ workspaceReady: 1 })
+      .where(eq(userProfiles.userId, userId));
+  }
+
+  async isWorkspaceReady(userId: string): Promise<boolean> {
+    const profile = await this.getUserProfile(userId);
+    return profile?.workspaceReady === 1;
   }
 }
 
