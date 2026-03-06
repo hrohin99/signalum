@@ -1790,6 +1790,50 @@ Rules:
     }
   });
 
+  app.patch("/api/entity/search-settings", requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
+    const { entityName, auto_search_enabled, alert_on_high_signal } = req.body;
+
+    if (!entityName) {
+      return res.status(400).json({ message: "entityName is required" });
+    }
+
+    try {
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      let updated = false;
+      for (const category of categories) {
+        for (const entity of category.entities) {
+          if (entity.name === entityName) {
+            if (typeof auto_search_enabled === "boolean") {
+              entity.auto_search_enabled = auto_search_enabled;
+            }
+            if (typeof alert_on_high_signal === "boolean") {
+              entity.alert_on_high_signal = alert_on_high_signal;
+            }
+            updated = true;
+            break;
+          }
+        }
+        if (updated) break;
+      }
+
+      if (!updated) {
+        return res.status(404).json({ message: "Entity not found" });
+      }
+
+      await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Update search settings error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/search/manual", requireAuth, async (req: Request, res: Response) => {
     const userId = (req as any).userId;
     const { entityName, categoryName, topicType } = req.body;
@@ -1842,19 +1886,27 @@ Rules:
         await storage.updateEntityAiSummary(userId, entityName, aiSummary);
 
         const tenantId = "00000000-0000-0000-0000-000000000000";
-        const highSignalFindings = deduplicated.filter(f => f.signal_strength === "high");
-        for (const finding of highSignalFindings) {
-          await storage.createNotification({
-            tenantId,
-            userId,
-            entityName,
-            categoryName: categoryName || null,
-            type: "high_signal",
-            title: `High-priority update: ${entityName}`,
-            content: finding.summary,
-            signalStrength: "high",
-            read: 0,
-          });
+        const workspace = await storage.getWorkspaceByUserId(userId);
+        const entityData = workspace?.categories
+          ?.flatMap((c: ExtractedCategory) => c.entities)
+          ?.find((e: ExtractedEntity) => e.name === entityName);
+        const alertEnabled = entityData?.alert_on_high_signal === true;
+
+        if (alertEnabled) {
+          const highSignalFindings = deduplicated.filter(f => f.signal_strength === "high");
+          for (const finding of highSignalFindings) {
+            await storage.createNotification({
+              tenantId,
+              userId,
+              entityName,
+              categoryName: categoryName || null,
+              type: "high_signal",
+              title: `High-priority update: ${entityName}`,
+              content: finding.summary,
+              signalStrength: "high",
+              read: 0,
+            });
+          }
         }
 
         return res.json({ newFindings: created.length, message: `${created.length} new update${created.length !== 1 ? "s" : ""} found` });

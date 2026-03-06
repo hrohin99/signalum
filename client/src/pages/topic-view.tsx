@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -857,6 +858,66 @@ function QuickStatsWidget({
   );
 }
 
+function SearchSettingsSection({ entity }: { entity: ExtractedEntity }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const autoSearchEnabled = entity.auto_search_enabled !== false;
+  const alertOnHighSignal = entity.alert_on_high_signal === true;
+
+  const updateSettingMutation = useMutation({
+    mutationFn: async (settings: { auto_search_enabled?: boolean; alert_on_high_signal?: boolean }) => {
+      const res = await apiRequest("PATCH", "/api/entity/search-settings", {
+        entityName: entity.name,
+        ...settings,
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Failed to update settings");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="pt-2 border-t border-border/50" data-testid="section-search-settings">
+      <p className="text-xs text-slate-500 mb-2">Search settings</p>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0 mr-3">
+            <p className="text-xs font-medium text-foreground">Automatic daily search</p>
+            <p className="text-[11px] text-slate-400">Search for updates every day</p>
+          </div>
+          <Switch
+            checked={autoSearchEnabled}
+            onCheckedChange={(checked) => updateSettingMutation.mutate({ auto_search_enabled: checked })}
+            disabled={updateSettingMutation.isPending}
+            data-testid="switch-auto-search"
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0 mr-3">
+            <p className="text-xs font-medium text-foreground">High signal alerts</p>
+            <p className="text-[11px] text-slate-400">Get notified for important findings</p>
+          </div>
+          <Switch
+            checked={alertOnHighSignal}
+            onCheckedChange={(checked) => updateSettingMutation.mutate({ alert_on_high_signal: checked })}
+            disabled={updateSettingMutation.isPending}
+            data-testid="switch-high-signal-alerts"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ManualSearchButton({
   entity,
   categoryName,
@@ -1199,6 +1260,8 @@ function TopicDetailsCard({
             categoryName={categoryName}
             captures={captures}
           />
+
+          <SearchSettingsSection entity={entity} />
 
           <div className="pt-2 border-t border-border/50">
             <p className="text-xs text-slate-500 mb-2">Related topics</p>

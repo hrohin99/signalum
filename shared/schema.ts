@@ -71,6 +71,10 @@ export interface ExtractedEntity {
   topic_type?: string;
   related_topic_ids?: string[];
   priority?: 'high' | 'medium' | 'low' | 'watch';
+  auto_search_enabled?: boolean;
+  alert_on_high_signal?: boolean;
+  aiSummary?: string;
+  aiSummaryUpdatedAt?: string;
 }
 
 export interface ExtractionResult {

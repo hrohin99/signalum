@@ -77,6 +77,11 @@ export async function runAmbientSearchForUser(
 
   for (const category of categories) {
     for (const entity of category.entities) {
+      if (entity.auto_search_enabled === false) {
+        console.log(`[ambient-search] Skipping ${entity.name} (auto search disabled)`);
+        continue;
+      }
+
       try {
         await perplexityRateLimiter.waitForSlot();
 
@@ -116,23 +121,25 @@ export async function runAmbientSearchForUser(
           const aiSummary = `Latest updates (${new Date().toLocaleDateString()}): ${summaryParts.slice(0, 3).join("; ")}`;
           await storage.updateEntityAiSummary(userId, entity.name, aiSummary);
 
-          const highSignalFindings = deduplicated.filter(
-            (f) => f.signal_strength === "high"
-          );
-          for (const finding of highSignalFindings) {
-            const notification: InsertNotification = {
-              tenantId,
-              userId,
-              entityName: entity.name,
-              categoryName: category.name,
-              type: "high_signal",
-              title: `High-priority update: ${entity.name}`,
-              content: finding.summary,
-              signalStrength: "high",
-              read: 0,
-            };
-            await storage.createNotification(notification);
-            result.notificationsCreated++;
+          if (entity.alert_on_high_signal === true) {
+            const highSignalFindings = deduplicated.filter(
+              (f) => f.signal_strength === "high"
+            );
+            for (const finding of highSignalFindings) {
+              const notification: InsertNotification = {
+                tenantId,
+                userId,
+                entityName: entity.name,
+                categoryName: category.name,
+                type: "high_signal",
+                title: `High-priority update: ${entity.name}`,
+                content: finding.summary,
+                signalStrength: "high",
+                read: 0,
+              };
+              await storage.createNotification(notification);
+              result.notificationsCreated++;
+            }
           }
         }
       } catch (entityError) {
