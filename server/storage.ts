@@ -1,7 +1,7 @@
-import { eq, desc, and, lt, sql } from "drizzle-orm";
+import { eq, desc, and, lt, gte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -35,6 +35,13 @@ export interface IStorage {
   markHistoricalSeedingCompleted(userId: string): Promise<void>;
   isHistoricalSeedingCompleted(userId: string): Promise<boolean>;
   createCaptures(capturesData: InsertCapture[]): Promise<Capture[]>;
+  getCapturesByEntitySince(userId: string, entityName: string, since: Date): Promise<Capture[]>;
+  getAllWorkspaces(): Promise<Workspace[]>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByUserId(userId: string): Promise<Notification[]>;
+  createAmbientSearchLog(log: { tenantId: string; userId: string; entitiesSearched: number; newCapturesCreated: number; notificationsCreated: number; errors: number }): Promise<void>;
+  updateEntityAiSummary(userId: string, entityName: string, summary: string): Promise<void>;
+  flagCapturesForBrief(captureIds: number[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -273,6 +280,75 @@ export class DatabaseStorage implements IStorage {
       .insert(captures)
       .values(capturesData)
       .returning();
+  }
+
+  async getCapturesByEntitySince(userId: string, entityName: string, since: Date): Promise<Capture[]> {
+    return db
+      .select()
+      .from(captures)
+      .where(and(
+        eq(captures.userId, userId),
+        eq(captures.matchedEntity, entityName),
+        gte(captures.createdAt, since)
+      ))
+      .orderBy(desc(captures.createdAt));
+  }
+
+  async getAllWorkspaces(): Promise<Workspace[]> {
+    return db.select().from(workspaces);
+  }
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [created] = await db
+      .insert(notifications)
+      .values(notification)
+      .returning();
+    return created;
+  }
+
+  async getNotificationsByUserId(userId: string): Promise<Notification[]> {
+    return db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt));
+  }
+
+  async createAmbientSearchLog(log: { tenantId: string; userId: string; entitiesSearched: number; newCapturesCreated: number; notificationsCreated: number; errors: number }): Promise<void> {
+    await db.insert(ambientSearchLogs).values(log);
+  }
+
+  async updateEntityAiSummary(userId: string, entityName: string, summary: string): Promise<void> {
+    const workspace = await this.getWorkspaceByUserId(userId);
+    if (!workspace) return;
+
+    const categories = workspace.categories as any[];
+    let updated = false;
+    for (const category of categories) {
+      for (const entity of category.entities) {
+        if (entity.name === entityName) {
+          entity.aiSummary = summary;
+          entity.aiSummaryUpdatedAt = new Date().toISOString();
+          updated = true;
+          break;
+        }
+      }
+      if (updated) break;
+    }
+
+    if (updated) {
+      await this.updateWorkspaceCategories(userId, categories);
+    }
+  }
+
+  async flagCapturesForBrief(captureIds: number[]): Promise<void> {
+    if (captureIds.length === 0) return;
+    for (const id of captureIds) {
+      await db
+        .update(captures)
+        .set({ matchReason: sql`COALESCE(${captures.matchReason}, '') || ' [FLAGGED_FOR_BRIEF]'` })
+        .where(eq(captures.id, id));
+    }
   }
 }
 

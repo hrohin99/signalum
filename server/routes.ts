@@ -1790,5 +1790,31 @@ Rules:
     }
   });
 
+  app.post("/api/search/run-ambient", async (req: Request, res: Response) => {
+    try {
+      const { runAmbientSearchForAllTenants } = await import("./ambientSearch");
+
+      res.json({ started: true, message: "Ambient search triggered for all tenants" });
+
+      (async () => {
+        try {
+          const results = await runAmbientSearchForAllTenants();
+          console.log(`[ambient-search] Completed. Results: ${JSON.stringify(results.map(r => ({
+            userId: r.userId,
+            entitiesSearched: r.entitiesSearched,
+            newCapturesCreated: r.newCapturesCreated,
+            notificationsCreated: r.notificationsCreated,
+            errors: r.errors,
+          })))}`);
+        } catch (error) {
+          console.error("[ambient-search] Fatal error:", error);
+        }
+      })();
+    } catch (error: any) {
+      console.error("Ambient search trigger error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

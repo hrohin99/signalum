@@ -35,4 +35,12 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **Resend:** Transactional email services for user verification.
 - **Replit AI Integrations (Anthropic Claude):** AI capabilities for content extraction, classification, transcription, and insight generation.
 - **Perplexity AI:** Web research layer for automated competitor and topic intelligence gathering. Service at `server/perplexityService.ts`. Uses `PERPLEXITY_API_KEY` secret. Provides `searchCompetitorNews`, `searchTopicUpdates`, `deduplicateFindings`, and `findingsToCaptures` functions.
+- **node-cron:** Schedules daily ambient search at 6:00 AM UTC.
 - **PostgreSQL:** Primary database.
+
+## Ambient Search System
+- **Route:** `POST /api/search/run-ambient` — triggers ambient web search for all tenants (no auth required, intended for scheduled jobs).
+- **Service:** `server/ambientSearch.ts` — core ambient search logic with rate limiting (10 Perplexity calls/min).
+- **Scheduler:** node-cron in `server/index.ts` runs daily at 6:00 AM UTC.
+- **Flow:** Fetches all workspaces → for each entity, searches Perplexity with 7-day lookback → deduplicates against 30-day capture window → creates captures, updates entity AI summaries, flags for daily brief, creates high-signal notifications.
+- **DB Tables:** `notifications` (high-signal alerts), `ambient_search_logs` (run history/metrics).

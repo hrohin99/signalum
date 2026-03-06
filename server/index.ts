@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import cron from "node-cron";
 
 const app = express();
 const httpServer = createServer(app);
@@ -110,6 +111,21 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+
+      cron.schedule("0 6 * * *", async () => {
+        log("Daily ambient search triggered by cron", "cron");
+        try {
+          const { runAmbientSearchForAllTenants } = await import("./ambientSearch");
+          const results = await runAmbientSearchForAllTenants();
+          log(`Ambient search complete: ${results.length} tenant(s) processed`, "cron");
+        } catch (error) {
+          console.error("[cron] Ambient search failed:", error);
+        }
+      }, {
+        timezone: "UTC",
+      });
+
+      log("Ambient search cron scheduled for 6:00 AM UTC daily", "cron");
     },
   );
 })();

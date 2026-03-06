@@ -183,3 +183,39 @@ export const insertTopicDateSchema = createInsertSchema(topicDates).omit({
 
 export type InsertTopicDate = z.infer<typeof insertTopicDateSchema>;
 export type TopicDate = typeof topicDates.$inferSelect;
+
+export const notifications = pgTable("notifications", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  entityName: text("entity_name").notNull(),
+  categoryName: text("category_name"),
+  type: text("type").notNull().default("high_signal"),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  signalStrength: text("signal_strength").notNull().default("high"),
+  read: integer("read").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("notifications_user_id_idx").on(table.userId),
+  index("notifications_tenant_id_idx").on(table.tenantId),
+]);
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type Notification = typeof notifications.$inferSelect;
+
+export const ambientSearchLogs = pgTable("ambient_search_logs", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  entitiesSearched: integer("entities_searched").notNull().default(0),
+  newCapturesCreated: integer("new_captures_created").notNull().default(0),
+  notificationsCreated: integer("notifications_created").notNull().default(0),
+  errors: integer("errors").notNull().default(0),
+  completedAt: timestamp("completed_at").defaultNow().notNull(),
+});
