@@ -61,10 +61,10 @@ AI-powered personal intelligence workspace.
 - `POST /api/battlecard/:entityId/autofill` - AI auto-fill all battlecard sections using captures + product_context (auth required)
 - `GET /api/product-context` - Get product context for the current tenant (auth required)
 - `PUT /api/product-context` - Upsert product context (productName, description, targetCustomer, strengths, weaknesses) for the current tenant (auth required)
-- `GET /api/topic-dates/:entityId` - Get all topic dates for an entity (auth required). Auto-updates status to 'overdue' for past-due upcoming items on every fetch
-- `POST /api/topic-dates` - Create a topic date (auth required). Accepts entityId, label, date, dateType (hard_deadline|soft_deadline|watch_date), source (manual|ai_extracted), notes
-- `PATCH /api/topic-dates/:id` - Update a topic date (auth required). Accepts partial fields: label, date, dateType, status (upcoming|overdue|completed|dismissed), notes
-- `DELETE /api/topic-dates/:id` - Delete a topic date (auth required)
+- `GET /api/topics/:entityId/dates` - Get all topic dates for an entity (auth required). Auto-updates overdue status on fetch. Returns computed `days_until` field (negative if overdue)
+- `POST /api/topics/:entityId/dates` - Create a topic date (auth required). Accepts label, date, dateType (hard_deadline|soft_deadline|watch_date), notes. Sets source=manual, auto-detects status (overdue if date is in the past)
+- `PATCH /api/topics/:entityId/dates/:dateId` - Update a topic date (auth required). Accepts partial: label, date, dateType, status (upcoming|overdue|completed|dismissed), notes
+- `DELETE /api/topics/:entityId/dates/:dateId` - Delete a topic date (auth required)
 
 ## Database Tables
 - `user_profiles` - User role, onboarding context (tracking text from signup Step 2), and welcome_dismissed flag. Saved at account creation before email confirmation

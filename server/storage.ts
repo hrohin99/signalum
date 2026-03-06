@@ -29,8 +29,8 @@ export interface IStorage {
   deleteCapturesByEntity(userId: string, entityName: string, categoryName: string): Promise<number>;
   getTopicDatesByEntity(tenantId: string, entityId: string): Promise<TopicDate[]>;
   createTopicDate(data: InsertTopicDate): Promise<TopicDate>;
-  updateTopicDate(id: string, tenantId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined>;
-  deleteTopicDate(id: string, tenantId: string): Promise<boolean>;
+  updateTopicDate(id: string, tenantId: string, entityId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined>;
+  deleteTopicDate(id: string, tenantId: string, entityId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -215,19 +215,19 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async updateTopicDate(id: string, tenantId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined> {
+  async updateTopicDate(id: string, tenantId: string, entityId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined> {
     const [updated] = await db
       .update(topicDates)
       .set({ ...data, updatedAt: new Date() })
-      .where(and(eq(topicDates.id, id), eq(topicDates.tenantId, tenantId)))
+      .where(and(eq(topicDates.id, id), eq(topicDates.tenantId, tenantId), eq(topicDates.entityId, entityId)))
       .returning();
     return updated;
   }
 
-  async deleteTopicDate(id: string, tenantId: string): Promise<boolean> {
+  async deleteTopicDate(id: string, tenantId: string, entityId: string): Promise<boolean> {
     const deleted = await db
       .delete(topicDates)
-      .where(and(eq(topicDates.id, id), eq(topicDates.tenantId, tenantId)))
+      .where(and(eq(topicDates.id, id), eq(topicDates.tenantId, tenantId), eq(topicDates.entityId, entityId)))
       .returning();
     return deleted.length > 0;
   }
