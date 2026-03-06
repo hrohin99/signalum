@@ -39,6 +39,7 @@ import {
   CheckCircle2,
   XCircle,
   Trash2,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -80,6 +81,7 @@ const captureTypeIcons: Record<string, typeof PenLine> = {
   voice: Mic,
   url: Link2,
   document: FileText,
+  web_search: Globe,
 };
 
 export default function TopicViewPage({ params }: { params: { category: string; entity: string } }) {
@@ -855,6 +857,51 @@ function QuickStatsWidget({
   );
 }
 
+function CaptureSourceIndicator({ capture }: { capture: Capture }) {
+  const sourceUrlMatch = capture.content.match(/\n\nSource: (https?:\/\/[^\s]+)/);
+  const sourceUrl = sourceUrlMatch ? sourceUrlMatch[1] : null;
+
+  let icon: typeof Globe | typeof Pencil = Pencil;
+  let label = "Added manually";
+
+  if (capture.type === "web_search") {
+    icon = Globe;
+    label = "Web search";
+  } else if (capture.matchReason?.includes("Direct update from topic view")) {
+    icon = Pencil;
+    label = "Added from topic";
+  } else if (capture.type === "text") {
+    icon = Pencil;
+    label = "Added manually";
+  }
+
+  const SourceIcon = icon;
+
+  const content = (
+    <span className="inline-flex items-center gap-1 text-[11px] text-slate-500" data-testid={`source-indicator-${capture.id}`}>
+      <SourceIcon className="w-3 h-3 text-[#1e3a5f]" />
+      <span>{label}</span>
+    </span>
+  );
+
+  if (sourceUrl) {
+    return (
+      <a
+        href={sourceUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#1e3a5f] hover:underline mt-2 transition-colors"
+        data-testid={`source-link-${capture.id}`}
+      >
+        <SourceIcon className="w-3 h-3 text-[#1e3a5f]" />
+        <span>{label}</span>
+      </a>
+    );
+  }
+
+  return <div className="mt-2">{content}</div>;
+}
+
 function UpdatesFeedWidget({
   entity,
   captures,
@@ -883,9 +930,10 @@ function UpdatesFeedWidget({
                         <p className="text-[15px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
                           {cap.content}
                         </p>
-                        {cap.matchReason && (
-                          <p className="text-xs text-muted-foreground mt-2 italic">
-                            {cap.matchReason}
+                        <CaptureSourceIndicator capture={cap} />
+                        {cap.matchReason && !cap.matchReason.includes("FLAGGED_FOR_BRIEF") && (
+                          <p className="text-xs text-muted-foreground mt-1 italic">
+                            {cap.matchReason.replace(/ \[FLAGGED_FOR_BRIEF\]/g, "")}
                           </p>
                         )}
                       </div>
