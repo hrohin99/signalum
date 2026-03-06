@@ -1,10 +1,15 @@
-import { Newspaper, Sparkles, Loader2, Calendar, Database, Users } from "lucide-react";
+import { Newspaper, Sparkles, Loader2, Calendar, Database, Users, AlertTriangle } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import type { Brief } from "@shared/schema";
+import { Link } from "wouter";
+import type { Brief, TopicDate, ExtractedCategory } from "@shared/schema";
+
+interface TopicDateWithDaysUntil extends TopicDate {
+  days_until: number;
+}
 
 function MarkdownRenderer({ content }: { content: string }) {
   const lines = content.split("\n");
@@ -107,12 +112,117 @@ function MarkdownRenderer({ content }: { content: string }) {
   return <div>{elements}</div>;
 }
 
+function OnYourRadar({ deadlines, categories }: { deadlines: TopicDateWithDaysUntil[]; categories: ExtractedCategory[] }) {
+  const urgent = deadlines
+    .filter(d => d.days_until <= 30)
+    .sort((a, b) => a.days_until - b.days_until);
+
+  if (urgent.length === 0) return null;
+
+  const displayed = urgent.slice(0, 5);
+  const remaining = urgent.length - 5;
+
+  function findCategoryForEntity(entityId: string): string | null {
+    for (const cat of categories) {
+      if (cat.entities.some(e => e.name === entityId)) {
+        return cat.name;
+      }
+    }
+    return null;
+  }
+
+  function getUrgencyColor(daysUntil: number): { text: string; dot: string } {
+    if (daysUntil < 0) return { text: "text-red-600", dot: "bg-red-500" };
+    if (daysUntil <= 7) return { text: "text-amber-600", dot: "bg-amber-500" };
+    return { text: "text-slate-500", dot: "bg-slate-400" };
+  }
+
+  function formatDate(dateVal: string | Date): string {
+    const dateStr = dateVal instanceof Date
+      ? dateVal.toISOString().split("T")[0]
+      : String(dateVal).split("T")[0];
+    return new Date(dateStr + "T00:00:00Z").toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  }
+
+  return (
+    <Card className="mb-6 border-l-4 border-l-amber-400" data-testid="card-on-your-radar">
+      <CardHeader className="pb-2">
+        <div className="flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-amber-500" />
+          <h2 className="text-base font-semibold text-foreground" data-testid="text-radar-title">On Your Radar</h2>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <ul className="space-y-2">
+          {displayed.map((d) => {
+            const colors = getUrgencyColor(d.days_until);
+            const category = findCategoryForEntity(d.entityId);
+            const topicLink = category
+              ? `/topic/${encodeURIComponent(category)}/${encodeURIComponent(d.entityId)}`
+              : null;
+
+            return (
+              <li key={d.id} className="flex items-center gap-3 text-sm" data-testid={`radar-item-${d.id}`}>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${colors.dot}`} />
+                <span className={`font-medium ${colors.text} shrink-0 min-w-[90px]`}>
+                  {formatDate(d.date)}
+                </span>
+                <span className="text-foreground">
+                  {d.label}
+                </span>
+                <span className="text-muted-foreground">—</span>
+                {topicLink ? (
+                  <Link
+                    href={topicLink}
+                    className="text-blue-600 hover:underline shrink-0"
+                    data-testid={`link-radar-topic-${d.id}`}
+                  >
+                    {d.entityId}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground shrink-0">{d.entityId}</span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {remaining > 0 && (
+          <div className="mt-3 pt-2 border-t">
+            <Link
+              href="/?filter=deadlines"
+              className="text-sm text-blue-600 hover:underline"
+              data-testid="link-radar-more"
+            >
+              and {remaining} more
+            </Link>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function BriefPage() {
   const { toast } = useToast();
 
   const { data: briefsList, isLoading } = useQuery<Brief[]>({
     queryKey: ["/api/briefs"],
   });
+
+  const { data: topicDatesData } = useQuery<{ dates: TopicDateWithDaysUntil[] }>({
+    queryKey: ["/api/topic-dates/all"],
+  });
+
+  const { data: workspaceData } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
+    queryKey: ["/api/workspace/current"],
+  });
+
+  const upcomingDeadlines = (topicDatesData?.dates ?? []).filter(d => d.days_until <= 30);
+  const categories = workspaceData?.workspace?.categories ?? [];
 
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -121,6 +231,7 @@ export default function BriefPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/briefs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/topic-dates/all"] });
       toast({ title: "Brief generated", description: "Your daily intelligence brief is ready." });
     },
     onError: (error: Error) => {
@@ -157,6 +268,10 @@ export default function BriefPage() {
           {generateMutation.isPending ? "Generating..." : "Generate Now"}
         </Button>
       </div>
+
+      {upcomingDeadlines.length > 0 && (
+        <OnYourRadar deadlines={upcomingDeadlines} categories={categories} />
+      )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-20">

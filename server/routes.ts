@@ -1072,6 +1072,16 @@ Return only the summary paragraph, no JSON, no formatting.`
       const categories = workspace.categories as ExtractedCategory[];
       const entities = flattenEntities(categories);
 
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const allTopicDates = await storage.getAllTopicDates(tenantId);
+      const activeDates = allTopicDates
+        .filter(d => d.status !== "completed" && d.status !== "dismissed")
+        .map(d => ({ ...d, days_until: computeDaysUntil(d.date) }));
+
+      const upcomingDeadlines = activeDates
+        .filter(d => d.days_until <= 30)
+        .sort((a, b) => a.days_until - b.days_until);
+
       const entitySummaries = entities.map(e => {
         const entityCaptures = allCaptures.filter(c => c.matchedEntity === e.entityName);
         if (entityCaptures.length === 0) return null;
@@ -1085,6 +1095,16 @@ Return only the summary paragraph, no JSON, no formatting.`
       const briefingContext = entitySummaries.length > 0
         ? entitySummaries.join("\n\n")
         : allCaptures.slice(0, 20).map((c, i) => `[${i + 1}] (${c.type}, entity: ${c.matchedEntity || "unmatched"}) ${c.content.slice(0, 300)}`).join("\n\n");
+
+      const deadlinesWithin14 = upcomingDeadlines.filter(d => d.days_until <= 14);
+      const deadlineContext = deadlinesWithin14.length > 0
+        ? "\n\nUpcoming deadlines (within 14 days):\n" + deadlinesWithin14.map(d => {
+            const urgency = d.days_until < 0 ? "OVERDUE" : d.days_until <= 7 ? "SOON" : "UPCOMING";
+            const rawDate = d.date instanceof Date ? d.date.toISOString().split("T")[0] : String(d.date).split("T")[0];
+            const dateStr = new Date(rawDate + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+            return `- [${urgency}] ${d.label} for "${d.entityId}" — ${dateStr} (${d.days_until < 0 ? Math.abs(d.days_until) + " days overdue" : d.days_until + " days away"})`;
+          }).join("\n")
+        : "";
 
       const client = getAnthropicClient();
 
@@ -1103,13 +1123,15 @@ Structure the brief as follows:
 
 Be direct, analytical, and concise. Write in a professional intelligence briefing style. Do not include any JSON or metadata — write pure narrative prose with markdown formatting. Do NOT use horizontal rules or separator lines (---) anywhere in the output. Use headings and spacing to separate sections instead.
 
+If there are upcoming deadlines listed below, naturally weave them into the relevant sections of the narrative. For example, if a topic has a deadline approaching, mention the time pressure in the Key Developments or Watch Items section where that topic is discussed. Do not create a separate deadlines section — integrate them into the narrative flow.
+
 Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 
 Categories being tracked:
 ${categories.map(c => `- ${c.name}: ${c.description}`).join("\n")}
 
 Intel data:
-${briefingContext}
+${briefingContext}${deadlineContext}
 
 Total captures: ${allCaptures.length}
 Total entities tracked: ${entities.length}`
@@ -1129,7 +1151,7 @@ Total entities tracked: ${entities.length}`
         entityCount: entities.length,
       });
 
-      return res.json(brief);
+      return res.json({ ...brief, upcomingDeadlines });
     } catch (error: any) {
       console.error("Generate brief error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
