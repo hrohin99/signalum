@@ -1,0 +1,34 @@
+FIX 1 — WIDEN THE CONTENT
+The main content container on the landing page is too narrow and is leaving excessive white space on both sides on desktop screens.
+Update the max-width values as follows:
+- Hero section content: increase max-width from current value to 900px
+- Stats bar: increase max-width to 860px
+- Tracking input and Build my workspace button: increase max-width to 700px
+- Product mockup frame: increase max-width to 960px
+- How it works section: increase max-width to 1040px
+- Social proof cards: increase max-width to 1040px
+- Showcase cards grid: increase max-width to 1100px
+- Real problem section: increase max-width to 1040px
+- Coming soon section: increase max-width to 860px
+- Final CTA section: increase max-width to 860px
+All sections should use padding: 0 40px on left and right to prevent content touching screen edges on smaller screens.
+FIX 2 — INCREASE FONT SIZES
+The text throughout the landing page is too small for a desktop hero. Update font sizes:
+- Hero H1 headline "Know more. Miss nothing." — increase to 72px, font-weight 800
+- Hero subheadline paragraph — increase to 20px, line-height 1.7
+- Stats bar large numbers ("5+ hours", "Daily weekly or monthly", "Any topic") — increase to 28px bold
+- Stats bar label text — increase to 14px
+- Section label small caps ("HOW IT WORKS", "THE REAL PROBLEM" etc) — keep at 12px but increase letter-spacing to 0.15em
+- Section headline H2s throughout the page — increase to 42px, font-weight 700
+- Section body paragraphs — increase to 17px, line-height 1.75
+- Card titles — increase to 18px, font-weight 600
+- Card body text — increase to 15px, line-height 1.6
+- Navbar links — increase to 15px
+- Button text — increase to 16px
+FIX 3 — TIGHTEN THE HERO VERTICAL SPACING
+There is too much vertical white space between the stats bar and the CTA buttons, and between the CTA buttons and the tracking input. Reduce these gaps:
+- Gap between hero headline and subheadline: 24px
+- Gap between subheadline and stats bar: 40px
+- Gap between stats bar and CTA buttons: 40px
+- Gap between CTA buttons and tracking input: 32px
+- Gap between tracking input and product mockup: 48px
