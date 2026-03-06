@@ -1,7 +1,7 @@
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, lt, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -27,6 +27,10 @@ export interface IStorage {
   getBattlecard(tenantId: string, entityId: string): Promise<Battlecard | undefined>;
   upsertBattlecard(tenantId: string, entityId: string, data: Partial<InsertBattlecard>): Promise<Battlecard>;
   deleteCapturesByEntity(userId: string, entityName: string, categoryName: string): Promise<number>;
+  getTopicDatesByEntity(tenantId: string, entityId: string): Promise<TopicDate[]>;
+  createTopicDate(data: InsertTopicDate): Promise<TopicDate>;
+  updateTopicDate(id: string, tenantId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined>;
+  deleteTopicDate(id: string, tenantId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -181,6 +185,51 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(captures.userId, userId), eq(captures.matchedEntity, entityName), eq(captures.matchedCategory, categoryName)))
       .returning();
     return deleted.length;
+  }
+
+  async getTopicDatesByEntity(tenantId: string, entityId: string): Promise<TopicDate[]> {
+    await db
+      .update(topicDates)
+      .set({ status: "overdue", updatedAt: new Date() })
+      .where(
+        and(
+          eq(topicDates.tenantId, tenantId),
+          eq(topicDates.entityId, entityId),
+          eq(topicDates.status, "upcoming"),
+          lt(topicDates.date, sql`CURRENT_DATE`)
+        )
+      );
+
+    return db
+      .select()
+      .from(topicDates)
+      .where(and(eq(topicDates.tenantId, tenantId), eq(topicDates.entityId, entityId)))
+      .orderBy(topicDates.date);
+  }
+
+  async createTopicDate(data: InsertTopicDate): Promise<TopicDate> {
+    const [created] = await db
+      .insert(topicDates)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async updateTopicDate(id: string, tenantId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined> {
+    const [updated] = await db
+      .update(topicDates)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(topicDates.id, id), eq(topicDates.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteTopicDate(id: string, tenantId: string): Promise<boolean> {
+    const deleted = await db
+      .delete(topicDates)
+      .where(and(eq(topicDates.id, id), eq(topicDates.tenantId, tenantId)))
+      .returning();
+    return deleted.length > 0;
   }
 }
 

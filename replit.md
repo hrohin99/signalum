@@ -61,6 +61,10 @@ AI-powered personal intelligence workspace.
 - `POST /api/battlecard/:entityId/autofill` - AI auto-fill all battlecard sections using captures + product_context (auth required)
 - `GET /api/product-context` - Get product context for the current tenant (auth required)
 - `PUT /api/product-context` - Upsert product context (productName, description, targetCustomer, strengths, weaknesses) for the current tenant (auth required)
+- `GET /api/topic-dates/:entityId` - Get all topic dates for an entity (auth required). Auto-updates status to 'overdue' for past-due upcoming items on every fetch
+- `POST /api/topic-dates` - Create a topic date (auth required). Accepts entityId, label, date, dateType (hard_deadline|soft_deadline|watch_date), source (manual|ai_extracted), notes
+- `PATCH /api/topic-dates/:id` - Update a topic date (auth required). Accepts partial fields: label, date, dateType, status (upcoming|overdue|completed|dismissed), notes
+- `DELETE /api/topic-dates/:id` - Delete a topic date (auth required)
 
 ## Database Tables
 - `user_profiles` - User role, onboarding context (tracking text from signup Step 2), and welcome_dismissed flag. Saved at account creation before email confirmation
@@ -70,6 +74,7 @@ AI-powered personal intelligence workspace.
 - `topic_type_configs` - Configurable topic types per tenant (uuid PK, tenant_id, type_key, display_name, icon, description, ai_prompt_hint, widget_config jsonb, created_at). Seeded with 11 system defaults (competitor, project, regulation, person, trend, account, technology, event, deal, risk, general) under system tenant 00000000-0000-0000-0000-000000000000
 - `product_context` - Product context per tenant (uuid PK, tenant_id, product_name, description, target_customer, strengths, weaknesses, updated_at)
 - `battlecards` - Competitive battlecard data per entity (uuid PK, tenant_id, entity_id text, what_they_do text, strengths jsonb, weaknesses jsonb, how_to_beat jsonb, last_ai_generated_at, updated_at). Unique on (tenant_id, entity_id)
+- `topic_dates` - Key dates/deadlines per entity (uuid PK, tenant_id, entity_id text, label, date, date_type, status default 'upcoming', source default 'manual', notes, created_at, updated_at). Indexed on entity_id and date. Status auto-updates to 'overdue' on fetch for past-due upcoming items
 
 ## File Structure
 - `client/src/lib/supabase.ts` - Supabase client initialization

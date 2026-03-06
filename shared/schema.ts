@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, jsonb, timestamp, serial, integer, uuid, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, serial, integer, uuid, unique, date, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -156,3 +156,29 @@ export const insertProductContextSchema = createInsertSchema(productContext).omi
 
 export type InsertProductContext = z.infer<typeof insertProductContextSchema>;
 export type ProductContext = typeof productContext.$inferSelect;
+
+export const topicDates = pgTable("topic_dates", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  entityId: text("entity_id").notNull(),
+  label: text("label").notNull(),
+  date: date("date").notNull(),
+  dateType: text("date_type").notNull(),
+  status: text("status").notNull().default("upcoming"),
+  source: text("source").notNull().default("manual"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("topic_dates_entity_id_idx").on(table.entityId),
+  index("topic_dates_date_idx").on(table.date),
+]);
+
+export const insertTopicDateSchema = createInsertSchema(topicDates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type InsertTopicDate = z.infer<typeof insertTopicDateSchema>;
+export type TopicDate = typeof topicDates.$inferSelect;

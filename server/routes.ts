@@ -8,6 +8,7 @@ import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
 import type { ExtractionResult, ExtractedCategory, ExtractedEntity } from "@shared/schema";
+import { z } from "zod";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -1539,6 +1540,99 @@ Rules:
       return res.json({ productContext: context });
     } catch (error: any) {
       console.error("Upsert product context error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Topic Dates CRUD
+  app.get("/api/topic-dates/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId } = req.params;
+      const dates = await storage.getTopicDatesByEntity(tenantId, entityId);
+      return res.json({ dates });
+    } catch (error: any) {
+      console.error("Get topic dates error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  const createTopicDateSchema = z.object({
+    entityId: z.string().min(1, "entityId is required"),
+    label: z.string().trim().min(1, "label is required"),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be in YYYY-MM-DD format"),
+    dateType: z.enum(["hard_deadline", "soft_deadline", "watch_date"]),
+    source: z.enum(["manual", "ai_extracted"]).default("manual"),
+    notes: z.string().trim().nullable().optional().transform(v => v || null),
+  });
+
+  const updateTopicDateSchema = z.object({
+    label: z.string().trim().min(1, "label cannot be empty").optional(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be in YYYY-MM-DD format").optional(),
+    dateType: z.enum(["hard_deadline", "soft_deadline", "watch_date"]).optional(),
+    status: z.enum(["upcoming", "overdue", "completed", "dismissed"]).optional(),
+    notes: z.string().trim().nullable().optional().transform(v => v || null),
+  });
+
+  app.post("/api/topic-dates", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const parsed = createTopicDateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors.map(e => e.message).join(", ") });
+      }
+
+      const created = await storage.createTopicDate({
+        tenantId,
+        ...parsed.data,
+      });
+
+      return res.status(201).json({ topicDate: created });
+    } catch (error: any) {
+      console.error("Create topic date error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.patch("/api/topic-dates/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { id } = req.params;
+      const parsed = updateTopicDateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors.map(e => e.message).join(", ") });
+      }
+
+      const updateData: any = {};
+      if (parsed.data.label !== undefined) updateData.label = parsed.data.label;
+      if (parsed.data.date !== undefined) updateData.date = parsed.data.date;
+      if (parsed.data.dateType !== undefined) updateData.dateType = parsed.data.dateType;
+      if (parsed.data.status !== undefined) updateData.status = parsed.data.status;
+      if (parsed.data.notes !== undefined) updateData.notes = parsed.data.notes;
+
+      const updated = await storage.updateTopicDate(id, tenantId, updateData);
+      if (!updated) {
+        return res.status(404).json({ message: "Topic date not found" });
+      }
+
+      return res.json({ topicDate: updated });
+    } catch (error: any) {
+      console.error("Update topic date error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/topic-dates/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { id } = req.params;
+      const deleted = await storage.deleteTopicDate(id, tenantId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Topic date not found" });
+      }
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete topic date error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
