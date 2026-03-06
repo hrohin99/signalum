@@ -35,11 +35,15 @@ import {
   X,
   AlertTriangle,
   Scissors,
+  MoreVertical,
+  CheckCircle2,
+  XCircle,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard } from "@shared/schema";
+import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate } from "@shared/schema";
 
 function detectMultipleEntities(name: string): string[] | null {
   if (!name.includes(",")) return null;
@@ -278,6 +282,7 @@ function TopicViewContent({
             allTopics={allTopics}
             categories={categories}
           />
+          <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
           <InlineCaptureCard entity={entity} categoryName={categoryName} />
           <AIInsightsCard entity={entity} categoryName={categoryName} captures={captures} />
         </div>
@@ -1273,6 +1278,325 @@ function DetailRow({
       <span className="text-xs text-slate-500">{label}</span>
       <span className="text-sm font-medium text-foreground">{value}</span>
     </div>
+  );
+}
+
+type TopicDateWithDays = TopicDate & { days_until: number };
+
+function formatDateDisplay(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function getDateStatusPill(daysUntil: number, status: string): { label: string; className: string } | null {
+  if (status === "completed" || status === "dismissed") return null;
+  if (daysUntil < 0) return { label: "Overdue", className: "bg-red-100 text-red-700" };
+  if (daysUntil <= 30) return { label: `${daysUntil} days`, className: "bg-amber-100 text-amber-700" };
+  return { label: `In ${daysUntil} days`, className: "bg-slate-100 text-slate-600" };
+}
+
+function sortTopicDates(dates: TopicDateWithDays[]): TopicDateWithDays[] {
+  return [...dates].sort((a, b) => {
+    const aOverdue = a.days_until < 0 && a.status !== "completed" && a.status !== "dismissed";
+    const bOverdue = b.days_until < 0 && b.status !== "completed" && b.status !== "dismissed";
+    if (aOverdue && !bOverdue) return -1;
+    if (!aOverdue && bOverdue) return 1;
+    return new Date(a.date).getTime() - new Date(b.date).getTime();
+  });
+}
+
+const dateTypeBorderColors: Record<string, string> = {
+  hard_deadline: "border-l-red-500",
+  soft_deadline: "border-l-amber-500",
+  watch_date: "border-l-blue-500",
+};
+
+function DatesAndDeadlinesCard({
+  entity,
+  categoryName,
+}: {
+  entity: ExtractedEntity;
+  categoryName: string;
+}) {
+  const { toast } = useToast();
+  const entityId = entity.name;
+  const topicType = (entity.topic_type || "general").toLowerCase();
+  const isProminent = topicType === "regulation" || topicType === "risk";
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [editingDate, setEditingDate] = useState<TopicDateWithDays | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const [formLabel, setFormLabel] = useState("");
+  const [formDate, setFormDate] = useState("");
+  const [formDateType, setFormDateType] = useState<string>("hard_deadline");
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const { data: datesData, isLoading } = useQuery<{ dates: TopicDateWithDays[] }>({
+    queryKey: ["/api/topics", entityId, "dates"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/topics/${encodeURIComponent(entityId)}/dates`);
+      return res.json();
+    },
+  });
+
+  const dates = datesData?.dates ?? [];
+  const activeDates = dates.filter(d => d.status !== "completed" && d.status !== "dismissed");
+  const sortedDates = sortTopicDates(activeDates);
+
+  const hasUrgent = activeDates.some(d => d.days_until < 0 || (d.days_until <= 7 && d.status !== "completed" && d.status !== "dismissed"));
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { label: string; date: string; dateType: string }) => {
+      const res = await apiRequest("POST", `/api/topics/${encodeURIComponent(entityId)}/dates`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", entityId, "dates"] });
+      setShowAddForm(false);
+      setFormLabel("");
+      setFormDate("");
+      setFormDateType("hard_deadline");
+      toast({ title: "Date added." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ dateId, data }: { dateId: string; data: Record<string, string> }) => {
+      const res = await apiRequest("PATCH", `/api/topics/${encodeURIComponent(entityId)}/dates/${dateId}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", entityId, "dates"] });
+      setEditingDate(null);
+      setFormLabel("");
+      setFormDate("");
+      setFormDateType("hard_deadline");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (dateId: string) => {
+      const res = await apiRequest("DELETE", `/api/topics/${encodeURIComponent(entityId)}/dates/${dateId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", entityId, "dates"] });
+      toast({ title: "Date deleted." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleAdd = () => {
+    if (!formLabel.trim() || !formDate) return;
+    createMutation.mutate({ label: formLabel.trim(), date: formDate, dateType: formDateType });
+  };
+
+  const handleEdit = (td: TopicDateWithDays) => {
+    setEditingDate(td);
+    setFormLabel(td.label);
+    setFormDate(td.date);
+    setFormDateType(td.dateType);
+    setOpenMenuId(null);
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingDate || !formLabel.trim() || !formDate) return;
+    updateMutation.mutate({
+      dateId: editingDate.id,
+      data: { label: formLabel.trim(), date: formDate, dateType: formDateType },
+    });
+  };
+
+  const handleMarkComplete = (dateId: string) => {
+    updateMutation.mutate({ dateId, data: { status: "completed" } });
+    setOpenMenuId(null);
+  };
+
+  const handleDismiss = (dateId: string) => {
+    updateMutation.mutate({ dateId, data: { status: "dismissed" } });
+    setOpenMenuId(null);
+  };
+
+  const handleDelete = (dateId: string) => {
+    deleteMutation.mutate(dateId);
+    setOpenMenuId(null);
+  };
+
+  const cardBorder = isProminent ? "border-l-4 border-l-amber-400" : "";
+
+  return (
+    <Card className={cardBorder} data-testid="card-dates-deadlines">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-[#1e3a5f]" />
+            <h3 className="text-sm font-semibold text-[#1e3a5f]" data-testid="text-dates-header">Dates and Deadlines</h3>
+            {isProminent && hasUrgent && (
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" data-testid="icon-dates-warning" />
+            )}
+          </div>
+          <button
+            onClick={() => { setShowAddForm(true); setEditingDate(null); setFormLabel(""); setFormDate(""); setFormDateType("hard_deadline"); }}
+            className="w-6 h-6 rounded flex items-center justify-center bg-[#1e3a5f] text-white hover:bg-[#1e3a5f]/90 transition-colors"
+            data-testid="button-add-date"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {(showAddForm || editingDate) && (
+          <div className="mb-3 p-3 rounded-lg border border-border bg-slate-50 space-y-2" data-testid="form-date">
+            <Input
+              placeholder="Label (e.g. Filing deadline)"
+              value={formLabel}
+              onChange={(e) => setFormLabel(e.target.value)}
+              className="text-sm"
+              data-testid="input-date-label"
+            />
+            <Input
+              type="date"
+              value={formDate}
+              onChange={(e) => setFormDate(e.target.value)}
+              className="text-sm"
+              data-testid="input-date-value"
+            />
+            <select
+              value={formDateType}
+              onChange={(e) => setFormDateType(e.target.value)}
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              data-testid="select-date-type"
+            >
+              <option value="hard_deadline">Hard Deadline</option>
+              <option value="soft_deadline">Soft Deadline</option>
+              <option value="watch_date">Watch Date</option>
+            </select>
+            <div className="flex items-center gap-2 justify-end">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => { setShowAddForm(false); setEditingDate(null); }}
+                data-testid="button-date-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+                onClick={editingDate ? handleSaveEdit : handleAdd}
+                disabled={!formLabel.trim() || !formDate || createMutation.isPending || updateMutation.isPending}
+                data-testid="button-date-save"
+              >
+                {(createMutation.isPending || updateMutation.isPending) ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                ) : null}
+                {editingDate ? "Save" : "Add"}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : sortedDates.length === 0 ? (
+          <p className="text-sm text-slate-400 italic" data-testid="text-dates-empty">
+            No dates tracked yet. Add a deadline or key date for this topic.
+          </p>
+        ) : (
+          <div className="space-y-1.5" data-testid="list-dates">
+            {sortedDates.map((td) => {
+              const borderColor = dateTypeBorderColors[td.dateType] || "border-l-slate-300";
+              const pill = getDateStatusPill(td.days_until, td.status);
+              return (
+                <div
+                  key={td.id}
+                  className={`flex items-center gap-3 p-2 rounded-md border-l-[3px] ${borderColor} bg-white hover:bg-slate-50 transition-colors`}
+                  data-testid={`row-date-${td.id}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500 font-medium whitespace-nowrap" data-testid={`text-date-value-${td.id}`}>
+                        {formatDateDisplay(td.date)}
+                      </span>
+                      {pill && (
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pill.className}`} data-testid={`pill-date-status-${td.id}`}>
+                          {pill.label}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-medium text-[#1e3a5f] truncate" data-testid={`text-date-label-${td.id}`}>
+                      {td.label}
+                    </p>
+                  </div>
+                  <div className="relative" ref={openMenuId === td.id ? menuRef : undefined}>
+                    <button
+                      onClick={() => setOpenMenuId(openMenuId === td.id ? null : td.id)}
+                      className="p-1 rounded hover:bg-slate-100 transition-colors"
+                      data-testid={`button-date-menu-${td.id}`}
+                    >
+                      <MoreVertical className="w-3.5 h-3.5 text-slate-400" />
+                    </button>
+                    {openMenuId === td.id && (
+                      <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-border rounded-lg shadow-lg py-1 w-36" data-testid={`menu-date-${td.id}`}>
+                        <button
+                          onClick={() => handleEdit(td)}
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
+                          data-testid={`button-date-edit-${td.id}`}
+                        >
+                          <Pencil className="w-3 h-3" /> Edit
+                        </button>
+                        <button
+                          onClick={() => handleMarkComplete(td.id)}
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
+                          data-testid={`button-date-complete-${td.id}`}
+                        >
+                          <CheckCircle2 className="w-3 h-3" /> Mark complete
+                        </button>
+                        <button
+                          onClick={() => handleDismiss(td.id)}
+                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
+                          data-testid={`button-date-dismiss-${td.id}`}
+                        >
+                          <XCircle className="w-3 h-3" /> Dismiss
+                        </button>
+                        <button
+                          onClick={() => handleDelete(td.id)}
+                          className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                          data-testid={`button-date-delete-${td.id}`}
+                        >
+                          <Trash2 className="w-3 h-3" /> Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
