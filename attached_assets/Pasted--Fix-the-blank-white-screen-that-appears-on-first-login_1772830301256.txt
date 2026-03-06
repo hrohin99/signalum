@@ -1,0 +1,20 @@
+"Fix the blank white screen that appears on first login after email confirmation.
+Root cause: when a user confirms their email and lands in the app for the first time, the workspace data has not finished being created yet. The auth state resolves immediately but the database entities are still being written, so My Workspace loads with no data and shows a blank screen.
+Fix this with the following approach:
+1. When My Workspace loads and the categories query returns empty, do not immediately show a blank screen. Instead show a loading state for up to 10 seconds while polling for workspace data.
+The loading state should look like:
+- Centred in the main content area
+- Watchloom logo mark
+- Animated pulsing dots or spinner below the logo
+- Text below: "Setting up your workspace..."
+- Subtext: "This only takes a moment."
+2. Poll the workspace API endpoint every 2 seconds for up to 10 seconds. If categories appear during the polling period, stop polling and render My Workspace normally including the welcome modal.
+3. If after 10 seconds the workspace is still empty, stop polling and show a helpful empty state instead of a blank screen:
+- Headline: "Your workspace is almost ready"
+- Body: "We are still setting things up. This usually takes less than a minute."
+- A navy button: "Refresh workspace"
+- Clicking refresh manually re-polls once and reloads if data is found
+4. Make sure the welcome modal — "Your workspace is ready. Here is what to do next." — fires correctly after the polling resolves and categories are found. It should appear on top of the populated My Workspace, not before it.
+5. Also fix the root cause where possible: ensure the workspace creation process triggered by onboarding completion writes all categories and entities to the database before the user is redirected. If the creation is async, add a workspace_ready flag to the users table that is set to true only after all entities are successfully written. The frontend polls this flag rather than the categories endpoint.
+Add workspace_ready boolean column to users table, default false. Set it to true after onboarding extraction and entity creation completes successfully.
+Do not change the landing page, authentication, or any other screens."
