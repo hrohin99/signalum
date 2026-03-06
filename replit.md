@@ -26,7 +26,7 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 
 **Core Technical Implementations:**
 - **API-driven communication:** A comprehensive set of RESTful API endpoints handles all interactions between the frontend and backend, including authentication, data extraction, classification, capture, and workspace management.
-- **Database Schema:** `user_profiles`, `workspaces` (with JSONB for categories/entities), `captures`, `briefs`, `topic_type_configs` (seeded with system defaults), `product_context`, `battlecards`, and `topic_dates` tables are central to data storage.
+- **Database Schema:** `user_profiles`, `workspaces` (with JSONB for categories/entities), `captures`, `briefs`, `topic_type_configs` (seeded with system defaults), `product_context`, `battlecards`, `topic_dates`, and `workspace_context` tables are central to data storage.
 - **Auth and User Management:** Integrates Supabase for robust authentication, including email verification via Resend. It supports a pre-auth flow with a 3-step signup process and handles redirects post-verification.
 - **AI Integration:** Utilizes Anthropic Claude for advanced natural language processing tasks, ensuring intelligent data handling.
 
@@ -46,3 +46,15 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **DB Tables:** `notifications` (high-signal alerts), `ambient_search_logs` (run history/metrics).
 - **Manual Search:** `POST /api/search/manual` (auth required) — per-topic manual Perplexity search with 30-day lookback, 3 searches/topic/day limit. Frontend `ManualSearchButton` component in `TopicDetailsCard` shows last searched time, loading state, limit reached message, and remaining searches count.
 - **Search Settings:** `PATCH /api/entity/search-settings` (auth required) — updates per-entity `auto_search_enabled` and `alert_on_high_signal` preferences stored in workspace JSONB. Frontend `SearchSettingsSection` component in `TopicDetailsCard` with toggle switches.
+
+## Sibling Topic Inference System
+- **Function:** `performSiblingInference()` in `server/routes.ts` — AI-powered disambiguation for new topics based on existing workspace context.
+- **Flow:** When a topic is created via `/api/add-entity` or `/api/add-category`, the system:
+  1. Checks `workspace_context` table for the tenant's domain context (primary_domain, relevant_subtopics, domain_keywords).
+  2. If no workspace_context exists, falls back to the 3 most recently confirmed entities (those with `disambiguation_confirmed: true` and `company_industry` or `domain_keywords` set) from the workspace JSONB.
+  3. Sends context + new entity name to Claude for domain inference.
+  4. Applies result based on confidence: high → auto-confirms with `disambiguation_context`; medium → sets context but leaves unconfirmed (for future lightweight confirmation UI); low → skips.
+- **Entity Fields (JSONB in workspaces.categories):** `disambiguation_confirmed`, `disambiguation_context`, `company_industry`, `domain_keywords` added to `ExtractedEntity` interface.
+- **DB Table:** `workspace_context` (id, tenant_id, primary_domain, relevant_subtopics JSONB, domain_keywords JSONB, updated_at).
+- **API Routes:** `GET /api/workspace-context`, `PUT /api/workspace-context` — CRUD for workspace context.
+- **Response:** Both `/api/add-entity` and `/api/add-category` now return `siblingInference` field with `inferred_domain`, `confidence`, and `reasoning`.

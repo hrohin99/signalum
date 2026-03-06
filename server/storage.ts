@@ -1,7 +1,7 @@
 import { eq, desc, and, lt, gte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -44,6 +44,8 @@ export interface IStorage {
   flagCapturesForBrief(captureIds: number[]): Promise<void>;
   setWorkspaceReady(userId: string): Promise<void>;
   isWorkspaceReady(userId: string): Promise<boolean>;
+  getWorkspaceContext(tenantId: string): Promise<WorkspaceContext | undefined>;
+  upsertWorkspaceContext(data: InsertWorkspaceContext): Promise<WorkspaceContext>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -363,6 +365,31 @@ export class DatabaseStorage implements IStorage {
   async isWorkspaceReady(userId: string): Promise<boolean> {
     const profile = await this.getUserProfile(userId);
     return profile?.workspaceReady === 1;
+  }
+
+  async getWorkspaceContext(tenantId: string): Promise<WorkspaceContext | undefined> {
+    const [context] = await db
+      .select()
+      .from(workspaceContext)
+      .where(eq(workspaceContext.tenantId, tenantId));
+    return context;
+  }
+
+  async upsertWorkspaceContext(data: InsertWorkspaceContext): Promise<WorkspaceContext> {
+    const existing = await this.getWorkspaceContext(data.tenantId);
+    if (existing) {
+      const [updated] = await db
+        .update(workspaceContext)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(workspaceContext.tenantId, data.tenantId))
+        .returning();
+      return updated;
+    }
+    const [created] = await db
+      .insert(workspaceContext)
+      .values(data)
+      .returning();
+    return created;
   }
 }
 

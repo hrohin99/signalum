@@ -7,7 +7,7 @@ import multer from "multer";
 import jwt from "jsonwebtoken";
 import { storage } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
-import type { ExtractionResult, ExtractedCategory, ExtractedEntity } from "@shared/schema";
+import type { ExtractionResult, ExtractedCategory, ExtractedEntity, SiblingInferenceResult } from "@shared/schema";
 import { z } from "zod";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -56,6 +56,120 @@ function flattenEntities(categories: ExtractedCategory[]) {
       categoryDescription: cat.description,
     }))
   );
+}
+
+async function performSiblingInference(
+  entityName: string,
+  tenantId: string,
+  workspace: { categories: ExtractedCategory[] }
+): Promise<SiblingInferenceResult | null> {
+  try {
+    const wsContext = await storage.getWorkspaceContext(tenantId);
+
+    let inferenceContext = "";
+
+    if (wsContext && (wsContext.primaryDomain || (wsContext.domainKeywords && (wsContext.domainKeywords as string[]).length > 0))) {
+      const parts: string[] = [];
+      if (wsContext.primaryDomain) parts.push(`Primary domain: ${wsContext.primaryDomain}`);
+      if (wsContext.relevantSubtopics && (wsContext.relevantSubtopics as string[]).length > 0) {
+        parts.push(`Relevant subtopics: ${(wsContext.relevantSubtopics as string[]).join(", ")}`);
+      }
+      if (wsContext.domainKeywords && (wsContext.domainKeywords as string[]).length > 0) {
+        parts.push(`Domain keywords: ${(wsContext.domainKeywords as string[]).join(", ")}`);
+      }
+      inferenceContext = parts.join(". ");
+    } else {
+      const confirmedEntities: ExtractedEntity[] = [];
+      const categories = workspace.categories as ExtractedCategory[];
+      for (const cat of categories) {
+        for (const entity of cat.entities) {
+          if (entity.disambiguation_confirmed && (entity.company_industry || (entity.domain_keywords && entity.domain_keywords.length > 0))) {
+            confirmedEntities.push(entity);
+          }
+        }
+      }
+
+      if (confirmedEntities.length === 0) {
+        console.log(`[SiblingInference] No confirmed entities or workspace context found for tenant ${tenantId}. Skipping inference.`);
+        return null;
+      }
+
+      const recentConfirmed = confirmedEntities.slice(-3);
+      const parts: string[] = [];
+      for (const entity of recentConfirmed) {
+        const entityParts: string[] = [`${entity.name}`];
+        if (entity.company_industry) entityParts.push(`industry: ${entity.company_industry}`);
+        if (entity.domain_keywords && entity.domain_keywords.length > 0) {
+          entityParts.push(`keywords: ${entity.domain_keywords.join(", ")}`);
+        }
+        parts.push(entityParts.join(" (") + (entityParts.length > 1 ? ")" : ""));
+      }
+      inferenceContext = `Existing tracked entities: ${parts.join("; ")}`;
+    }
+
+    if (!inferenceContext) {
+      console.log(`[SiblingInference] Empty inference context for entity "${entityName}". Skipping.`);
+      return null;
+    }
+
+    const client = getAnthropicClient();
+
+    const inferencePromise = client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: `A user is adding "${entityName}" to their workspace. Their existing workspace focuses on: ${inferenceContext}. Given this context, which aspect of "${entityName}" is most relevant to this workspace? Return ONLY valid JSON with this structure:
+{
+  "inferred_domain": "the specific business unit or product area most relevant",
+  "confidence": "high" | "medium" | "low",
+  "reasoning": "one sentence explaining why"
+}
+
+Guidelines for confidence:
+- "high": The entity clearly relates to the workspace domain and there is an obvious specific aspect relevant to this context.
+- "medium": The entity likely relates but the specific relevant aspect is somewhat ambiguous.
+- "low": The entity's relationship to the workspace is unclear or there are too many possible aspects to choose from.
+
+Return ONLY valid JSON, no other text.`
+        }
+      ]
+    });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Sibling inference timed out")), 10000)
+    );
+
+    const message = await Promise.race([inferencePromise, timeoutPromise]);
+
+    const textContent = message.content.find(block => block.type === "text");
+    if (!textContent || textContent.type !== "text") {
+      console.log(`[SiblingInference] No text response from AI for entity "${entityName}".`);
+      return null;
+    }
+
+    let result: SiblingInferenceResult;
+    try {
+      const jsonStr = textContent.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+      result = JSON.parse(jsonStr);
+    } catch {
+      console.error(`[SiblingInference] Failed to parse AI response for entity "${entityName}".`);
+      return null;
+    }
+
+    const validConfidences = ["high", "medium", "low"];
+    if (!validConfidences.includes(result.confidence)) {
+      result.confidence = "low";
+    }
+
+    console.log(`[SiblingInference] Entity: "${entityName}", Confidence: ${result.confidence}, Domain: "${result.inferred_domain}", Reasoning: "${result.reasoning}"`);
+
+    return result;
+  } catch (error: any) {
+    console.error(`[SiblingInference] Error during inference for entity "${entityName}":`, error?.message || error);
+    return null;
+  }
 }
 
 const JWT_SECRET = process.env.SESSION_SECRET!;
@@ -773,10 +887,28 @@ Return only the summary paragraph, no JSON, no formatting.`
         return res.status(400).json({ message: "Entity already exists in this category" });
       }
 
-      category.entities.push({ name: entityName, type: safeEntityType, topic_type: 'general', related_topic_ids: [], priority: 'medium' });
+      const newEntity: ExtractedEntity = { name: entityName, type: safeEntityType, topic_type: 'general', related_topic_ids: [], priority: 'medium' };
+
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const inferenceResult = await performSiblingInference(entityName, tenantId, { categories });
+
+      let siblingInference: SiblingInferenceResult | null = null;
+
+      if (inferenceResult) {
+        siblingInference = inferenceResult;
+        if (inferenceResult.confidence === "high") {
+          newEntity.disambiguation_context = inferenceResult.inferred_domain;
+          newEntity.disambiguation_confirmed = true;
+        } else if (inferenceResult.confidence === "medium") {
+          newEntity.disambiguation_context = inferenceResult.inferred_domain;
+          newEntity.disambiguation_confirmed = false;
+        }
+      }
+
+      category.entities.push(newEntity);
 
       const updated = await storage.updateWorkspaceCategories(userId, categories);
-      return res.json({ success: true, workspace: updated });
+      return res.json({ success: true, workspace: updated, siblingInference });
     } catch (error: any) {
       console.error("Add entity error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
@@ -809,15 +941,35 @@ Return only the summary paragraph, no JSON, no formatting.`
       const validTopicTypesForCategory = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
       const safeTopicType = (typeof topicType === "string" && validTopicTypesForCategory.includes(topicType.toLowerCase())) ? topicType.toLowerCase() : "general";
 
+      const newEntityObj: ExtractedEntity | null = entityName ? { name: entityName, type: safeEntityType, topic_type: safeTopicType, related_topic_ids: [], priority: 'medium' as const } : null;
+
+      let siblingInference: SiblingInferenceResult | null = null;
+
+      if (newEntityObj) {
+        const tenantId = "00000000-0000-0000-0000-000000000000";
+        const inferenceResult = await performSiblingInference(entityName, tenantId, { categories });
+
+        if (inferenceResult) {
+          siblingInference = inferenceResult;
+          if (inferenceResult.confidence === "high") {
+            newEntityObj.disambiguation_context = inferenceResult.inferred_domain;
+            newEntityObj.disambiguation_confirmed = true;
+          } else if (inferenceResult.confidence === "medium") {
+            newEntityObj.disambiguation_context = inferenceResult.inferred_domain;
+            newEntityObj.disambiguation_confirmed = false;
+          }
+        }
+      }
+
       const newCategory: ExtractedCategory = {
         name: categoryName,
         description: typeof categoryDescription === "string" ? categoryDescription : "",
-        entities: entityName ? [{ name: entityName, type: safeEntityType, topic_type: safeTopicType, related_topic_ids: [], priority: 'medium' as const }] : [],
+        entities: newEntityObj ? [newEntityObj] : [],
       };
 
       categories.push(newCategory);
       const updated = await storage.updateWorkspaceCategories(userId, categories);
-      return res.json({ success: true, workspace: updated, newCategory });
+      return res.json({ success: true, workspace: updated, newCategory, siblingInference });
     } catch (error: any) {
       console.error("Add category error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
@@ -1633,6 +1785,36 @@ Rules:
     }
 
     return res.json({ exists: false });
+  });
+
+  app.get("/api/workspace-context", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const context = await storage.getWorkspaceContext(tenantId);
+      return res.json({ workspaceContext: context || null });
+    } catch (error: any) {
+      console.error("Get workspace context error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/workspace-context", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { primaryDomain, relevantSubtopics, domainKeywords } = req.body;
+
+      const context = await storage.upsertWorkspaceContext({
+        tenantId,
+        primaryDomain: typeof primaryDomain === "string" ? primaryDomain.trim() : null,
+        relevantSubtopics: Array.isArray(relevantSubtopics) ? relevantSubtopics.filter((s: any) => typeof s === "string") : [],
+        domainKeywords: Array.isArray(domainKeywords) ? domainKeywords.filter((s: any) => typeof s === "string") : [],
+      });
+
+      return res.json({ workspaceContext: context });
+    } catch (error: any) {
+      console.error("Update workspace context error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
   });
 
   app.get("/api/product-context", requireAuth, async (req: Request, res: Response) => {

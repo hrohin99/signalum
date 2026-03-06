@@ -76,6 +76,10 @@ export interface ExtractedEntity {
   alert_on_high_signal?: boolean;
   aiSummary?: string;
   aiSummaryUpdatedAt?: string;
+  disambiguation_confirmed?: boolean;
+  disambiguation_context?: string;
+  company_industry?: string;
+  domain_keywords?: string[];
 }
 
 export interface ExtractionResult {
@@ -213,6 +217,29 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
 
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 export type Notification = typeof notifications.$inferSelect;
+
+export const workspaceContext = pgTable("workspace_context", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull().unique(),
+  primaryDomain: text("primary_domain"),
+  relevantSubtopics: jsonb("relevant_subtopics").$type<string[]>().default([]),
+  domainKeywords: jsonb("domain_keywords").$type<string[]>().default([]),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertWorkspaceContextSchema = createInsertSchema(workspaceContext).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertWorkspaceContext = z.infer<typeof insertWorkspaceContextSchema>;
+export type WorkspaceContext = typeof workspaceContext.$inferSelect;
+
+export interface SiblingInferenceResult {
+  inferred_domain: string;
+  confidence: 'high' | 'medium' | 'low';
+  reasoning: string;
+}
 
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
