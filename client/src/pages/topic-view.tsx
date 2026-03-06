@@ -1323,7 +1323,7 @@ function DatesAndDeadlinesCard({
   const topicType = (entity.topic_type || "general").toLowerCase();
   const isProminent = topicType === "regulation" || topicType === "risk";
 
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
   const [editingDate, setEditingDate] = useState<TopicDateWithDays | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -1331,6 +1331,7 @@ function DatesAndDeadlinesCard({
   const [formLabel, setFormLabel] = useState("");
   const [formDate, setFormDate] = useState("");
   const [formDateType, setFormDateType] = useState<string>("hard_deadline");
+  const [formNotes, setFormNotes] = useState("");
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1356,17 +1357,33 @@ function DatesAndDeadlinesCard({
 
   const hasUrgent = activeDates.some(d => d.days_until < 0 || (d.days_until <= 7 && d.status !== "completed" && d.status !== "dismissed"));
 
+  const resetForm = () => {
+    setFormLabel("");
+    setFormDate("");
+    setFormDateType("hard_deadline");
+    setFormNotes("");
+  };
+
+  const openAddModal = () => {
+    setEditingDate(null);
+    resetForm();
+    setShowDateModal(true);
+  };
+
+  const closeModal = () => {
+    setShowDateModal(false);
+    setEditingDate(null);
+    resetForm();
+  };
+
   const createMutation = useMutation({
-    mutationFn: async (data: { label: string; date: string; dateType: string }) => {
+    mutationFn: async (data: { label: string; date: string; dateType: string; notes?: string }) => {
       const res = await apiRequest("POST", `/api/topics/${encodeURIComponent(entityId)}/dates`, data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/topics", entityId, "dates"] });
-      setShowAddForm(false);
-      setFormLabel("");
-      setFormDate("");
-      setFormDateType("hard_deadline");
+      closeModal();
       toast({ title: "Date added." });
     },
     onError: (err: Error) => {
@@ -1381,10 +1398,7 @@ function DatesAndDeadlinesCard({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/topics", entityId, "dates"] });
-      setEditingDate(null);
-      setFormLabel("");
-      setFormDate("");
-      setFormDateType("hard_deadline");
+      closeModal();
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -1407,7 +1421,11 @@ function DatesAndDeadlinesCard({
 
   const handleAdd = () => {
     if (!formLabel.trim() || !formDate) return;
-    createMutation.mutate({ label: formLabel.trim(), date: formDate, dateType: formDateType });
+    const payload: { label: string; date: string; dateType: string; notes?: string } = {
+      label: formLabel.trim(), date: formDate, dateType: formDateType,
+    };
+    if (formNotes.trim()) payload.notes = formNotes.trim();
+    createMutation.mutate(payload);
   };
 
   const handleEdit = (td: TopicDateWithDays) => {
@@ -1415,14 +1433,16 @@ function DatesAndDeadlinesCard({
     setFormLabel(td.label);
     setFormDate(td.date);
     setFormDateType(td.dateType);
+    setFormNotes(td.notes || "");
     setOpenMenuId(null);
+    setShowDateModal(true);
   };
 
   const handleSaveEdit = () => {
     if (!editingDate || !formLabel.trim() || !formDate) return;
     updateMutation.mutate({
       dateId: editingDate.id,
-      data: { label: formLabel.trim(), date: formDate, dateType: formDateType },
+      data: { label: formLabel.trim(), date: formDate, dateType: formDateType, notes: formNotes.trim() },
     });
   };
 
@@ -1455,7 +1475,7 @@ function DatesAndDeadlinesCard({
             )}
           </div>
           <button
-            onClick={() => { setShowAddForm(true); setEditingDate(null); setFormLabel(""); setFormDate(""); setFormDateType("hard_deadline"); }}
+            onClick={openAddModal}
             className="w-6 h-6 rounded flex items-center justify-center bg-[#1e3a5f] text-white hover:bg-[#1e3a5f]/90 transition-colors"
             data-testid="button-add-date"
           >
@@ -1463,56 +1483,96 @@ function DatesAndDeadlinesCard({
           </button>
         </div>
 
-        {(showAddForm || editingDate) && (
-          <div className="mb-3 p-3 rounded-lg border border-border bg-slate-50 space-y-2" data-testid="form-date">
-            <Input
-              placeholder="Label (e.g. Filing deadline)"
-              value={formLabel}
-              onChange={(e) => setFormLabel(e.target.value)}
-              className="text-sm"
-              data-testid="input-date-label"
-            />
-            <Input
-              type="date"
-              value={formDate}
-              onChange={(e) => setFormDate(e.target.value)}
-              className="text-sm"
-              data-testid="input-date-value"
-            />
-            <select
-              value={formDateType}
-              onChange={(e) => setFormDateType(e.target.value)}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
-              data-testid="select-date-type"
-            >
-              <option value="hard_deadline">Hard Deadline</option>
-              <option value="soft_deadline">Soft Deadline</option>
-              <option value="watch_date">Watch Date</option>
-            </select>
-            <div className="flex items-center gap-2 justify-end">
+        <Dialog open={showDateModal} onOpenChange={(open) => { if (!open) closeModal(); }}>
+          <DialogContent className="sm:max-w-md" data-testid="modal-add-date">
+            <DialogHeader>
+              <DialogTitle className="text-[#1e3a5f]" data-testid="text-date-modal-title">
+                {editingDate ? `Edit date for ${entity.name}` : `Add a date to ${entity.name}`}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Label</label>
+                <Input
+                  placeholder="e.g. Compliance enforcement begins, Project kickoff, Expected launch"
+                  value={formLabel}
+                  onChange={(e) => setFormLabel(e.target.value)}
+                  className="text-sm"
+                  data-testid="input-date-label"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Date</label>
+                <Input
+                  type="date"
+                  value={formDate}
+                  onChange={(e) => setFormDate(e.target.value)}
+                  className="text-sm"
+                  data-testid="input-date-value"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Type</label>
+                <div className="flex gap-2" data-testid="select-date-type">
+                  {([
+                    { value: "hard_deadline", label: "Hard deadline", description: "A firm date with real consequences if missed", selectedClass: "border-red-400 bg-red-50 text-red-700", ringClass: "ring-red-200" },
+                    { value: "soft_deadline", label: "Soft deadline", description: "A target date that is important but flexible", selectedClass: "border-amber-400 bg-amber-50 text-amber-700", ringClass: "ring-amber-200" },
+                    { value: "watch_date", label: "Watch date", description: "A date worth monitoring but not a strict deadline", selectedClass: "border-blue-400 bg-blue-50 text-blue-700", ringClass: "ring-blue-200" },
+                  ] as const).map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormDateType(opt.value)}
+                      className={`flex-1 rounded-lg border-2 px-3 py-2 text-left transition-all ${
+                        formDateType === opt.value
+                          ? `${opt.selectedClass} ring-2 ${opt.ringClass}`
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                      data-testid={`pill-date-type-${opt.value}`}
+                    >
+                      <span className="text-xs font-semibold block">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-slate-400 mt-1.5 italic" data-testid="text-date-type-description">
+                  {formDateType === "hard_deadline" && "A firm date with real consequences if missed"}
+                  {formDateType === "soft_deadline" && "A target date that is important but flexible"}
+                  {formDateType === "watch_date" && "A date worth monitoring but not a strict deadline"}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-slate-700 mb-1.5 block">Notes</label>
+                <textarea
+                  placeholder="Any additional context about this date"
+                  value={formNotes}
+                  onChange={(e) => setFormNotes(e.target.value)}
+                  className="w-full min-h-[70px] rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]/50 resize-none"
+                  data-testid="input-date-notes"
+                />
+              </div>
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
               <Button
                 variant="ghost"
-                size="sm"
-                onClick={() => { setShowAddForm(false); setEditingDate(null); }}
+                onClick={closeModal}
                 data-testid="button-date-cancel"
               >
                 Cancel
               </Button>
               <Button
-                size="sm"
                 className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
                 onClick={editingDate ? handleSaveEdit : handleAdd}
                 disabled={!formLabel.trim() || !formDate || createMutation.isPending || updateMutation.isPending}
                 data-testid="button-date-save"
               >
                 {(createMutation.isPending || updateMutation.isPending) ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                  <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
                 ) : null}
-                {editingDate ? "Save" : "Add"}
+                {editingDate ? "Save Changes" : "Add Date"}
               </Button>
-            </div>
-          </div>
-        )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {isLoading ? (
           <div className="space-y-2">
