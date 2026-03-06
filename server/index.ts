@@ -112,6 +112,15 @@ app.use((req, res, next) => {
     () => {
       log(`serving on port ${port}`);
 
+      (async () => {
+        try {
+          const { runRetroactiveMigration } = await import("./retroactiveMigration");
+          await runRetroactiveMigration();
+        } catch (error) {
+          console.error("[startup] Retroactive migration failed:", error);
+        }
+      })();
+
       cron.schedule("0 6 * * *", async () => {
         log("Daily ambient search triggered by cron", "cron");
         try {

@@ -1146,12 +1146,15 @@ Return only the summary paragraph, no JSON, no formatting.`
         entity.priority = priority as 'high' | 'medium' | 'low' | 'watch';
       }
 
-      const { disambiguation_confirmed, disambiguation_context } = req.body;
+      const { disambiguation_confirmed, disambiguation_context, needs_aspect_review } = req.body;
       if (disambiguation_confirmed !== undefined) {
         entity.disambiguation_confirmed = disambiguation_confirmed === true;
       }
       if (disambiguation_context !== undefined && typeof disambiguation_context === "string") {
         entity.disambiguation_context = disambiguation_context.trim();
+      }
+      if (needs_aspect_review !== undefined) {
+        entity.needs_aspect_review = needs_aspect_review === true;
       }
 
       const updated = await storage.updateWorkspaceCategories(userId, categories);
@@ -1311,6 +1314,7 @@ Rules:
 
       entity.disambiguation_context = disambiguation_context.trim();
       entity.disambiguation_confirmed = true;
+      entity.needs_aspect_review = false;
 
       await storage.updateWorkspaceCategories(userId, categories);
 

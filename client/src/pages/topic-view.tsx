@@ -272,7 +272,7 @@ function TopicViewContent({
         </div>
       )}
 
-      {entity.disambiguation_context && !entity.disambiguation_confirmed && (
+      {((entity.disambiguation_context && !entity.disambiguation_confirmed) || entity.needs_aspect_review) && (
         <DisambiguationBanner
           entity={entity}
           categoryName={categoryName}
@@ -280,7 +280,7 @@ function TopicViewContent({
         />
       )}
 
-      {!entity.disambiguation_confirmed && !entity.disambiguation_context && (
+      {!entity.disambiguation_confirmed && !entity.disambiguation_context && !entity.needs_aspect_review && (
         <DisambiguationCard
           entity={entity}
           categoryName={categoryName}
@@ -2417,7 +2417,12 @@ function DisambiguationBanner({
   const [dismissed, setDismissed] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
+  const isReviewBanner = entity.needs_aspect_review && !entity.disambiguation_context;
+  const isContextBanner = !!entity.disambiguation_context && !entity.disambiguation_confirmed;
+  const isNeedsReviewWithContext = entity.needs_aspect_review && !!entity.disambiguation_context;
+
   useEffect(() => {
+    if (isReviewBanner || isNeedsReviewWithContext) return;
     if (!entity.disambiguation_context || entity.disambiguation_confirmed) return;
 
     const storageKey = `disambiguation_banner_shown_${entity.name}`;
@@ -2439,6 +2444,7 @@ function DisambiguationBanner({
             categoryName,
             entityName: entity.name,
             disambiguation_confirmed: true,
+            needs_aspect_review: false,
           });
           queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
           setDismissed(true);
@@ -2447,11 +2453,10 @@ function DisambiguationBanner({
       };
       autoConfirm();
     }
-  }, [entity.name, entity.disambiguation_context, entity.disambiguation_confirmed, categoryName, user?.id]);
+  }, [entity.name, entity.disambiguation_context, entity.disambiguation_confirmed, entity.needs_aspect_review, categoryName, user?.id, isReviewBanner]);
 
-  if (dismissed || !entity.disambiguation_context || entity.disambiguation_confirmed) {
-    return null;
-  }
+  if (dismissed) return null;
+  if (!isReviewBanner && !isContextBanner && !isNeedsReviewWithContext) return null;
 
   const handleConfirm = async () => {
     setConfirming(true);
@@ -2460,11 +2465,14 @@ function DisambiguationBanner({
         categoryName,
         entityName: entity.name,
         disambiguation_confirmed: true,
+        needs_aspect_review: false,
       });
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
       setDismissed(true);
       toast({
-        title: `Got it. All searches will focus on ${entity.disambiguation_context}.`,
+        title: entity.disambiguation_context
+          ? `Got it. All searches will focus on ${entity.disambiguation_context}.`
+          : "Confirmed. We'll keep tracking this topic as-is.",
         className: "bg-green-50 border-green-200 text-green-800",
       });
     } catch (err: any) {
@@ -2478,26 +2486,34 @@ function DisambiguationBanner({
     <div className="mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200" data-testid="banner-disambiguation-confirm">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <p className="text-sm text-amber-900">
-          We are tracking <span className="font-semibold">{entity.name}</span> for their{" "}
-          <span className="font-semibold">{entity.disambiguation_context}</span> products based on your workspace focus. Is that right?
+          {isReviewBanner ? (
+            <>
+              We'd like to confirm how you want us to track <span className="font-semibold">{entity.name}</span>. Would you like to select a specific business area to focus on?
+            </>
+          ) : (
+            <>
+              We are tracking <span className="font-semibold">{entity.name}</span> for their{" "}
+              <span className="font-semibold">{entity.disambiguation_context}</span> products based on your workspace focus. Is that right?
+            </>
+          )}
         </p>
         <div className="flex items-center gap-3 shrink-0">
           <Button
             size="sm"
             className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-8 px-3 text-xs"
-            onClick={handleConfirm}
+            onClick={isReviewBanner ? onChangeRequest : handleConfirm}
             disabled={confirming}
             data-testid="button-disambiguation-yes"
           >
             {confirming ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
-            Yes, that is right
+            {isReviewBanner ? "Select focus area" : "Yes, that is right"}
           </Button>
           <button
             className="text-xs text-gray-500 hover:text-gray-700 hover:underline"
-            onClick={onChangeRequest}
+            onClick={isReviewBanner ? handleConfirm : onChangeRequest}
             data-testid="button-disambiguation-no"
           >
-            No, change this
+            {isReviewBanner ? "Keep as-is" : "No, change this"}
           </button>
         </div>
       </div>

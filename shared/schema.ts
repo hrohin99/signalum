@@ -80,6 +80,7 @@ export interface ExtractedEntity {
   disambiguation_context?: string;
   company_industry?: string;
   domain_keywords?: string[];
+  needs_aspect_review?: boolean;
 }
 
 export interface ExtractionResult {

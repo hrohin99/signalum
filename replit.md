@@ -56,7 +56,7 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
   4. Sends context + new entity name to Claude for domain inference.
   5. Applies result based on confidence: high → auto-confirms with `disambiguation_context`; medium → sets context but leaves unconfirmed; low → skips.
 - **Category Name Context:** The category name is always passed to the inference prompt as supplementary context. When it's the only signal available, it serves as the primary inference context.
-- **Entity Fields (JSONB in workspaces.categories):** `disambiguation_confirmed`, `disambiguation_context`, `company_industry`, `domain_keywords` added to `ExtractedEntity` interface.
+- **Entity Fields (JSONB in workspaces.categories):** `disambiguation_confirmed`, `disambiguation_context`, `company_industry`, `domain_keywords`, `needs_aspect_review` added to `ExtractedEntity` interface.
 - **DB Table:** `workspace_context` (id, tenant_id, primary_domain, relevant_subtopics JSONB, domain_keywords JSONB, updated_at).
 - **API Routes:** `GET /api/workspace-context`, `PUT /api/workspace-context` — CRUD for workspace context.
 - **Response:** Both `/api/add-entity` and `/api/add-category` now return `siblingInference` field with `inferred_domain`, `confidence`, and `reasoning`.
@@ -72,11 +72,25 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **Data:** Fetches `GET /api/workspace-context` to determine workspace context availability.
 
 ## Disambiguation UI (Parts 2-4)
-- **DisambiguationBanner** (`client/src/pages/topic-view.tsx`): Amber confirmation banner shown when entity has `disambiguation_context` but `disambiguation_confirmed` is false (medium confidence). "Yes, that is right" confirms; "No, change this" opens AspectSelectionModal. Auto-dismisses after 24 hours via localStorage tracking.
+- **DisambiguationBanner** (`client/src/pages/topic-view.tsx`): Amber confirmation banner shown when entity has `disambiguation_context` but `disambiguation_confirmed` is false (medium confidence), OR when entity has `needs_aspect_review` flag set (retroactive migration). For context banners: "Yes, that is right" confirms; "No, change this" opens AspectSelectionModal. For review banners (no context): "Select focus area" opens AspectSelectionModal; "Keep as-is" confirms. Auto-dismisses context banners after 24 hours via localStorage tracking.
 - **AspectSelectionModal** (`client/src/pages/topic-view.tsx`): Modal with Claude-generated aspect pills for selecting which business area to track. Calls `POST /api/entity/aspect-pills` for pills, `POST /api/entity/confirm-disambiguation` on selection. Triggers Perplexity search scoped to selected aspect. Includes free-text input and "All business areas" option. No cancel — user must select.
 - **DisambiguationCard** (`client/src/pages/topic-view.tsx`): Two-step card for ambiguous company names. Step 1: calls `POST /api/entity/disambiguate-companies` to check ambiguity, shows company selection cards. Step 2: transitions to AspectSelectionModal scoped to selected company. If name is unambiguous (single: true), skips to aspect selection directly. Back arrow on Step 2.
 - **API Endpoints:**
   - `POST /api/entity/aspect-pills` — generates 3-5 business area labels via Claude
   - `POST /api/entity/disambiguate-companies` — checks if entity name is ambiguous, returns company options
   - `POST /api/entity/confirm-disambiguation` — saves disambiguation_context, confirms entity, triggers Perplexity search
-  - `PATCH /api/entity` — now supports `disambiguation_confirmed` and `disambiguation_context` fields
+  - `PATCH /api/entity` — now supports `disambiguation_confirmed`, `disambiguation_context`, and `needs_aspect_review` fields
+
+## Retroactive Disambiguation Migration (Part 7)
+- **Module:** `server/retroactiveMigration.ts` — one-time background migration that runs on server start.
+- **Purpose:** For entities with `disambiguation_confirmed=true` but no `disambiguation_context` (confirmed before the disambiguation system existed).
+- **Flow:**
+  1. Fetches all workspaces and identifies qualifying entities.
+  2. For each entity: runs sibling inference using workspace context and sibling topics.
+  3. High confidence → sets `disambiguation_context` silently.
+  4. Medium confidence → sets `disambiguation_context` AND `needs_aspect_review=true`.
+  5. Low confidence or inference failure → sets `needs_aspect_review=true`.
+  6. Saves updated workspace categories after processing each workspace.
+  7. Regenerates AI summaries for competitor entities with updated context (sequential, 1s delay between each).
+- **Non-blocking:** Runs as a fire-and-forget async task after server listen callback. Errors are caught and logged, never crash the server.
+- **Entity Field:** `needs_aspect_review` (boolean) on `ExtractedEntity` — triggers the DisambiguationBanner when user opens topic view.
