@@ -62,7 +62,7 @@ function HeroTrackingInput() {
   };
 
   return (
-    <div className="mx-auto mt-6" style={{ maxWidth: 700 }}>
+    <div className="mx-auto" style={{ maxWidth: 700, marginTop: 32 }}>
       <div
         style={{
           border: "2px solid #1e3a5f",
@@ -636,7 +636,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-center gap-4 mb-6">
+          <div className="flex items-center justify-center gap-4 mb-0">
             <Link href="/signup">
               <button
                 className="px-8 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90"
