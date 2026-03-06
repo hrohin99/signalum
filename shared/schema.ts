@@ -8,6 +8,7 @@ export const userProfiles = pgTable("user_profiles", {
   role: text("role"),
   onboardingContext: text("onboarding_context"),
   welcomeDismissed: integer("welcome_dismissed").default(0).notNull(),
+  historicalSeedingCompleted: integer("historical_seeding_completed").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

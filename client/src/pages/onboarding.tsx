@@ -59,6 +59,9 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
         userId: user?.id,
         categories: extraction.categories,
       });
+      try {
+        await apiRequest("POST", "/api/historical-seeding");
+      } catch {}
       onComplete();
     } catch (err: any) {
       toast({

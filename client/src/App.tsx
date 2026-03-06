@@ -147,6 +147,10 @@ function AppContent() {
               categories: extraction.categories,
             });
 
+            try {
+              await apiRequest("POST", "/api/historical-seeding");
+            } catch {}
+
             localStorage.removeItem("pendingOnboarding");
             checkedUserId.current = user.id;
             setAutoOnboarding(false);

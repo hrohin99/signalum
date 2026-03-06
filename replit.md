@@ -14,7 +14,7 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 
 **Key Features:**
 - **Intelligent Capture System:** Supports text, voice, URL, and document inputs with AI classification and topic routing.
-- **Onboarding Flow:** Guides new users through initial setup, extracting categories and entities from their descriptions using AI.
+- **Onboarding Flow:** Guides new users through initial setup, extracting categories and entities from their descriptions using AI. After workspace creation, triggers asynchronous historical seeding via Perplexity to populate the workspace with 90 days of web intelligence. A navy banner with pulsing dot shows during seeding; a green toast confirms completion.
 - **Dynamic Dashboard:** Features a sidebar for navigation to "My Workspace," "Capture," "Inbox," "Daily Brief," and "Settings" pages.
 - **Workspace Management:** Organizes intelligence into categories and "Topics" (user-facing term for entities), displaying deadline indicators (red for overdue, amber for 7 days, yellow for 30 days) and an "Empty Category Nudge" for easy topic creation.
 - **Daily Briefs:** AI-generated summaries of key intelligence, including an "On Your Radar" section for urgent topics.

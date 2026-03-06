@@ -32,6 +32,9 @@ export interface IStorage {
   createTopicDate(data: InsertTopicDate): Promise<TopicDate>;
   updateTopicDate(id: string, tenantId: string, entityId: string, data: Partial<InsertTopicDate>): Promise<TopicDate | undefined>;
   deleteTopicDate(id: string, tenantId: string, entityId: string): Promise<boolean>;
+  markHistoricalSeedingCompleted(userId: string): Promise<void>;
+  isHistoricalSeedingCompleted(userId: string): Promise<boolean>;
+  createCaptures(capturesData: InsertCapture[]): Promise<Capture[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -250,6 +253,26 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(topicDates.id, id), eq(topicDates.tenantId, tenantId), eq(topicDates.entityId, entityId)))
       .returning();
     return deleted.length > 0;
+  }
+
+  async markHistoricalSeedingCompleted(userId: string): Promise<void> {
+    await db
+      .update(userProfiles)
+      .set({ historicalSeedingCompleted: 1 })
+      .where(eq(userProfiles.userId, userId));
+  }
+
+  async isHistoricalSeedingCompleted(userId: string): Promise<boolean> {
+    const profile = await this.getUserProfile(userId);
+    return profile?.historicalSeedingCompleted === 1;
+  }
+
+  async createCaptures(capturesData: InsertCapture[]): Promise<Capture[]> {
+    if (capturesData.length === 0) return [];
+    return db
+      .insert(captures)
+      .values(capturesData)
+      .returning();
   }
 }
 

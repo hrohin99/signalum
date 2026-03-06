@@ -1035,6 +1035,98 @@ Return only the summary paragraph, no JSON, no formatting.`
     }
   });
 
+  const seedingStatus = new Map<string, { running: boolean; totalFindings: number; topicsProcessed: number }>();
+
+  app.post("/api/historical-seeding", requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
+
+    try {
+      const alreadyDone = await storage.isHistoricalSeedingCompleted(userId);
+      if (alreadyDone) {
+        return res.json({ started: false, reason: "already_completed" });
+      }
+
+      if (seedingStatus.get(userId)?.running) {
+        return res.json({ started: false, reason: "already_running" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      seedingStatus.set(userId, { running: true, totalFindings: 0, topicsProcessed: 0 });
+      res.json({ started: true });
+
+      (async () => {
+        try {
+          const { searchCompetitorNews, searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
+          const categories = workspace.categories as ExtractedCategory[];
+          let totalFindings = 0;
+          let topicsProcessed = 0;
+
+          for (const category of categories) {
+            for (const entity of category.entities) {
+              try {
+                const topicType = (entity.topic_type || "general").toLowerCase();
+                const lookbackDays = 90;
+
+                let findings;
+                if (topicType === "competitor") {
+                  findings = await searchCompetitorNews(entity.name, category.name, lookbackDays);
+                } else {
+                  findings = await searchTopicUpdates(entity.name, topicType, lookbackDays);
+                }
+
+                const existingCaptures = await storage.getCapturesByUserId(userId);
+                const entityCaptures = existingCaptures.filter(c => c.matchedEntity === entity.name);
+                const deduplicated = deduplicateFindings(findings, entityCaptures);
+
+                if (deduplicated.length > 0) {
+                  const captureRecords = findingsToCaptures(deduplicated, entity.name, userId, category.name);
+                  await storage.createCaptures(captureRecords);
+                  totalFindings += deduplicated.length;
+                }
+
+                topicsProcessed++;
+                seedingStatus.set(userId, { running: true, totalFindings, topicsProcessed });
+
+                await new Promise(resolve => setTimeout(resolve, 500));
+              } catch (entityError) {
+                console.error(`Seeding error for entity ${entity.name}:`, entityError);
+                topicsProcessed++;
+                seedingStatus.set(userId, { running: true, totalFindings, topicsProcessed });
+              }
+            }
+          }
+
+          await storage.markHistoricalSeedingCompleted(userId);
+          seedingStatus.set(userId, { running: false, totalFindings, topicsProcessed });
+
+          setTimeout(() => seedingStatus.delete(userId), 60000);
+        } catch (error) {
+          console.error("Historical seeding error:", error);
+          seedingStatus.set(userId, { running: false, totalFindings: 0, topicsProcessed: 0 });
+        }
+      })();
+    } catch (error: any) {
+      console.error("Historical seeding trigger error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/historical-seeding/status", requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
+    const status = seedingStatus.get(userId);
+
+    if (!status) {
+      const completed = await storage.isHistoricalSeedingCompleted(userId);
+      return res.json({ running: false, completed, totalFindings: 0, topicsProcessed: 0 });
+    }
+
+    return res.json(status);
+  });
+
   app.get("/api/welcome-status", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;

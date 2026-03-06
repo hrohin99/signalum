@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -272,12 +272,31 @@ function InlineAddTopic({
   );
 }
 
+function SeedingBanner() {
+  return (
+    <div
+      className="w-full rounded-lg bg-[#1e3a5f] text-white px-4 py-3 flex items-center gap-3 mb-6"
+      data-testid="banner-seeding"
+    >
+      <span className="relative flex h-2.5 w-2.5 shrink-0">
+        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
+      </span>
+      <p className="text-sm">
+        Watchloom is searching the web for recent intelligence on your tracked topics. This takes about 30 seconds.
+      </p>
+    </div>
+  );
+}
+
 export default function MapPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [seedingActive, setSeedingActive] = useState(false);
+  const [seedingChecked, setSeedingChecked] = useState(false);
 
   const { data: wsData, isLoading: wsLoading } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
@@ -333,6 +352,42 @@ export default function MapPage() {
       setShowWelcome(true);
     }
   }, [welcomeStatus]);
+
+  const checkSeedingStatus = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await apiRequest("GET", "/api/historical-seeding/status");
+      const data = await res.json();
+      if (data.running) {
+        setSeedingActive(true);
+      } else if (seedingActive && !data.running) {
+        setSeedingActive(false);
+        if (data.totalFindings > 0) {
+          queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
+          toast({
+            title: "Intelligence gathered",
+            description: `Your workspace has been populated with recent intelligence. ${data.totalFindings} updates found across ${data.topicsProcessed} topics.`,
+            className: "bg-emerald-50 border-emerald-200 text-emerald-900",
+          });
+        }
+      }
+      setSeedingChecked(true);
+    } catch {
+      setSeedingChecked(true);
+    }
+  }, [user, seedingActive, toast]);
+
+  useEffect(() => {
+    if (!user) return;
+    checkSeedingStatus();
+  }, [user]);
+
+  useEffect(() => {
+    if (!seedingActive) return;
+    const interval = setInterval(checkSeedingStatus, 3000);
+    return () => clearInterval(interval);
+  }, [seedingActive, checkSeedingStatus]);
 
   const categories = wsData?.workspace?.categories ?? [];
   const loading = wsLoading || capLoading;
@@ -424,6 +479,7 @@ export default function MapPage() {
   return (
     <div className="p-8 max-w-6xl mx-auto">
       {showWelcome && <WelcomeModal onDismiss={handleDismissWelcome} />}
+      {seedingActive && <SeedingBanner />}
 
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
