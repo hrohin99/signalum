@@ -430,6 +430,33 @@ export default function MapPage() {
   const getCaptureCountForEntity = (entityName: string) =>
     captures.filter((c) => c.matchedEntity === entityName).length;
 
+  const getLastSearchedLabel = (entityName: string): { text: string; isSearched: boolean } => {
+    const webSearchCaptures = captures
+      .filter((c) => c.matchedEntity === entityName && c.type === "web_search")
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    if (webSearchCaptures.length === 0) {
+      return { text: "Searching soon...", isSearched: false };
+    }
+
+    const lastDate = new Date(webSearchCaptures[0].createdAt);
+    const now = new Date();
+    const diffMs = now.getTime() - lastDate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    let relative: string;
+    if (diffMins < 1) relative = "just now";
+    else if (diffMins < 60) relative = `${diffMins} min${diffMins !== 1 ? "s" : ""} ago`;
+    else if (diffHours < 24) relative = `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+    else if (diffDays === 1) relative = "yesterday";
+    else if (diffDays < 7) relative = `${diffDays} days ago`;
+    else relative = lastDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+    return { text: `Last searched: ${relative}`, isSearched: true };
+  };
+
   const handleDismissWelcome = () => {
     dismissWelcomeMutation.mutate();
   };
@@ -584,6 +611,7 @@ export default function MapPage() {
                       const count = getCaptureCountForEntity(entity.name);
                       const entityDeadline = getEntityDeadline(entity.name);
                       const pill = entityDeadline ? formatDeadlinePill(entityDeadline.days_until, String(entityDeadline.date)) : null;
+                      const searchStatus = getLastSearchedLabel(entity.name);
                       return (
                         <button
                           key={entity.name}
@@ -599,6 +627,12 @@ export default function MapPage() {
                             <p className="text-xs text-muted-foreground mt-0.5">
                               {topicTypeMap[(entity.topic_type || "general").toLowerCase()]?.displayName || entityTypeLabels[entity.type] || entity.type}
                               {count > 0 ? ` · ${count} update${count !== 1 ? "s" : ""}` : ""}
+                            </p>
+                            <p
+                              className={`text-[11px] text-slate-400 mt-0.5 ${!searchStatus.isSearched ? "italic" : ""}`}
+                              data-testid={`text-last-searched-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
+                            >
+                              {searchStatus.text}
                             </p>
                             {pill && (
                               <span
