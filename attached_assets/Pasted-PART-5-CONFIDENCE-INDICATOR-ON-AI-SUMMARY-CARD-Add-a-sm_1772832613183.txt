@@ -1,0 +1,31 @@
+PART 5 — CONFIDENCE INDICATOR ON AI SUMMARY CARD
+Add a small confidence indicator to the AI Summary card on every topic view.
+Positioned on the same line as "Last updated" timestamp, on the right side.
+Three states:
+State 1 — Confirmed and scoped (disambiguation_confirmed true and workspace_context exists):
+Small green dot followed by slate grey text: "Scoped to [primary_domain]"
+State 2 — Inferred but not explicitly confirmed (disambiguation_confirmed true but set via medium confidence inference):
+Small amber dot followed by slate grey text: "Based on your workspace focus"
+A small thumbs down icon after the text
+State 3 — No domain context (disambiguation_confirmed false or no workspace_context):
+Small grey dot followed by slate grey text: "General summary"
+A small pencil icon after the text that opens the aspect selection modal
+Thumbs down behaviour:
+When user clicks thumbs down on State 2:
+- Show a small popover with two options:
+
+· "This summary is about the wrong part of the company" → opens aspect selection modal*
+· "This summary contains irrelevant information" → opens a text input: "What should this summary focus on instead?" — saves answer as disambiguation_context, triggers summary regeneration*
+- After user responds: regenerate AI summary using updated context, show green toast: "Summary updated."
+- Update confidence state to State 1 after correction
+
+---
+PART 6 — CATEGORY NAME AS CONTEXT SIGNAL
+Use the category name as an additional inference signal when sibling topic inference has low confidence and no workspace_context exists.
+When a topic is created in a category, pass the category name to the enrichment step:
+Add to the Claude enrichment prompt: "This topic is being added to a category called [categoryName]. Use this as additional context when determining the relevant aspect of this company."
+Examples of how this helps:
+- Category "IDV Competitors" → strong signal to focus on identity verification
+- Category "Regulations" → strong signal this is a compliance or legal topic
+- Category "Key Accounts" → strong signal this is a customer or prospect not a competitor
+If category name inference produces high confidence, treat it the same as sibling inference high confidence — apply silently without asking the user.
