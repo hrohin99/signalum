@@ -22,6 +22,7 @@ Watchloom is built with a React, Vite, and Tailwind CSS frontend, utilizing shad
 - **Product Context:** Allows users to define their product's context for personalized AI insights, particularly for battlecards.
 - **Battlecards:** AI-enhanced competitive analysis tools for competitor topics, supporting auto-fill and manual updates.
 - **Key Dates Management:** Allows users to track and manage specific dates/deadlines associated with topics.
+- **Topic Type-Specific Behaviour:** For regulation, risk, and event topics: the Dates and Deadlines card shows a contextual soft prompt when no dates exist yet, and creating a new topic of these types automatically presents an Add Date modal in the capture flow.
 
 **Core Technical Implementations:**
 - **API-driven communication:** A comprehensive set of RESTful API endpoints handles all interactions between the frontend and backend, including authentication, data extraction, classification, capture, and workspace management.

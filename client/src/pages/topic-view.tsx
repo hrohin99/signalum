@@ -1322,6 +1322,7 @@ function DatesAndDeadlinesCard({
   const entityId = entity.name;
   const topicType = (entity.topic_type || "general").toLowerCase();
   const isProminent = topicType === "regulation" || topicType === "risk";
+  const isDatePromptType = topicType === "regulation" || topicType === "risk" || topicType === "event";
 
   const [showDateModal, setShowDateModal] = useState(false);
   const [editingDate, setEditingDate] = useState<TopicDateWithDays | null>(null);
@@ -1580,9 +1581,28 @@ function DatesAndDeadlinesCard({
             <Skeleton className="h-10 w-full" />
           </div>
         ) : sortedDates.length === 0 ? (
-          <p className="text-sm text-slate-400 italic" data-testid="text-dates-empty">
-            No dates tracked yet. Add a deadline or key date for this topic.
-          </p>
+          isDatePromptType ? (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3" data-testid="text-dates-prompt">
+              <p className="text-sm text-blue-700">
+                {topicType === "regulation"
+                  ? "Regulations and deadlines go hand in hand. Add the key compliance dates for this topic so Watchloom can keep you on track."
+                  : topicType === "risk"
+                  ? "Tracking risk means staying ahead of key dates. Add the important deadlines for this risk so Watchloom can keep you on track."
+                  : "Events revolve around dates. Add the key dates for this event so Watchloom can keep you on track."}
+              </p>
+              <button
+                onClick={openAddModal}
+                className="mt-2 text-xs font-semibold text-[#1e3a5f] hover:underline"
+                data-testid="button-dates-prompt-add"
+              >
+                + Add a date
+              </button>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-400 italic" data-testid="text-dates-empty">
+              No dates tracked yet. Add a deadline or key date for this topic.
+            </p>
+          )
         ) : (
           <div className="space-y-1.5" data-testid="list-dates">
             {sortedDates.map((td) => {

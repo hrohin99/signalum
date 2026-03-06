@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, MessageCircle } from "lucide-react";
+import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, MessageCircle, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,9 +7,16 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ToastAction } from "@/components/ui/toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import type { ExtractedCategory } from "@shared/schema";
 
 type CaptureType = "text" | "voice" | "url" | "document" | null;
@@ -85,6 +92,15 @@ export default function CapturePage() {
   const [selectedManualCategory, setSelectedManualCategory] = useState<string>("");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
+  const [showPostCreateDateModal, setShowPostCreateDateModal] = useState(false);
+  const [postCreateEntityName, setPostCreateEntityName] = useState("");
+  const [postCreateTopicType, setPostCreateTopicType] = useState("");
+  const [postDateLabel, setPostDateLabel] = useState("");
+  const [postDateValue, setPostDateValue] = useState("");
+  const [postDateType, setPostDateType] = useState<string>("hard_deadline");
+  const [postDateNotes, setPostDateNotes] = useState("");
+  const [isAddingDate, setIsAddingDate] = useState(false);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -109,6 +125,44 @@ export default function CapturePage() {
     setSelectedManualCategory("");
     setIsCreatingCategory(false);
   }, []);
+
+  const datePromptTypeLabel = (type: string) => {
+    if (type === "regulation") return "regulation";
+    if (type === "risk") return "risk";
+    if (type === "event") return "event";
+    return "topic";
+  };
+
+  const closePostCreateDateModal = () => {
+    setShowPostCreateDateModal(false);
+    setPostCreateEntityName("");
+    setPostCreateTopicType("");
+    setPostDateLabel("");
+    setPostDateValue("");
+    setPostDateType("hard_deadline");
+    setPostDateNotes("");
+  };
+
+  const handlePostCreateAddDate = async () => {
+    if (!postDateLabel.trim() || !postDateValue || !postCreateEntityName) return;
+    setIsAddingDate(true);
+    try {
+      const payload: { label: string; date: string; dateType: string; notes?: string } = {
+        label: postDateLabel.trim(),
+        date: postDateValue,
+        dateType: postDateType,
+      };
+      if (postDateNotes.trim()) payload.notes = postDateNotes.trim();
+      await apiRequest("POST", `/api/topics/${encodeURIComponent(postCreateEntityName)}/dates`, payload);
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", postCreateEntityName, "dates"] });
+      toast({ title: "Date added", description: `Key date added to ${postCreateEntityName}.` });
+      closePostCreateDateModal();
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Could not add date.", variant: "destructive" });
+    } finally {
+      setIsAddingDate(false);
+    }
+  };
 
   const handleSelectType = (type: CaptureType) => {
     if (activeType === type) {
@@ -245,6 +299,13 @@ export default function CapturePage() {
         title: "New category created and note filed",
         description: `Created "${classification.suggestedCategory.name}" with topic "${classification.suggestedEntity.name}".`,
       });
+
+      const createdTopicType = (classification.suggestedEntity.topic_type || "general").toLowerCase();
+      if (createdTopicType === "regulation" || createdTopicType === "risk" || createdTopicType === "event") {
+        setPostCreateEntityName(classification.suggestedEntity.name);
+        setPostCreateTopicType(createdTopicType);
+        setShowPostCreateDateModal(true);
+      }
     } catch (err: any) {
       toast({
         title: "Failed to create category",
@@ -810,6 +871,100 @@ export default function CapturePage() {
           </p>
         </div>
       )}
+
+      <Dialog open={showPostCreateDateModal} onOpenChange={(open) => { if (!open) closePostCreateDateModal(); }}>
+        <DialogContent className="sm:max-w-md" data-testid="modal-post-create-date">
+          <DialogHeader>
+            <DialogTitle className="text-[#1e3a5f]" data-testid="text-post-create-date-title">
+              Add a key date
+            </DialogTitle>
+          </DialogHeader>
+          <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 mb-2" data-testid="text-post-create-date-prompt">
+            <div className="flex items-start gap-2">
+              <Calendar className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-blue-700">
+                Would you like to add a key date for this {datePromptTypeLabel(postCreateTopicType)}? You can always add one later.
+              </p>
+            </div>
+          </div>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Label</label>
+              <Input
+                placeholder="e.g. Compliance enforcement begins, Project kickoff, Expected launch"
+                value={postDateLabel}
+                onChange={(e) => setPostDateLabel(e.target.value)}
+                className="text-sm"
+                data-testid="input-post-date-label"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Date</label>
+              <Input
+                type="date"
+                value={postDateValue}
+                onChange={(e) => setPostDateValue(e.target.value)}
+                className="text-sm"
+                data-testid="input-post-date-value"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Type</label>
+              <div className="flex gap-2" data-testid="select-post-date-type">
+                {([
+                  { value: "hard_deadline", label: "Hard deadline", selectedClass: "border-red-400 bg-red-50 text-red-700", ringClass: "ring-red-200" },
+                  { value: "soft_deadline", label: "Soft deadline", selectedClass: "border-amber-400 bg-amber-50 text-amber-700", ringClass: "ring-amber-200" },
+                  { value: "watch_date", label: "Watch date", selectedClass: "border-blue-400 bg-blue-50 text-blue-700", ringClass: "ring-blue-200" },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setPostDateType(opt.value)}
+                    className={`flex-1 rounded-lg border-2 px-3 py-2 text-left transition-all ${
+                      postDateType === opt.value
+                        ? `${opt.selectedClass} ring-2 ${opt.ringClass}`
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                    }`}
+                    data-testid={`pill-post-date-type-${opt.value}`}
+                  >
+                    <span className="text-xs font-semibold block">{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-slate-700 mb-1.5 block">Notes</label>
+              <textarea
+                placeholder="Any additional context about this date"
+                value={postDateNotes}
+                onChange={(e) => setPostDateNotes(e.target.value)}
+                className="w-full min-h-[70px] rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#1e3a5f]/30 focus:border-[#1e3a5f]/50 resize-none"
+                data-testid="input-post-date-notes"
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="ghost"
+              onClick={closePostCreateDateModal}
+              data-testid="button-post-date-skip"
+            >
+              Skip for now
+            </Button>
+            <Button
+              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+              onClick={handlePostCreateAddDate}
+              disabled={!postDateLabel.trim() || !postDateValue || isAddingDate}
+              data-testid="button-post-date-save"
+            >
+              {isAddingDate ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+              ) : null}
+              Add Date
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
