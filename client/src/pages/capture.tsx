@@ -53,7 +53,23 @@ interface ClassificationUserIntent {
   description: string;
 }
 
-type ClassificationResult = ClassificationMatch | ClassificationNewCategory | ClassificationUserIntent;
+interface MultiMatchItem {
+  entity_id: string | null;
+  category: string | null;
+  relevant_excerpt: string;
+  confidence: number;
+  reasoning: string;
+  suggested_entity_name: string | null;
+  suggested_category: { name: string; description: string } | null;
+  suggested_topic_type: string | null;
+}
+
+interface ClassificationMultiMatch {
+  multi_match: true;
+  matches: MultiMatchItem[];
+}
+
+type ClassificationResult = ClassificationMatch | ClassificationNewCategory | ClassificationUserIntent | ClassificationMultiMatch;
 
 const topicTypeDisplayNames: Record<string, string> = {
   competitor: "Competitor",
@@ -104,6 +120,10 @@ export default function CapturePage() {
 
   const [extractionInfo, setExtractionInfo] = useState<{ filename: string; characterCount: number } | null>(null);
 
+  const [multiMatchSkipped, setMultiMatchSkipped] = useState<Set<number>>(new Set());
+  const [multiMatchConfirmed, setMultiMatchConfirmed] = useState<Set<number>>(new Set());
+  const [isConfirmingAll, setIsConfirmingAll] = useState(false);
+
   const [showPostCreateDateModal, setShowPostCreateDateModal] = useState(false);
   const [postCreateEntityName, setPostCreateEntityName] = useState("");
   const [postCreateTopicType, setPostCreateTopicType] = useState("");
@@ -138,6 +158,9 @@ export default function CapturePage() {
     setSelectedManualCategory("");
     setIsCreatingCategory(false);
     setExtractionInfo(null);
+    setMultiMatchSkipped(new Set());
+    setMultiMatchConfirmed(new Set());
+    setIsConfirmingAll(false);
   }, []);
 
   const datePromptTypeLabel = (type: string) => {
@@ -219,6 +242,10 @@ export default function CapturePage() {
         setIntentTopicType(data.topic_type || "general");
         setIntentCategory("");
         setIntentNewCategoryName("");
+      } else if (data.multi_match === true) {
+        setClassification(data as ClassificationMultiMatch);
+        setMultiMatchSkipped(new Set());
+        setMultiMatchConfirmed(new Set());
       } else if (typeof data.matched === "undefined") {
         const legacyData = data as any;
         setClassification({
@@ -293,8 +320,130 @@ export default function CapturePage() {
     }
   };
 
+  const handleConfirmMultiMatchItem = async (match: MultiMatchItem, index: number) => {
+    if (!pendingContent || !match.entity_id || !match.category) return;
+    setIsSaving(true);
+    try {
+      await apiRequest("POST", "/api/captures", {
+        type: pendingType,
+        content: match.relevant_excerpt,
+        matchedEntity: match.entity_id,
+        matchedCategory: match.category,
+        matchReason: match.reasoning,
+      });
+      setMultiMatchConfirmed(prev => new Set(prev).add(index));
+      toast({
+        title: "Captured",
+        description: `Saved to ${match.entity_id} in ${match.category}.`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Save failed",
+        description: err.message || "Could not save capture.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSkipMultiMatchItem = (index: number) => {
+    setMultiMatchSkipped(prev => new Set(prev).add(index));
+  };
+
+  const handleCreateAndConfirmMultiMatchItem = async (match: MultiMatchItem, index: number) => {
+    if (!match.suggested_entity_name || !match.suggested_category) return;
+    setIsSaving(true);
+    try {
+      await apiRequest("POST", "/api/add-category", {
+        categoryName: match.suggested_category.name,
+        categoryDescription: match.suggested_category.description,
+        entityName: match.suggested_entity_name,
+        entityType: "topic",
+        topicType: match.suggested_topic_type || "general",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
+
+      await apiRequest("POST", "/api/captures", {
+        type: pendingType,
+        content: match.relevant_excerpt,
+        matchedEntity: match.suggested_entity_name,
+        matchedCategory: match.suggested_category.name,
+        matchReason: match.reasoning,
+      });
+      setMultiMatchConfirmed(prev => new Set(prev).add(index));
+      toast({
+        title: "Topic created and captured",
+        description: `Created "${match.suggested_entity_name}" in "${match.suggested_category.name}".`,
+      });
+    } catch (err: any) {
+      toast({
+        title: "Failed",
+        description: err.message || "Could not create topic and save capture.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleConfirmAllMultiMatch = async () => {
+    if (!classification || !('multi_match' in classification) || !classification.multi_match) return;
+    setIsConfirmingAll(true);
+    const pendingMatches = classification.matches
+      .map((m, i) => ({ match: m, index: i }))
+      .filter(({ match, index }) => match.entity_id && match.category && !multiMatchSkipped.has(index) && !multiMatchConfirmed.has(index));
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const { match, index } of pendingMatches) {
+      try {
+        await apiRequest("POST", "/api/captures", {
+          type: pendingType,
+          content: match.relevant_excerpt,
+          matchedEntity: match.entity_id,
+          matchedCategory: match.category,
+          matchReason: match.reasoning,
+        });
+        setMultiMatchConfirmed(prev => new Set(prev).add(index));
+        successCount++;
+      } catch (err: any) {
+        failCount++;
+        toast({
+          title: "Save failed",
+          description: `Could not save to ${match.entity_id}: ${err.message || "Unknown error"}`,
+          variant: "destructive",
+        });
+      }
+    }
+
+    if (failCount === 0 && successCount > 0) {
+      toast({
+        title: "All captures saved",
+        description: `Routed to ${successCount} topic${successCount !== 1 ? "s" : ""}.`,
+      });
+    } else if (successCount > 0) {
+      toast({
+        title: "Partially saved",
+        description: `${successCount} saved, ${failCount} failed.`,
+        variant: "destructive",
+      });
+    }
+
+    setIsConfirmingAll(false);
+
+    const allDone = classification.matches.every(
+      (_, i) => multiMatchSkipped.has(i) || multiMatchConfirmed.has(i) || pendingMatches.some(p => p.index === i)
+    );
+    if (allDone && failCount === 0) {
+      resetState();
+      setActiveType(null);
+    }
+  };
+
   const handleCreateCategoryAndConfirm = async () => {
-    if (!classification || classification.matched) return;
+    if (!classification || ('matched' in classification && classification.matched) || ('multi_match' in classification)) return;
     setIsCreatingCategory(true);
 
     try {
@@ -889,7 +1038,7 @@ export default function CapturePage() {
         </div>
       )}
 
-      {classification && !isClassifying && !('user_intent' in classification) && classification.matched && (
+      {classification && !isClassifying && !('user_intent' in classification) && !('multi_match' in classification) && classification.matched && (
         <div className="mt-6 border border-border rounded-md p-6 space-y-5">
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-3">AI Classification</p>
@@ -948,7 +1097,208 @@ export default function CapturePage() {
         </div>
       )}
 
-      {classification && !isClassifying && !('user_intent' in classification) && !classification.matched && !showManualPicker && (
+      {classification && !isClassifying && 'multi_match' in classification && classification.multi_match && (
+        <div className="mt-6 space-y-3" data-testid="multi-match-container">
+          <p className="text-sm font-medium text-muted-foreground">
+            AI found {classification.matches.length} topics in this content
+          </p>
+          {classification.matches.map((match, index) => {
+            const isSkipped = multiMatchSkipped.has(index);
+            const isConfirmedItem = multiMatchConfirmed.has(index);
+            const isNewTopic = !match.entity_id;
+
+            if (isSkipped) {
+              return (
+                <div key={index} className="border border-border rounded-md p-4 opacity-50" data-testid={`multi-match-card-skipped-${index}`}>
+                  <div className="flex items-center gap-2">
+                    <X className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground line-through">
+                      {match.entity_id || match.suggested_entity_name || "New topic"}
+                    </span>
+                    <Badge variant="outline" className="text-xs">Skipped</Badge>
+                  </div>
+                </div>
+              );
+            }
+
+            if (isConfirmedItem) {
+              return (
+                <div key={index} className="border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-md p-4" data-testid={`multi-match-card-confirmed-${index}`}>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                      Saved to {match.entity_id} in {match.category}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={index} className="border border-border rounded-md p-6 space-y-4" data-testid={`multi-match-card-${index}`}>
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <FolderOpen className="w-5 h-5 text-[#1e3a5f]" />
+                  </div>
+                  <div className="space-y-2 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {isNewTopic ? (
+                        <>
+                          <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 hover:bg-amber-100">
+                            <Plus className="w-3 h-3 mr-1" />
+                            {match.suggested_entity_name || "New topic"}
+                          </Badge>
+                          {match.suggested_category && (
+                            <>
+                              <span className="text-sm text-muted-foreground">in new category</span>
+                              <Badge variant="outline">{match.suggested_category.name}</Badge>
+                            </>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <Badge variant="secondary">
+                            <Tag className="w-3 h-3 mr-1" />
+                            {match.entity_id}
+                          </Badge>
+                          <span className="text-sm text-muted-foreground">in</span>
+                          <Badge variant="outline">{match.category}</Badge>
+                        </>
+                      )}
+                    </div>
+                    <p className="text-sm text-foreground" data-testid={`text-multi-match-reasoning-${index}`}>
+                      {match.reasoning}
+                    </p>
+                    <div className="bg-muted/50 rounded-md p-3 mt-2">
+                      <p className="text-xs font-medium text-muted-foreground mb-1">Relevant excerpt</p>
+                      <p className="text-sm text-foreground" data-testid={`text-multi-match-excerpt-${index}`}>
+                        {match.relevant_excerpt}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSkipMultiMatchItem(index)}
+                    data-testid={`button-skip-multi-match-${index}`}
+                  >
+                    <X className="w-4 h-4 mr-1" />
+                    Skip
+                  </Button>
+                  {isNewTopic ? (
+                    <Button
+                      size="sm"
+                      onClick={() => handleCreateAndConfirmMultiMatchItem(match, index)}
+                      disabled={isSaving}
+                      className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                      data-testid={`button-create-multi-match-${index}`}
+                    >
+                      {isSaving ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Creating...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <Plus className="w-4 h-4" />
+                          Create &amp; confirm
+                        </span>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => handleConfirmMultiMatchItem(match, index)}
+                      disabled={isSaving}
+                      className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                      data-testid={`button-confirm-multi-match-${index}`}
+                    >
+                      {isSaving ? (
+                        <span className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Saving...
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-2">
+                          <Check className="w-4 h-4" />
+                          Confirm
+                        </span>
+                      )}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {(() => {
+            const remainingCount = classification.matches.filter(
+              (m, i) => m.entity_id && m.category && !multiMatchSkipped.has(i) && !multiMatchConfirmed.has(i)
+            ).length;
+            const allDone = classification.matches.every(
+              (_, i) => multiMatchSkipped.has(i) || multiMatchConfirmed.has(i)
+            );
+
+            if (allDone) {
+              return (
+                <div className="flex items-center justify-center pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      resetState();
+                      setActiveType(null);
+                    }}
+                    data-testid="button-multi-match-done"
+                  >
+                    Done
+                  </Button>
+                </div>
+              );
+            }
+
+            return remainingCount > 1 ? (
+              <div className="flex items-center justify-between pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setClassification(null);
+                    setPendingContent("");
+                    setPendingType("");
+                    setMultiMatchSkipped(new Set());
+                    setMultiMatchConfirmed(new Set());
+                  }}
+                  data-testid="button-cancel-multi-match"
+                >
+                  <X className="w-4 h-4 mr-1" />
+                  Cancel all
+                </Button>
+                <Button
+                  onClick={handleConfirmAllMultiMatch}
+                  disabled={isConfirmingAll || isSaving}
+                  className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                  data-testid="button-confirm-all-multi-match"
+                >
+                  {isConfirmingAll ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Confirming...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Check className="w-4 h-4" />
+                      Confirm all ({remainingCount})
+                    </span>
+                  )}
+                </Button>
+              </div>
+            ) : null;
+          })()}
+        </div>
+      )}
+
+      {classification && !isClassifying && !('user_intent' in classification) && !('multi_match' in classification) && !classification.matched && !showManualPicker && (
         <div className="mt-6 border border-border rounded-md p-6 space-y-5">
           <div>
             <p className="text-sm font-medium text-muted-foreground mb-3">AI Classification</p>

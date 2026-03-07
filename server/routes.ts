@@ -699,41 +699,39 @@ ${categoryList}
 Captured content:
 ${content}
 
-IMPORTANT: Evaluate how well the content fits any existing entity and category. Assign a confidence score from 0 to 100.
+Analyse this content and identify ALL topics it contains intelligence about. For each topic found, extract only the relevant portion of the content. Return a JSON object with a "matches" array where each item has:
+- entity_id: the matched entity name from the available entities list (or null if no existing entity matches)
+- category: the category name the entity belongs to (or null if entity_id is null)
+- relevant_excerpt: only the sentences from the captured content relevant to this topic
+- confidence: 0-100 score for how well this excerpt matches the topic
+- reasoning: one sentence explaining the match
+- suggested_entity_name: (only if entity_id is null) the recommended new topic name
+- suggested_category: (only if entity_id is null) object with "name" and "description" for a suggested new category
+- suggested_topic_type: (only if entity_id is null) one of: competitor, project, regulation, person, trend, account, technology, event, deal, risk, general
 
-Additionally, evaluate whether the matched entity's current topic_type is still the best fit given this new content. The valid topic_type values are: competitor, project, regulation, person, trend, account, technology, event, deal, risk, general.
+If content is relevant to 3 topics, return 3 items. If only 1 topic, return 1 item.
+Match against existing topics first. If a section clearly belongs to a topic not yet in the workspace, include it with entity_id null and suggested_entity_name with the recommended topic name.
 
-MULTI-ENTITY RULE: If the captured content mentions multiple specific named entities (companies, people, regulations, etc.), suggest filing it under each relevant individual topic separately — never suggest a single combined topic name. Each named entity should be its own topic. For the primary match, pick the single most relevant entity. Do NOT create or suggest topic names that combine multiple names (e.g. never suggest "iProov and IDEMIA" as a single topic name).
+Only include matches with confidence >= 70. If no match reaches 70 confidence, return a single item with entity_id null and suggest a new topic.
 
-If your confidence is 70 or above, return this JSON:
+The valid topic_type values are: competitor, project, regulation, person, trend, account, technology, event, deal, risk, general.
+
+IMPORTANT RULES:
+- Each suggested_entity_name must be a single named entity. Never combine multiple names into one topic name.
+- Each match's relevant_excerpt must contain ONLY the sentences relevant to that specific topic, not the full content.
+
+Return this JSON format:
 {
-  "matched": true,
-  "confidence": <number>,
-  "matchedEntity": "Entity Name",
-  "matchedCategory": "Category Name",
-  "reason": "One sentence explaining why this content matches this entity.",
-  "suggested_type_change": "new_type_key or null"
+  "matches": [
+    {
+      "entity_id": "Entity Name or null",
+      "category": "Category Name or null",
+      "relevant_excerpt": "The specific sentences relevant to this topic",
+      "confidence": 85,
+      "reasoning": "One sentence explaining why."
+    }
+  ]
 }
-
-Set "suggested_type_change" to a new topic_type key ONLY if the content strongly suggests the entity's current type is wrong. Set it to null if the current type is fine.
-
-If your confidence is below 70 — meaning no existing category or entity is a genuinely good fit — do NOT force a match. Instead, suggest a new category. Return this JSON:
-{
-  "matched": false,
-  "confidence": <number>,
-  "reason": "One sentence explaining why no existing category fits.",
-  "suggestedCategory": {
-    "name": "Suggested Category Name",
-    "description": "A short description of what this category would track."
-  },
-  "suggestedEntity": {
-    "name": "Suggested Topic Name",
-    "type": "topic",
-    "topic_type": "inferred_type_key"
-  }
-}
-
-IMPORTANT: The suggestedEntity name must ALWAYS be a single named entity. Never combine multiple names into one topic name (e.g. never "Company A, Company B" or "Regulation X and Y"). If the content relates to multiple entities, pick the single most relevant one for the suggestion.
 
 Always return valid JSON only, no other text.`
           }
@@ -762,31 +760,51 @@ Always return valid JSON only, no other text.`
         });
       }
 
+      if (Array.isArray(parsed.matches) && parsed.matches.length > 0) {
+        const multiMatches = parsed.matches.map((m: any) => ({
+          entity_id: m.entity_id || null,
+          category: m.category || null,
+          relevant_excerpt: m.relevant_excerpt || "",
+          confidence: typeof m.confidence === "number" ? m.confidence : 0,
+          reasoning: m.reasoning || "",
+          suggested_entity_name: m.suggested_entity_name || null,
+          suggested_category: m.suggested_category || null,
+          suggested_topic_type: m.suggested_topic_type || null,
+        }));
+
+        if (multiMatches.length === 1) {
+          const single = multiMatches[0];
+          if (single.entity_id && single.category && single.confidence >= 70) {
+            return res.json({
+              matched: true,
+              confidence: single.confidence,
+              matchedEntity: single.entity_id,
+              matchedCategory: single.category,
+              reason: single.reasoning,
+              suggested_type_change: null,
+            });
+          } else if (!single.entity_id) {
+            return res.json({
+              matched: false,
+              confidence: single.confidence,
+              reason: single.reasoning || "No existing category is a strong match for this content.",
+              suggestedCategory: single.suggested_category || { name: "Uncategorized", description: "Items that don't fit existing categories" },
+              suggestedEntity: {
+                name: single.suggested_entity_name || "General",
+                type: "topic",
+                topic_type: single.suggested_topic_type || "general",
+              },
+            });
+          }
+        }
+
+        return res.json({
+          multi_match: true,
+          matches: multiMatches,
+        });
+      }
+
       const confidence = typeof parsed.confidence === "number" ? parsed.confidence : 0;
-
-      const validTopicTypes = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
-      const suggestedTypeChange = (typeof parsed.suggested_type_change === "string" && validTopicTypes.includes(parsed.suggested_type_change.toLowerCase())) ? parsed.suggested_type_change.toLowerCase() : null;
-
-      if (parsed.matched === true && confidence >= 70 && parsed.matchedEntity && parsed.matchedCategory) {
-        return res.json({
-          matched: true,
-          confidence,
-          matchedEntity: parsed.matchedEntity,
-          matchedCategory: parsed.matchedCategory,
-          reason: parsed.reason || "",
-          suggested_type_change: suggestedTypeChange,
-        });
-      }
-
-      if (parsed.suggestedCategory?.name && parsed.suggestedEntity?.name) {
-        return res.json({
-          matched: false,
-          confidence,
-          reason: parsed.reason || "No existing category is a strong match for this content.",
-          suggestedCategory: parsed.suggestedCategory,
-          suggestedEntity: parsed.suggestedEntity,
-        });
-      }
 
       return res.json({
         matched: false,

@@ -13,7 +13,7 @@ I do not want changes made to the `client/src/pages/auth.tsx` file.
 Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui components, using a white background and deep navy blue (`#1e3a5f`) accents. DM Sans is used for marketing pages, and Inter for the authenticated dashboard. The backend is built with Node.js/Express. Supabase handles authentication via email/password and Google OAuth, with Resend for transactional emails. AI capabilities, including entity extraction, content classification, transcription, and insight generation, are powered by Replit AI Integrations (Anthropic Claude). Data is stored in a PostgreSQL database managed by Drizzle ORM.
 
 **Key Features:**
-- **Intelligent Capture System:** Supports various input types (text, voice, URL, document) with AI classification and topic routing. It can infer user intent to pre-fill topic creation forms.
+- **Intelligent Capture System:** Supports various input types (text, voice, URL, document) with AI classification and multi-topic routing. When content spans multiple topics, the AI splits it and routes each piece to the correct topic with individual confirm/skip controls and a "Confirm all" option. It can also infer user intent to pre-fill topic creation forms.
 - **Onboarding Flow:** Guides new users through initial setup, extracting categories and entities using AI, and performs asynchronous historical data seeding.
 - **Dynamic Dashboard:** Provides navigation to "My Workspace," "Capture," "Inbox," "Daily Brief," and "Settings."
 - **Workspace Management:** Organizes intelligence into categories and "Topics" (entities), including deadline indicators and features for creating categories and topics.
