@@ -26,7 +26,12 @@ interface AdminUser {
   createdAt: string;
   lastSignIn: string | null;
   topicCount: number;
-  captureCount: number;
+}
+
+interface AdminStats {
+  feedback: FeedbackRow[];
+  featureInterest: FeatureInterestSummary[];
+  users: AdminUser[];
 }
 
 const moodEmoji: Record<string, string> = {
@@ -58,18 +63,8 @@ export default function AdminPage() {
     }
   }, [user, setLocation]);
 
-  const feedbackQuery = useQuery<FeedbackRow[]>({
-    queryKey: ["/api/admin/feedback"],
-    enabled: user?.email === ADMIN_EMAIL,
-  });
-
-  const featureQuery = useQuery<FeatureInterestSummary[]>({
-    queryKey: ["/api/admin/feature-interest"],
-    enabled: user?.email === ADMIN_EMAIL,
-  });
-
-  const usersQuery = useQuery<AdminUser[]>({
-    queryKey: ["/api/admin/users"],
+  const statsQuery = useQuery<AdminStats>({
+    queryKey: ["/api/admin/stats"],
     enabled: user?.email === ADMIN_EMAIL,
   });
 
@@ -77,9 +72,7 @@ export default function AdminPage() {
     return null;
   }
 
-  const isLoading = feedbackQuery.isLoading || featureQuery.isLoading || usersQuery.isLoading;
-
-  if (isLoading) {
+  if (statsQuery.isLoading) {
     return (
       <div className="flex items-center justify-center h-full" data-testid="admin-loading">
         <Loader2 className="w-6 h-6 animate-spin text-[#1e3a5f]" />
@@ -87,9 +80,9 @@ export default function AdminPage() {
     );
   }
 
-  const feedbackData = feedbackQuery.data || [];
-  const featureData = featureQuery.data || [];
-  const usersData = usersQuery.data || [];
+  const feedbackData = statsQuery.data?.feedback || [];
+  const featureData = statsQuery.data?.featureInterest || [];
+  const usersData = statsQuery.data?.users || [];
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-10" data-testid="admin-dashboard">
@@ -174,22 +167,20 @@ export default function AdminPage() {
                 <th className="text-left px-4 py-2 font-medium">Created</th>
                 <th className="text-left px-4 py-2 font-medium">Last Sign In</th>
                 <th className="text-left px-4 py-2 font-medium">Topics</th>
-                <th className="text-left px-4 py-2 font-medium">Captures</th>
               </tr>
             </thead>
             <tbody>
-              {usersData.map((u) => (
-                <tr key={u.userId} className="border-t" data-testid={`row-user-${u.userId}`}>
+              {usersData.map((u, idx) => (
+                <tr key={u.email || idx} className="border-t" data-testid={`row-user-${idx}`}>
                   <td className="px-4 py-2">{u.email}</td>
                   <td className="px-4 py-2 whitespace-nowrap">{formatDate(u.createdAt)}</td>
                   <td className="px-4 py-2 whitespace-nowrap">{u.lastSignIn ? formatDate(u.lastSignIn) : "—"}</td>
                   <td className="px-4 py-2 text-center">{u.topicCount}</td>
-                  <td className="px-4 py-2 text-center">{u.captureCount}</td>
                 </tr>
               ))}
               {usersData.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
+                  <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
                     No users yet
                   </td>
                 </tr>

@@ -8,7 +8,7 @@ import jwt from "jsonwebtoken";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import mammoth from "mammoth";
 import path from "path";
-import { storage } from "./storage";
+import { storage, pool } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
 import type { ExtractionResult, ExtractedCategory, ExtractedEntity, SiblingInferenceResult } from "@shared/schema";
 import { z } from "zod";
@@ -2748,94 +2748,61 @@ Rules:
     next();
   }
 
-  app.get("/api/admin/feedback", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+  app.get("/api/admin/stats", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
     try {
-      const allFeedback = await storage.getAllFeedback();
-      const userIds = [...new Set(allFeedback.map(f => f.userId))];
-      const emailMap: Record<string, string> = {};
-      try {
-        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        for (const u of users) {
-          emailMap[u.id] = u.email || "unknown";
-        }
-      } catch (e) {
-        console.error("Failed to fetch user emails for admin feedback:", e);
-      }
-      const enriched = allFeedback.map(f => ({
-        ...f,
-        userEmail: emailMap[f.userId] || f.userId,
+      const feedbackResult = await pool.query(
+        `SELECT au.email, f.id, f.mood, f.message, f.created_at
+         FROM feedback f
+         LEFT JOIN auth.users au ON f.user_id = au.id
+         ORDER BY f.created_at DESC`
+      );
+      const feedbackData = feedbackResult.rows.map(r => ({
+        id: r.id,
+        mood: r.mood,
+        message: r.message,
+        createdAt: r.created_at,
+        userEmail: r.email || "unknown",
       }));
-      return res.json(enriched);
-    } catch (error: any) {
-      console.error("Admin feedback error:", error);
-      return res.status(500).json({ message: sanitizeErrorMessage(error) });
-    }
-  });
 
-  app.get("/api/admin/feature-interest", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
-    try {
-      const allInterest = await storage.getAllFeatureInterest();
-      const emailMap: Record<string, string> = {};
-      try {
-        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        for (const u of users) {
-          emailMap[u.id] = u.email || "unknown";
-        }
-      } catch (e) {
-        console.error("Failed to fetch user emails for admin feature interest:", e);
-      }
+      const featureResult = await pool.query(
+        `SELECT au.email, fi.feature_name, fi.created_at
+         FROM feature_interest fi
+         LEFT JOIN auth.users au ON fi.user_id = au.id
+         ORDER BY fi.created_at DESC`
+      );
       const featureMap: Record<string, { featureName: string; count: number; emails: string[] }> = {};
-      for (const fi of allInterest) {
-        if (!featureMap[fi.featureName]) {
-          featureMap[fi.featureName] = { featureName: fi.featureName, count: 0, emails: [] };
+      for (const r of featureResult.rows) {
+        if (!featureMap[r.feature_name]) {
+          featureMap[r.feature_name] = { featureName: r.feature_name, count: 0, emails: [] };
         }
-        featureMap[fi.featureName].count++;
-        const email = emailMap[fi.userId] || fi.userId;
-        if (!featureMap[fi.featureName].emails.includes(email)) {
-          featureMap[fi.featureName].emails.push(email);
+        featureMap[r.feature_name].count++;
+        const email = r.email || "unknown";
+        if (!featureMap[r.feature_name].emails.includes(email)) {
+          featureMap[r.feature_name].emails.push(email);
         }
       }
       const features = ["AI Visibility", "Email Capture", "Search"];
-      const result = features.map(name => featureMap[name] || { featureName: name, count: 0, emails: [] });
-      return res.json(result);
-    } catch (error: any) {
-      console.error("Admin feature interest error:", error);
-      return res.status(500).json({ message: sanitizeErrorMessage(error) });
-    }
-  });
+      const featureData = features.map(name => featureMap[name] || { featureName: name, count: 0, emails: [] });
 
-  app.get("/api/admin/users", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
-    try {
-      const profiles = await storage.getAllUserProfiles();
-      const emailMap: Record<string, { email: string; created_at: string; last_sign_in_at: string | null }> = {};
-      try {
-        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-        for (const u of users) {
-          emailMap[u.id] = {
-            email: u.email || "unknown",
-            created_at: u.created_at,
-            last_sign_in_at: u.last_sign_in_at || null,
-          };
-        }
-      } catch (e) {
-        console.error("Failed to fetch user emails for admin users:", e);
-      }
-      const enriched = await Promise.all(profiles.map(async (p) => {
-        const supaUser = emailMap[p.userId];
-        const topicCount = await storage.getTopicCountByUser(p.userId);
-        const captureCount = await storage.getCaptureCountByUser(p.userId);
+      const usersResult = await pool.query(
+        `SELECT au.id, au.email, au.created_at, au.last_sign_in_at
+         FROM auth.users au
+         ORDER BY au.created_at DESC`
+      );
+      const usersData = await Promise.all(usersResult.rows.map(async (r) => {
+        const topicCount = await storage.getTopicCountByUser(r.id);
         return {
-          userId: p.userId,
-          email: supaUser?.email || p.userId,
-          createdAt: supaUser?.created_at || p.createdAt,
-          lastSignIn: supaUser?.last_sign_in_at || null,
+          userId: r.id,
+          email: r.email || "unknown",
+          createdAt: r.created_at,
+          lastSignIn: r.last_sign_in_at || null,
           topicCount,
-          captureCount,
         };
       }));
-      return res.json(enriched);
+
+      return res.json({ feedback: feedbackData, featureInterest: featureData, users: usersData });
     } catch (error: any) {
-      console.error("Admin users error:", error);
+      console.error("Admin stats error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
