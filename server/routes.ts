@@ -2738,5 +2738,107 @@ Rules:
     }
   });
 
+  const ADMIN_EMAIL = "hrohin99@gmail.com";
+
+  function requireAdmin(req: Request, res: Response, next: NextFunction) {
+    const email = (req as any).userEmail;
+    if (email !== ADMIN_EMAIL) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    next();
+  }
+
+  app.get("/api/admin/feedback", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const allFeedback = await storage.getAllFeedback();
+      const userIds = [...new Set(allFeedback.map(f => f.userId))];
+      const emailMap: Record<string, string> = {};
+      try {
+        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        for (const u of users) {
+          emailMap[u.id] = u.email || "unknown";
+        }
+      } catch (e) {
+        console.error("Failed to fetch user emails for admin feedback:", e);
+      }
+      const enriched = allFeedback.map(f => ({
+        ...f,
+        userEmail: emailMap[f.userId] || f.userId,
+      }));
+      return res.json(enriched);
+    } catch (error: any) {
+      console.error("Admin feedback error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/admin/feature-interest", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const allInterest = await storage.getAllFeatureInterest();
+      const emailMap: Record<string, string> = {};
+      try {
+        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        for (const u of users) {
+          emailMap[u.id] = u.email || "unknown";
+        }
+      } catch (e) {
+        console.error("Failed to fetch user emails for admin feature interest:", e);
+      }
+      const featureMap: Record<string, { featureName: string; count: number; emails: string[] }> = {};
+      for (const fi of allInterest) {
+        if (!featureMap[fi.featureName]) {
+          featureMap[fi.featureName] = { featureName: fi.featureName, count: 0, emails: [] };
+        }
+        featureMap[fi.featureName].count++;
+        const email = emailMap[fi.userId] || fi.userId;
+        if (!featureMap[fi.featureName].emails.includes(email)) {
+          featureMap[fi.featureName].emails.push(email);
+        }
+      }
+      const features = ["AI Visibility", "Email Capture", "Search"];
+      const result = features.map(name => featureMap[name] || { featureName: name, count: 0, emails: [] });
+      return res.json(result);
+    } catch (error: any) {
+      console.error("Admin feature interest error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/admin/users", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const profiles = await storage.getAllUserProfiles();
+      const emailMap: Record<string, { email: string; created_at: string; last_sign_in_at: string | null }> = {};
+      try {
+        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+        for (const u of users) {
+          emailMap[u.id] = {
+            email: u.email || "unknown",
+            created_at: u.created_at,
+            last_sign_in_at: u.last_sign_in_at || null,
+          };
+        }
+      } catch (e) {
+        console.error("Failed to fetch user emails for admin users:", e);
+      }
+      const enriched = await Promise.all(profiles.map(async (p) => {
+        const supaUser = emailMap[p.userId];
+        const topicCount = await storage.getTopicCountByUser(p.userId);
+        const captureCount = await storage.getCaptureCountByUser(p.userId);
+        return {
+          userId: p.userId,
+          email: supaUser?.email || p.userId,
+          createdAt: supaUser?.created_at || p.createdAt,
+          lastSignIn: supaUser?.last_sign_in_at || null,
+          topicCount,
+          captureCount,
+        };
+      }));
+      return res.json(enriched);
+    } catch (error: any) {
+      console.error("Admin users error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

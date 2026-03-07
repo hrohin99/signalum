@@ -52,6 +52,11 @@ export interface IStorage {
   createFeatureInterest(data: InsertFeatureInterest): Promise<FeatureInterest>;
   getFeatureInterestByUser(userId: string): Promise<FeatureInterest[]>;
   createFeedback(data: InsertFeedback): Promise<Feedback>;
+  getAllFeedback(): Promise<Feedback[]>;
+  getAllFeatureInterest(): Promise<FeatureInterest[]>;
+  getAllUserProfiles(): Promise<UserProfile[]>;
+  getTopicCountByUser(userId: string): Promise<number>;
+  getCaptureCountByUser(userId: string): Promise<number>;
   updateWeeklyDigest(userId: string, enabled: boolean): Promise<void>;
   getUsersWithWeeklyDigest(): Promise<UserProfile[]>;
 }
@@ -452,6 +457,41 @@ export class DatabaseStorage implements IStorage {
       .values(data)
       .returning();
     return created;
+  }
+
+  async getAllFeedback(): Promise<Feedback[]> {
+    return db
+      .select()
+      .from(feedback)
+      .orderBy(desc(feedback.createdAt));
+  }
+
+  async getAllFeatureInterest(): Promise<FeatureInterest[]> {
+    return db
+      .select()
+      .from(featureInterest)
+      .orderBy(desc(featureInterest.createdAt));
+  }
+
+  async getAllUserProfiles(): Promise<UserProfile[]> {
+    return db
+      .select()
+      .from(userProfiles)
+      .orderBy(desc(userProfiles.createdAt));
+  }
+
+  async getTopicCountByUser(userId: string): Promise<number> {
+    const workspace = await this.getWorkspaceByUserId(userId);
+    if (!workspace || !workspace.categories) return 0;
+    return workspace.categories.reduce((count: number, cat: any) => count + (cat.entities?.length || 0), 0);
+  }
+
+  async getCaptureCountByUser(userId: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(captures)
+      .where(eq(captures.userId, userId));
+    return result[0]?.count || 0;
   }
 
   async updateWeeklyDigest(userId: string, enabled: boolean): Promise<void> {
