@@ -358,29 +358,44 @@ export default function CapturePage() {
   };
 
   const handleCreateAndConfirmMultiMatchItem = async (match: MultiMatchItem, index: number) => {
-    if (!match.suggested_entity_name || !match.suggested_category) return;
+    const entityName = match.suggested_entity_name;
+    if (!entityName) return;
+
+    const categoryName = match.suggested_category?.name || match.category;
+    const categoryDescription = match.suggested_category?.description || "";
+    if (!categoryName) return;
+
     setSavingCards(prev => new Set(prev).add(index));
     try {
-      await apiRequest("POST", "/api/add-category", {
-        categoryName: match.suggested_category.name,
-        categoryDescription: match.suggested_category.description,
-        entityName: match.suggested_entity_name,
-        entityType: "topic",
-        topicType: match.suggested_topic_type || "general",
-      });
+      if (match.suggested_category) {
+        await apiRequest("POST", "/api/add-category", {
+          categoryName,
+          categoryDescription,
+          entityName,
+          entityType: "topic",
+          topicType: match.suggested_topic_type || "general",
+        });
+      } else {
+        await apiRequest("POST", "/api/add-entity", {
+          categoryName,
+          entityName,
+          entityType: "topic",
+          topicType: match.suggested_topic_type || "general",
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
 
       await apiRequest("POST", "/api/captures", {
         type: pendingType,
         content: match.relevant_excerpt,
-        matchedEntity: match.suggested_entity_name,
-        matchedCategory: match.suggested_category.name,
+        matchedEntity: entityName,
+        matchedCategory: categoryName,
         matchReason: match.reasoning,
       });
       setMultiMatchConfirmed(prev => new Set(prev).add(index));
       toast({
         title: "Topic created and captured",
-        description: `Created "${match.suggested_entity_name}" in "${match.suggested_category.name}".`,
+        description: `Created "${entityName}" in "${categoryName}".`,
       });
     } catch (err: any) {
       toast({
@@ -411,23 +426,37 @@ export default function CapturePage() {
     for (const { match, index } of pendingMatches) {
       try {
         const isNewTopic = !match.entity_id;
-        if (isNewTopic && match.suggested_entity_name && match.suggested_category) {
-          await apiRequest("POST", "/api/add-category", {
-            categoryName: match.suggested_category.name,
-            categoryDescription: match.suggested_category.description,
-            entityName: match.suggested_entity_name,
-            entityType: "topic",
-            topicType: match.suggested_topic_type || "general",
-          });
+        if (isNewTopic && match.suggested_entity_name) {
+          const catName = match.suggested_category?.name || match.category;
+          if (!catName) {
+            failCount++;
+            continue;
+          }
+          if (match.suggested_category) {
+            await apiRequest("POST", "/api/add-category", {
+              categoryName: catName,
+              categoryDescription: match.suggested_category.description || "",
+              entityName: match.suggested_entity_name,
+              entityType: "topic",
+              topicType: match.suggested_topic_type || "general",
+            });
+          } else {
+            await apiRequest("POST", "/api/add-entity", {
+              categoryName: catName,
+              entityName: match.suggested_entity_name,
+              entityType: "topic",
+              topicType: match.suggested_topic_type || "general",
+            });
+          }
           queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
           await apiRequest("POST", "/api/captures", {
             type: pendingType,
             content: match.relevant_excerpt,
             matchedEntity: match.suggested_entity_name,
-            matchedCategory: match.suggested_category.name,
+            matchedCategory: catName,
             matchReason: match.reasoning,
           });
-          confirmedCategories.add(match.suggested_category.name);
+          confirmedCategories.add(catName);
         } else if (match.entity_id && match.category) {
           await apiRequest("POST", "/api/captures", {
             type: pendingType,
@@ -1156,12 +1185,14 @@ export default function CapturePage() {
             }
 
             if (isConfirmedItem) {
+              const displayEntity = match.entity_id || match.suggested_entity_name || "topic";
+              const displayCategory = match.category || match.suggested_category?.name || "category";
               return (
                 <div key={index} className="border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-md p-4" data-testid={`multi-match-card-confirmed-${index}`}>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
                     <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                      Saved to {match.entity_id} in {match.category}
+                      Saved to {displayEntity} in {displayCategory}
                     </span>
                   </div>
                 </div>

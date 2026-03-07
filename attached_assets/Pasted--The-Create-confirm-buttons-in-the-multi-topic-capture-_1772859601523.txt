@@ -1,0 +1,16 @@
+"The Create & confirm buttons in the multi-topic capture routing cards do nothing when clicked. Debug and fix.
+Step 1 — Find the confirm button handler in the capture routing UI component. Add a console.log as the very first line of the handler: console.log('Confirm clicked', card)
+Step 2 — The most likely causes, check and fix all of them:
+Cause A: the handler is calling an API route that does not exist or has the wrong path. Check that the confirm action calls the correct existing capture confirmation endpoint.
+Cause B: the handler is receiving entity_id as null for new topics and not handling that case. When entity_id is null the handler must first create the topic, then create the capture against it.
+Cause C: the handler is throwing silently because category_id is missing. When routing suggests a new category, the confirm flow must: 1) find or create the category, 2) create the topic under it, 3) create the capture against the topic. All three steps in sequence.
+Cause D: the async function is not being awaited properly, causing silent failure.
+Step 3 — For each routing card, the confirm flow must be:
+- If entity exists: POST /api/captures/confirm with entity_id and excerpt
+- If entity is new: POST /api/categories (find or create), then POST /api/entities with category_id, then POST /api/captures/confirm with new entity_id and excerpt
+- On success: mark that card as confirmed with a green checkmark, do not navigate away until all cards are resolved
+- On error: show the error message on that specific card in red, leave other cards unaffected
+Step 4 — After all cards are confirmed or skipped, show a summary toast and navigate to My Workspace.
+Do not change anything else."
+
+The core issue is almost certainly Cause B or C — the confirm handler does not know how to handle new topics that do not have an entity_id yet. It tries to confirm against a null ID, fails silently, and nothing happens. The fix makes the handler handle creation and confirmation as a sequence rather than assuming the entity already exists.

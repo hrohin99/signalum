@@ -1011,9 +1011,9 @@ Return only the summary paragraph, no JSON, no formatting.`
         return res.status(404).json({ message: "Category not found" });
       }
 
-      const exists = category.entities.some(e => e.name.toLowerCase() === entityName.toLowerCase());
-      if (exists) {
-        return res.status(400).json({ message: "Entity already exists in this category" });
+      const existingEntity = category.entities.find(e => e.name.toLowerCase() === entityName.toLowerCase());
+      if (existingEntity) {
+        return res.json({ success: true, workspace: workspace, siblingInference: null, existing: true });
       }
 
       const newEntity: ExtractedEntity = { name: entityName, type: safeEntityType, topic_type: safeTopicType, related_topic_ids: [], priority: 'medium' };
