@@ -126,6 +126,13 @@ app.use((req, res, next) => {
         } catch (error) {
           console.error("[startup] Retroactive migration failed:", error);
         }
+
+        try {
+          const { fixCenTs18099Entity } = await import("./fixCenTs18099");
+          await fixCenTs18099Entity();
+        } catch (error) {
+          console.error("[startup] CEN/TS 18099 fix failed:", error);
+        }
       })();
 
       cron.schedule("0 6 * * *", async () => {

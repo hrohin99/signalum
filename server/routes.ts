@@ -925,7 +925,10 @@ Return only the summary paragraph, no JSON, no formatting.`
 
       let siblingInference: SiblingInferenceResult | null = null;
 
-      if (inferenceResult) {
+      const aspectApplicableTypes = ["competitor", "account", "technology"];
+      if (!aspectApplicableTypes.includes(safeTopicType)) {
+        newEntity.disambiguation_confirmed = true;
+      } else if (inferenceResult) {
         siblingInference = inferenceResult;
         if (inferenceResult.confidence === "high") {
           newEntity.disambiguation_context = inferenceResult.inferred_domain;
@@ -977,17 +980,22 @@ Return only the summary paragraph, no JSON, no formatting.`
       let siblingInference: SiblingInferenceResult | null = null;
 
       if (newEntityObj) {
-        const tenantId = "00000000-0000-0000-0000-000000000000";
-        const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName);
+        const aspectApplicableTypes = ["competitor", "account", "technology"];
+        if (!aspectApplicableTypes.includes(safeTopicType)) {
+          newEntityObj.disambiguation_confirmed = true;
+        } else {
+          const tenantId = "00000000-0000-0000-0000-000000000000";
+          const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName);
 
-        if (inferenceResult) {
-          siblingInference = inferenceResult;
-          if (inferenceResult.confidence === "high") {
-            newEntityObj.disambiguation_context = inferenceResult.inferred_domain;
-            newEntityObj.disambiguation_confirmed = true;
-          } else if (inferenceResult.confidence === "medium") {
-            newEntityObj.disambiguation_context = inferenceResult.inferred_domain;
-            newEntityObj.disambiguation_confirmed = false;
+          if (inferenceResult) {
+            siblingInference = inferenceResult;
+            if (inferenceResult.confidence === "high") {
+              newEntityObj.disambiguation_context = inferenceResult.inferred_domain;
+              newEntityObj.disambiguation_confirmed = true;
+            } else if (inferenceResult.confidence === "medium") {
+              newEntityObj.disambiguation_context = inferenceResult.inferred_domain;
+              newEntityObj.disambiguation_confirmed = false;
+            }
           }
         }
       }
@@ -1205,6 +1213,7 @@ Return only the summary paragraph, no JSON, no formatting.`
 }
 
 Rules:
+- Only list real documented divisions of this specific company. If this is a regulation, standard, law, or technical specification rather than a company, return an empty array immediately. Do not guess or hallucinate divisions.
 - Each label should be maximum 4 words
 - Return between 3 and 5 items
 - Be specific to this company's actual business areas

@@ -272,7 +272,7 @@ function TopicViewContent({
         </div>
       )}
 
-      {((entity.disambiguation_context && !(entity.disambiguation_confirmed ?? false)) || (entity.needs_aspect_review ?? false)) && (
+      {["competitor", "account", "technology"].includes(currentTopicType) && ((entity.disambiguation_context && !(entity.disambiguation_confirmed ?? false)) || (entity.needs_aspect_review ?? false)) && (
         <DisambiguationBanner
           entity={entity}
           categoryName={categoryName}
@@ -280,19 +280,21 @@ function TopicViewContent({
         />
       )}
 
-      {!(entity.disambiguation_confirmed ?? false) && !entity.disambiguation_context && !(entity.needs_aspect_review ?? false) && (
+      {["competitor", "account", "technology"].includes(currentTopicType) && !(entity.disambiguation_confirmed ?? false) && !entity.disambiguation_context && !(entity.needs_aspect_review ?? false) && (
         <DisambiguationCard
           entity={entity}
           categoryName={categoryName}
         />
       )}
 
-      <AspectSelectionModal
-        open={showAspectModal}
-        onOpenChange={setShowAspectModal}
-        entityName={entity.name}
-        categoryName={categoryName}
-      />
+      {["competitor", "account", "technology"].includes(currentTopicType) && (
+        <AspectSelectionModal
+          open={showAspectModal}
+          onOpenChange={setShowAspectModal}
+          entityName={entity.name}
+          categoryName={categoryName}
+        />
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
