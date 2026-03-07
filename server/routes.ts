@@ -1062,10 +1062,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       }
 
       const categories = workspace.categories as ExtractedCategory[];
-      const exists = categories.some(c => c.name.toLowerCase() === categoryName.toLowerCase());
-      if (exists) {
-        return res.status(400).json({ message: "Category already exists" });
-      }
+      const existingCategory = categories.find(c => c.name.toLowerCase() === categoryName.toLowerCase());
 
       const allowedEntityTypes = ["person", "company", "topic", "technology", "regulation", "event", "location", "other"];
       const safeEntityType = (typeof entityType === "string" && allowedEntityTypes.includes(entityType)) ? entityType : "topic";
@@ -1098,15 +1095,28 @@ Return only the summary paragraph, no JSON, no formatting.`
         }
       }
 
-      const newCategory: ExtractedCategory = {
-        name: categoryName,
-        description: typeof categoryDescription === "string" ? categoryDescription : "",
-        entities: newEntityObj ? [newEntityObj] : [],
-      };
+      let targetCategory: ExtractedCategory;
+      if (existingCategory) {
+        targetCategory = existingCategory;
+        if (newEntityObj) {
+          const entityExists = existingCategory.entities.some(
+            e => e.name.toLowerCase() === newEntityObj.name.toLowerCase()
+          );
+          if (!entityExists) {
+            existingCategory.entities.push(newEntityObj);
+          }
+        }
+      } else {
+        targetCategory = {
+          name: categoryName,
+          description: typeof categoryDescription === "string" ? categoryDescription : "",
+          entities: newEntityObj ? [newEntityObj] : [],
+        };
+        categories.push(targetCategory);
+      }
 
-      categories.push(newCategory);
       const updated = await storage.updateWorkspaceCategories(userId, categories);
-      return res.json({ success: true, workspace: updated, newCategory, siblingInference });
+      return res.json({ success: true, workspace: updated, newCategory: targetCategory, siblingInference });
     } catch (error: any) {
       console.error("Add category error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });

@@ -123,6 +123,7 @@ export default function CapturePage() {
   const [multiMatchSkipped, setMultiMatchSkipped] = useState<Set<number>>(new Set());
   const [multiMatchConfirmed, setMultiMatchConfirmed] = useState<Set<number>>(new Set());
   const [isConfirmingAll, setIsConfirmingAll] = useState(false);
+  const [savingCards, setSavingCards] = useState<Set<number>>(new Set());
 
   const [showPostCreateDateModal, setShowPostCreateDateModal] = useState(false);
   const [postCreateEntityName, setPostCreateEntityName] = useState("");
@@ -161,6 +162,7 @@ export default function CapturePage() {
     setMultiMatchSkipped(new Set());
     setMultiMatchConfirmed(new Set());
     setIsConfirmingAll(false);
+    setSavingCards(new Set());
   }, []);
 
   const datePromptTypeLabel = (type: string) => {
@@ -322,7 +324,7 @@ export default function CapturePage() {
 
   const handleConfirmMultiMatchItem = async (match: MultiMatchItem, index: number) => {
     if (!pendingContent || !match.entity_id || !match.category) return;
-    setIsSaving(true);
+    setSavingCards(prev => new Set(prev).add(index));
     try {
       await apiRequest("POST", "/api/captures", {
         type: pendingType,
@@ -343,7 +345,11 @@ export default function CapturePage() {
         variant: "destructive",
       });
     } finally {
-      setIsSaving(false);
+      setSavingCards(prev => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
     }
   };
 
@@ -353,7 +359,7 @@ export default function CapturePage() {
 
   const handleCreateAndConfirmMultiMatchItem = async (match: MultiMatchItem, index: number) => {
     if (!match.suggested_entity_name || !match.suggested_category) return;
-    setIsSaving(true);
+    setSavingCards(prev => new Set(prev).add(index));
     try {
       await apiRequest("POST", "/api/add-category", {
         categoryName: match.suggested_category.name,
@@ -383,7 +389,11 @@ export default function CapturePage() {
         variant: "destructive",
       });
     } finally {
-      setIsSaving(false);
+      setSavingCards(prev => {
+        const next = new Set(prev);
+        next.delete(index);
+        return next;
+      });
     }
   };
 
@@ -392,43 +402,55 @@ export default function CapturePage() {
     setIsConfirmingAll(true);
     const pendingMatches = classification.matches
       .map((m, i) => ({ match: m, index: i }))
-      .filter(({ match, index }) => match.entity_id && match.category && !multiMatchSkipped.has(index) && !multiMatchConfirmed.has(index));
+      .filter(({ index }) => !multiMatchSkipped.has(index) && !multiMatchConfirmed.has(index));
 
     let successCount = 0;
     let failCount = 0;
+    const confirmedCategories = new Set<string>();
 
     for (const { match, index } of pendingMatches) {
       try {
-        await apiRequest("POST", "/api/captures", {
-          type: pendingType,
-          content: match.relevant_excerpt,
-          matchedEntity: match.entity_id,
-          matchedCategory: match.category,
-          matchReason: match.reasoning,
-        });
+        const isNewTopic = !match.entity_id;
+        if (isNewTopic && match.suggested_entity_name && match.suggested_category) {
+          await apiRequest("POST", "/api/add-category", {
+            categoryName: match.suggested_category.name,
+            categoryDescription: match.suggested_category.description,
+            entityName: match.suggested_entity_name,
+            entityType: "topic",
+            topicType: match.suggested_topic_type || "general",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
+          await apiRequest("POST", "/api/captures", {
+            type: pendingType,
+            content: match.relevant_excerpt,
+            matchedEntity: match.suggested_entity_name,
+            matchedCategory: match.suggested_category.name,
+            matchReason: match.reasoning,
+          });
+          confirmedCategories.add(match.suggested_category.name);
+        } else if (match.entity_id && match.category) {
+          await apiRequest("POST", "/api/captures", {
+            type: pendingType,
+            content: match.relevant_excerpt,
+            matchedEntity: match.entity_id,
+            matchedCategory: match.category,
+            matchReason: match.reasoning,
+          });
+          confirmedCategories.add(match.category);
+        } else {
+          failCount++;
+          continue;
+        }
         setMultiMatchConfirmed(prev => new Set(prev).add(index));
         successCount++;
       } catch (err: any) {
         failCount++;
         toast({
           title: "Save failed",
-          description: `Could not save to ${match.entity_id}: ${err.message || "Unknown error"}`,
+          description: `Could not save to ${match.entity_id || match.suggested_entity_name}: ${err.message || "Unknown error"}`,
           variant: "destructive",
         });
       }
-    }
-
-    if (failCount === 0 && successCount > 0) {
-      toast({
-        title: "All captures saved",
-        description: `Routed to ${successCount} topic${successCount !== 1 ? "s" : ""}.`,
-      });
-    } else if (successCount > 0) {
-      toast({
-        title: "Partially saved",
-        description: `${successCount} saved, ${failCount} failed.`,
-        variant: "destructive",
-      });
     }
 
     setIsConfirmingAll(false);
@@ -436,9 +458,21 @@ export default function CapturePage() {
     const allDone = classification.matches.every(
       (_, i) => multiMatchSkipped.has(i) || multiMatchConfirmed.has(i) || pendingMatches.some(p => p.index === i)
     );
-    if (allDone && failCount === 0) {
+    if (allDone && failCount === 0 && successCount > 0) {
+      toast({
+        title: "All done",
+        description: `${successCount} topic${successCount !== 1 ? "s" : ""} updated across ${confirmedCategories.size} categor${confirmedCategories.size !== 1 ? "ies" : "y"}.`,
+        className: "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300",
+      });
       resetState();
       setActiveType(null);
+      navigate("/map");
+    } else if (successCount > 0) {
+      toast({
+        title: "Partially saved",
+        description: `${successCount} saved, ${failCount} failed.`,
+        variant: "destructive",
+      });
     }
   };
 
@@ -1191,11 +1225,11 @@ export default function CapturePage() {
                     <Button
                       size="sm"
                       onClick={() => handleCreateAndConfirmMultiMatchItem(match, index)}
-                      disabled={isSaving}
+                      disabled={savingCards.has(index)}
                       className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
                       data-testid={`button-create-multi-match-${index}`}
                     >
-                      {isSaving ? (
+                      {savingCards.has(index) ? (
                         <span className="flex items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Creating...
@@ -1211,11 +1245,11 @@ export default function CapturePage() {
                     <Button
                       size="sm"
                       onClick={() => handleConfirmMultiMatchItem(match, index)}
-                      disabled={isSaving}
+                      disabled={savingCards.has(index)}
                       className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
                       data-testid={`button-confirm-multi-match-${index}`}
                     >
-                      {isSaving ? (
+                      {savingCards.has(index) ? (
                         <span className="flex items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Saving...
@@ -1242,13 +1276,23 @@ export default function CapturePage() {
             );
 
             if (allDone) {
+              const confirmedMatches = classification.matches.filter((_, i) => multiMatchConfirmed.has(i));
+              const confirmedCount = confirmedMatches.length;
+              const uniqueCategories = new Set(confirmedMatches.map(m => m.category || m.suggested_category?.name).filter(Boolean));
+              const categoryCount = uniqueCategories.size;
               return (
                 <div className="flex items-center justify-center pt-2">
                   <Button
                     variant="outline"
                     onClick={() => {
+                      toast({
+                        title: "All done",
+                        description: `${confirmedCount} topic${confirmedCount !== 1 ? "s" : ""} updated across ${categoryCount} categor${categoryCount !== 1 ? "ies" : "y"}.`,
+                        className: "bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300",
+                      });
                       resetState();
                       setActiveType(null);
+                      navigate("/map");
                     }}
                     data-testid="button-multi-match-done"
                   >
@@ -1276,7 +1320,7 @@ export default function CapturePage() {
                 </Button>
                 <Button
                   onClick={handleConfirmAllMultiMatch}
-                  disabled={isConfirmingAll || isSaving}
+                  disabled={isConfirmingAll || savingCards.size > 0}
                   className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
                   data-testid="button-confirm-all-multi-match"
                 >
