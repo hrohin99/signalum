@@ -720,6 +720,8 @@ IMPORTANT RULES:
 - Each suggested_entity_name must be a single named entity. Never combine multiple names into one topic name.
 - Each match's relevant_excerpt must contain ONLY the sentences relevant to that specific topic, not the full content.
 
+Also return an extracted_dates array at the top level of your JSON response. For each date or deadline mentioned in the captured content include: date (YYYY-MM-DD), label (what the date represents), date_type (hard_deadline if words like must/deadline/enforcement/mandatory; soft_deadline if target/planned/expected; watch_date otherwise). Normalise quarters: Q1=Mar 31, Q2=Jun 30, Q3=Sep 30, Q4=Dec 31. If no dates are found, return an empty array.
+
 Return this JSON format:
 {
   "matches": [
@@ -729,6 +731,13 @@ Return this JSON format:
       "relevant_excerpt": "The specific sentences relevant to this topic",
       "confidence": 85,
       "reasoning": "One sentence explaining why."
+    }
+  ],
+  "extracted_dates": [
+    {
+      "date": "2025-06-30",
+      "label": "Q2 compliance deadline",
+      "date_type": "hard_deadline"
     }
   ]
 }
@@ -751,12 +760,19 @@ Always return valid JSON only, no other text.`
         return res.status(500).json({ message: "Failed to parse AI classification" });
       }
 
+      const extractedDates = Array.isArray(parsed.extracted_dates) ? parsed.extracted_dates.map((d: any) => ({
+        date: d.date || "",
+        label: d.label || "",
+        date_type: d.date_type || "watch_date",
+      })).filter((d: any) => d.date && d.label) : [];
+
       if (parsed.user_intent === true) {
         return res.json({
           user_intent: true,
           entity_name: parsed.entity_name || "",
           topic_type: parsed.topic_type || "general",
           description: parsed.description || "",
+          extracted_dates: extractedDates,
         });
       }
 
@@ -782,6 +798,7 @@ Always return valid JSON only, no other text.`
               matchedCategory: single.category,
               reason: single.reasoning,
               suggested_type_change: null,
+              extracted_dates: extractedDates,
             });
           } else if (!single.entity_id) {
             return res.json({
@@ -794,6 +811,7 @@ Always return valid JSON only, no other text.`
                 type: "topic",
                 topic_type: single.suggested_topic_type || "general",
               },
+              extracted_dates: extractedDates,
             });
           }
         }
@@ -801,6 +819,7 @@ Always return valid JSON only, no other text.`
         return res.json({
           multi_match: true,
           matches: multiMatches,
+          extracted_dates: extractedDates,
         });
       }
 
@@ -818,10 +837,62 @@ Always return valid JSON only, no other text.`
           name: "General",
           type: "topic",
         },
+        extracted_dates: extractedDates,
       });
     } catch (error: any) {
       console.error("Classify error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/extract-dates", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { content } = req.body;
+      if (!content || typeof content !== "string") {
+        return res.status(400).json({ message: "Missing content" });
+      }
+
+      const client = getAnthropicClient();
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1024,
+        messages: [
+          {
+            role: "user",
+            content: `Extract any dates or deadlines mentioned in this text. For each date found return: date (YYYY-MM-DD), label (what the date represents), date_type (hard_deadline if words like must/deadline/enforcement/mandatory; soft_deadline if target/planned/expected; watch_date otherwise). Normalise quarters: Q1=Mar 31, Q2=Jun 30, Q3=Sep 30, Q4=Dec 31.
+
+Text:
+${content}
+
+Return JSON only: { "extracted_dates": [ { "date": "YYYY-MM-DD", "label": "...", "date_type": "..." } ] }
+If no dates found, return { "extracted_dates": [] }.`
+          }
+        ]
+      });
+
+      const textContent = message.content.find(block => block.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.json({ extracted_dates: [] });
+      }
+
+      let parsed: any;
+      try {
+        const jsonStr = textContent.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        return res.json({ extracted_dates: [] });
+      }
+
+      const dates = Array.isArray(parsed.extracted_dates) ? parsed.extracted_dates.map((d: any) => ({
+        date: d.date || "",
+        label: d.label || "",
+        date_type: d.date_type || "watch_date",
+      })).filter((d: any) => d.date && d.label) : [];
+
+      return res.json({ extracted_dates: dates });
+    } catch (error: any) {
+      console.error("Extract dates error:", error);
+      return res.json({ extracted_dates: [] });
     }
   });
 
@@ -2220,6 +2291,7 @@ Rules:
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be in YYYY-MM-DD format"),
     dateType: z.enum(["hard_deadline", "soft_deadline", "watch_date"]),
     notes: z.string().trim().nullable().optional().transform(v => v || null),
+    source: z.enum(["manual", "ai_extracted"]).optional().default("manual"),
   });
 
   const updateTopicDateSchema = z.object({
@@ -2281,7 +2353,7 @@ Rules:
         label: parsed.data.label,
         date: parsed.data.date,
         dateType: parsed.data.dateType,
-        source: "manual",
+        source: parsed.data.source,
         status,
         notes: parsed.data.notes ?? null,
       });

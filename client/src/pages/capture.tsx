@@ -78,6 +78,12 @@ interface ClassificationMultiMatch {
 
 type ClassificationResult = ClassificationMatch | ClassificationNewCategory | ClassificationUserIntent | ClassificationMultiMatch;
 
+interface ExtractedDate {
+  date: string;
+  label: string;
+  date_type: "hard_deadline" | "soft_deadline" | "watch_date";
+}
+
 const topicTypeDisplayNames: Record<string, string> = {
   competitor: "Competitor",
   project: "Project",
@@ -143,6 +149,11 @@ export default function CapturePage() {
   const [postDateNotes, setPostDateNotes] = useState("");
   const [isAddingDate, setIsAddingDate] = useState(false);
 
+  const [extractedDates, setExtractedDates] = useState<ExtractedDate[]>([]);
+  const [trackedDateIndices, setTrackedDateIndices] = useState<Set<number>>(new Set());
+  const [dismissedDateIndices, setDismissedDateIndices] = useState<Set<number>>(new Set());
+  const [trackingDateIndex, setTrackingDateIndex] = useState<number | null>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -175,6 +186,10 @@ export default function CapturePage() {
     setSavingCards(new Set());
     setMultiMatchCategoryOverrides({});
     setChangingCategoryIndex(null);
+    setExtractedDates([]);
+    setTrackedDateIndices(new Set());
+    setDismissedDateIndices(new Set());
+    setTrackingDateIndex(null);
   }, []);
 
   const getResolvedCategoryForMatch = useCallback((match: MultiMatchItem, index: number): string | null => {
@@ -226,6 +241,45 @@ export default function CapturePage() {
     }
   };
 
+  const getRoutedEntityName = (): string | null => {
+    if (!classification) return null;
+    if ('user_intent' in classification && classification.user_intent) return classification.entity_name || null;
+    if ('multi_match' in classification && classification.multi_match) {
+      const confirmed = classification.matches.find((_, i) => multiMatchConfirmed.has(i));
+      return confirmed?.entity_id || confirmed?.suggested_entity_name || null;
+    }
+    if ('matched' in classification && classification.matched) return classification.matchedEntity;
+    return null;
+  };
+
+  const handleTrackDate = async (dateItem: ExtractedDate, index: number) => {
+    const entityName = getRoutedEntityName();
+    if (!entityName) {
+      toast({ title: "No topic selected", description: "Confirm a topic first before tracking dates.", variant: "destructive" });
+      return;
+    }
+    setTrackingDateIndex(index);
+    try {
+      await apiRequest("POST", `/api/topics/${encodeURIComponent(entityName)}/dates`, {
+        label: dateItem.label,
+        date: dateItem.date,
+        dateType: dateItem.date_type,
+        source: "ai_extracted",
+      });
+      setTrackedDateIndices(prev => new Set(prev).add(index));
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", entityName, "dates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/topic-dates/all"] });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Could not track date.", variant: "destructive" });
+    } finally {
+      setTrackingDateIndex(null);
+    }
+  };
+
+  const handleDismissDate = (index: number) => {
+    setDismissedDateIndices(prev => new Set(prev).add(index));
+  };
+
   const handleSelectType = (type: CaptureType) => {
     if (activeType === type) {
       setActiveType(null);
@@ -261,6 +315,9 @@ export default function CapturePage() {
     try {
       const res = await apiRequest("POST", "/api/classify", { content, type });
       const data = await res.json();
+      setExtractedDates(Array.isArray(data.extracted_dates) ? data.extracted_dates : []);
+      setTrackedDateIndices(new Set());
+      setDismissedDateIndices(new Set());
       if (data.user_intent === true) {
         setClassification(data as ClassificationUserIntent);
         setIntentTopicName(data.entity_name || "");
@@ -1565,6 +1622,84 @@ export default function CapturePage() {
               )}
             </Button>
           </div>
+        </div>
+      )}
+
+      {extractedDates.length > 0 && classification && !isClassifying && (
+        <div className="mt-6 space-y-3" data-testid="extracted-dates-section">
+          <p className="text-sm font-semibold text-muted-foreground flex items-center gap-1.5">
+            <Calendar className="w-4 h-4" />
+            Dates detected
+          </p>
+          {extractedDates.map((dateItem, index) => {
+            if (dismissedDateIndices.has(index)) return null;
+
+            if (trackedDateIndices.has(index)) {
+              return (
+                <div key={index} className="border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-md p-4" data-testid={`extracted-date-tracked-${index}`}>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-green-700 dark:text-green-300">
+                      Date tracked: {dateItem.label} ({dateItem.date})
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
+            const dateTypeColors: Record<string, string> = {
+              hard_deadline: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+              soft_deadline: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+              watch_date: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+            };
+            const dateTypeLabels: Record<string, string> = {
+              hard_deadline: "Hard deadline",
+              soft_deadline: "Soft deadline",
+              watch_date: "Watch date",
+            };
+
+            return (
+              <div key={index} className="border border-border rounded-md p-4 flex items-center justify-between gap-3" data-testid={`extracted-date-card-${index}`}>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="shrink-0">
+                    <Calendar className="w-4 h-4 text-[#1e3a5f]" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground truncate">{dateItem.label}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs text-muted-foreground">{dateItem.date}</span>
+                      <Badge className={`text-xs px-1.5 py-0 ${dateTypeColors[dateItem.date_type] || dateTypeColors.watch_date}`}>
+                        {dateTypeLabels[dateItem.date_type] || "Watch date"}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => handleDismissDate(index)}
+                    data-testid={`button-ignore-date-${index}`}
+                  >
+                    Ignore
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => handleTrackDate(dateItem, index)}
+                    disabled={trackingDateIndex === index}
+                    className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                    data-testid={`button-track-date-${index}`}
+                  >
+                    {trackingDateIndex === index ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      "Track this"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

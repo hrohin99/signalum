@@ -21,7 +21,7 @@ Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui compo
 - **Topic View:** Detailed full-screen view for topics with AI summaries, widgets (e.g., battlecards), and an updates feed.
 - **Product Context:** Allows users to define product context for personalized AI insights, especially for battlecards.
 - **Battlecards:** AI-enhanced competitive analysis tools with auto-fill and manual update capabilities.
-- **Key Dates Management:** Tracks and manages specific dates/deadlines for topics.
+- **Key Dates Management:** Tracks and manages specific dates/deadlines for topics. AI date extraction automatically detects dates/deadlines from capture text during classification (`/api/classify` includes `extracted_dates` in response) and via a dedicated `/api/extract-dates` endpoint for inline captures. Extracted dates appear as actionable cards with Track/Ignore buttons on the capture page and as inline prompts on the topic detail view.
 - **Topic Type-Specific Behavior:** Provides contextual prompts and automated date modals for regulation, risk, and event topics.
 - **Ambient Search System:** Schedules daily web searches using Perplexity AI for all tenants, deduplicating findings and creating captures and notifications. Supports manual, per-topic searches and customizable search settings.
 - **Sibling Topic Inference:** AI-powered disambiguation for new topics based on existing workspace context or category names, determining domain, confidence, and reasoning.

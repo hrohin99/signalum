@@ -2089,6 +2089,12 @@ function DatesAndDeadlinesCard({
   );
 }
 
+interface InlineExtractedDate {
+  date: string;
+  label: string;
+  date_type: string;
+}
+
 function InlineCaptureCard({
   entity,
   categoryName,
@@ -2101,6 +2107,8 @@ function InlineCaptureCard({
   const [text, setText] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
   const confirmTimerRef = useRef<number | null>(null);
+  const [inlineDates, setInlineDates] = useState<InlineExtractedDate[]>([]);
+  const [trackingInlineDate, setTrackingInlineDate] = useState<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -2119,7 +2127,8 @@ function InlineCaptureCard({
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, content) => {
+      const capturedContent = content;
       setText("");
       setShowConfirmation(true);
       if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
@@ -2127,6 +2136,14 @@ function InlineCaptureCard({
       queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
       queryClient.invalidateQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
       queryClient.invalidateQueries({ queryKey: ["/api/ai-insights", entity.name, categoryName] });
+
+      setInlineDates([]);
+      apiRequest("POST", "/api/extract-dates", { content: capturedContent })
+        .then(res => res.json())
+        .then(data => {
+          setInlineDates(Array.isArray(data.extracted_dates) ? data.extracted_dates : []);
+        })
+        .catch(() => { setInlineDates([]); });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -2138,6 +2155,30 @@ function InlineCaptureCard({
     const trimmed = text.trim();
     if (!trimmed) return;
     submitMutation.mutate(trimmed);
+  };
+
+  const handleTrackInlineDate = async (dateItem: InlineExtractedDate, index: number) => {
+    setTrackingInlineDate(index);
+    try {
+      await apiRequest("POST", `/api/topics/${encodeURIComponent(entity.name)}/dates`, {
+        label: dateItem.label,
+        date: dateItem.date,
+        dateType: dateItem.date_type,
+        source: "ai_extracted",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", entity.name, "dates"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/topic-dates/all"] });
+      setInlineDates(prev => prev.filter((_, i) => i !== index));
+      toast({ title: "Date tracked", description: `${dateItem.label} added to ${entity.name}.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Could not track date.", variant: "destructive" });
+    } finally {
+      setTrackingInlineDate(null);
+    }
+  };
+
+  const handleDismissInlineDate = (index: number) => {
+    setInlineDates(prev => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -2178,6 +2219,29 @@ function InlineCaptureCard({
             Submit
           </Button>
         </div>
+        {inlineDates.map((dateItem, index) => (
+          <div key={index} className="mt-2 flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded-md px-3 py-2" data-testid={`inline-date-prompt-${index}`}>
+            <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="text-sm text-blue-800 dark:text-blue-300 flex-1">
+              {dateItem.date} — {dateItem.label}. Track this?
+            </span>
+            <button
+              onClick={() => handleDismissInlineDate(index)}
+              className="text-xs font-medium text-muted-foreground hover:text-foreground px-1.5 py-0.5"
+              data-testid={`button-inline-date-no-${index}`}
+            >
+              No
+            </button>
+            <button
+              onClick={() => handleTrackInlineDate(dateItem, index)}
+              disabled={trackingInlineDate === index}
+              className="text-xs font-medium text-blue-700 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-200 px-1.5 py-0.5"
+              data-testid={`button-inline-date-yes-${index}`}
+            >
+              {trackingInlineDate === index ? "..." : "Yes"}
+            </button>
+          </div>
+        ))}
       </CardContent>
     </Card>
   );
