@@ -1,0 +1,21 @@
+"In perplexityService.js, update searchCompetitorNews to also search for hiring signals. Add to the user prompt: 'Also search for recent job postings or strategic hires at [entityName] from the last [lookbackDays] days. Focus on leadership hires, AI/ML roles, and new market expansion roles as these signal strategic direction. If found, return as findings with signal_type: hiring_signal.'
+In the updates feed, when a capture has signal_type 'hiring_signal' show a small briefcase icon and amber 'Hiring signal' pill instead of the standard globe icon. Do not change anything else."
+
+2 — Weekly digest email option
+"Add a weekly digest option to Settings.
+In the Notifications or Account card in Settings, add a toggle: 'Weekly digest email' — off by default. Description: 'Get a weekly Monday morning summary of everything that changed across your workspace.' Store as weekly_digest_enabled boolean on the user record.
+Create a backend route POST /api/digest/weekly that generates the same brief format as the daily brief but covers the last 7 days instead of 24 hours. Include: top high-signal updates per topic, any deadlines due within 30 days, hiring signals detected.
+Set up a node-cron job that runs every Monday at 8am UTC. For all users with weekly_digest_enabled true, generate and send the weekly digest via nodemailer to their account email.
+Do not change the daily brief or any other functionality."
+
+3 — All Coming Soon cards + feedback widget (combined)
+"Add three Coming Soon cards, a feature interest table, and a feedback widget.
+Create two tables:
+- feature_interest: id, tenant_id, user_id, feature_name, created_at
+- feedback: id, tenant_id, user_id, mood, message, created_at
+COMING SOON CARD 1 — AI Visibility: add to competitor topic full screen view below Monitored URLs. Amber 'Coming Soon' badge. Text: 'See how often your competitors appear in ChatGPT, Perplexity, and Gemini responses — and why they get cited.' Navy 'I'm Interested' button → inserts feature_interest row (feature_name: ai_visibility) → button becomes disabled 'Interest noted'.
+COMING SOON CARD 2 — Email Capture: add to Settings below My Product. Amber 'Coming Soon' badge. Text: 'Forward any competitor newsletter or announcement to your personal Watchloom address and it files automatically.' Same interest button (feature_name: email_capture).
+COMING SOON CARD 3 — Search Your Intelligence: add to Settings below Email Capture. Amber 'Coming Soon' badge. Text: 'Ask questions across all your captured intelligence — find anything across every topic instantly.' Same interest button (feature_name: search). Also add a disabled search icon in the top nav with tooltip 'Coming Soon'.
+One record per user per feature — check before inserting.
+FEEDBACK WIDGET: Fixed navy 'Feedback' button bottom-right of all authenticated screens. On click: modal with textarea (placeholder: 'What's working? What's missing? What's confusing?'), three mood pills (😊 Loving it / 😐 It's okay / 😕 Struggling), navy Send button. On submit: save to feedback table, send email via nodemailer to hrohin99@gmail.com (subject: 'Watchloom feedback — [mood]', body: message + user email + tenant_id), show green toast 'Thanks — your feedback goes directly to the founder.'
+Wrap feedback button in FEEDBACK_ENABLED env var (default true). Do not change landing page or any other functionality."
