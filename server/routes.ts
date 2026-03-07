@@ -600,10 +600,12 @@ User's description: ${description}`
             content: `You are an intelligence routing assistant. A user captured the following ${type} content. Your FIRST task is to determine whether this is actual intelligence content or a user request/instruction.
 
 USER INTENT DETECTION (check this FIRST):
-If the captured content is a request, instruction, or question directed at the system rather than actual intelligence about a topic — for example phrases like "I want to", "can you", "please create", "how do I", "help me", "generate a", "make me", "build a", "create a", "show me", "tell me", "I need", "could you", "would you", "I'd like to" — then this is a USER INTENT, not intelligence content. Return this JSON:
+If the captured content is a request, instruction, or question directed at the system rather than actual intelligence about a topic — for example phrases like "I want to track", "can you monitor", "please create", "how do I", "help me", "I want to", "can you", "generate a", "make me", "build a", "create a", "show me", "tell me", "I need", "could you", "would you", "I'd like to" — then this is a USER INTENT, not intelligence content. Extract the entity or subject they want to track/create and return this JSON:
 {
   "user_intent": true,
-  "message": "A helpful, friendly response acknowledging what the user wants and guiding them to the right feature. For example, if they want a battle card, tell them they can find it on their topic page. If they want analysis, point them to the relevant feature."
+  "entity_name": "The specific entity or subject name extracted from the user's request (e.g. 'CEN/TS 18099', 'Tesla', 'GDPR')",
+  "topic_type": "The most likely topic type from: competitor, project, regulation, person, trend, technology, event, general",
+  "description": "A single sentence describing what this entity is, e.g. 'A European standard for injection attack detection in document verification systems.'"
 }
 
 If the content IS genuine intelligence (news, notes, observations, data about a topic), proceed with classification:
@@ -674,7 +676,9 @@ Always return valid JSON only, no other text.`
       if (parsed.user_intent === true) {
         return res.json({
           user_intent: true,
-          message: parsed.message || "It looks like you're asking for help rather than submitting intelligence. Try using the relevant feature from your workspace instead.",
+          entity_name: parsed.entity_name || "",
+          topic_type: parsed.topic_type || "general",
+          description: parsed.description || "",
         });
       }
 

@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, MessageCircle, Calendar } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, Calendar } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import {
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import type { ExtractedCategory } from "@shared/schema";
 
 type CaptureType = "text" | "voice" | "url" | "document" | null;
@@ -47,7 +48,9 @@ interface ClassificationNewCategory {
 
 interface ClassificationUserIntent {
   user_intent: true;
-  message: string;
+  entity_name: string;
+  topic_type: string;
+  description: string;
 }
 
 type ClassificationResult = ClassificationMatch | ClassificationNewCategory | ClassificationUserIntent;
@@ -75,6 +78,7 @@ const captureTypes = [
 
 export default function CapturePage() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const [activeType, setActiveType] = useState<CaptureType>(null);
   const [textContent, setTextContent] = useState("");
   const [urlContent, setUrlContent] = useState("");
@@ -92,6 +96,12 @@ export default function CapturePage() {
   const [selectedManualCategory, setSelectedManualCategory] = useState<string>("");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
+  const [intentTopicName, setIntentTopicName] = useState("");
+  const [intentCategory, setIntentCategory] = useState("");
+  const [intentNewCategoryName, setIntentNewCategoryName] = useState("");
+  const [intentTopicType, setIntentTopicType] = useState("general");
+  const [isCreatingIntentTopic, setIsCreatingIntentTopic] = useState(false);
+
   const [showPostCreateDateModal, setShowPostCreateDateModal] = useState(false);
   const [postCreateEntityName, setPostCreateEntityName] = useState("");
   const [postCreateTopicType, setPostCreateTopicType] = useState("");
@@ -106,9 +116,10 @@ export default function CapturePage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const hasIntentClassification = classification !== null && 'user_intent' in classification && classification.user_intent;
   const { data: workspaceData } = useQuery<{ exists: boolean; workspace: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace/current"],
-    enabled: showManualPicker,
+    enabled: showManualPicker || hasIntentClassification,
   });
 
   const resetState = useCallback(() => {
@@ -201,6 +212,10 @@ export default function CapturePage() {
       const data = await res.json();
       if (data.user_intent === true) {
         setClassification(data as ClassificationUserIntent);
+        setIntentTopicName(data.entity_name || "");
+        setIntentTopicType(data.topic_type || "general");
+        setIntentCategory("");
+        setIntentNewCategoryName("");
       } else if (typeof data.matched === "undefined") {
         const legacyData = data as any;
         setClassification({
@@ -314,6 +329,61 @@ export default function CapturePage() {
       });
     } finally {
       setIsCreatingCategory(false);
+    }
+  };
+
+  const handleCreateIntentTopic = async () => {
+    if (!intentTopicName.trim()) return;
+    const isNewCategory = intentCategory === "__new__";
+    const categoryName = isNewCategory ? intentNewCategoryName.trim() : intentCategory;
+    if (!categoryName) return;
+
+    setIsCreatingIntentTopic(true);
+    try {
+      if (isNewCategory) {
+        await apiRequest("POST", "/api/add-category", {
+          categoryName,
+          categoryDescription: "",
+          entityName: intentTopicName.trim(),
+          entityType: "topic",
+          topicType: intentTopicType,
+        });
+      } else {
+        await apiRequest("POST", "/api/add-entity", {
+          categoryName,
+          entityName: intentTopicName.trim(),
+          entityType: "topic",
+          topicType: intentTopicType,
+        });
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace"] });
+
+      toast({
+        title: "Topic created",
+        description: `Watchloom will start tracking ${intentTopicName.trim()}.`,
+      });
+
+      const datePromptTypes = ["regulation", "risk", "event"];
+      if (datePromptTypes.includes(intentTopicType.toLowerCase())) {
+        setPostCreateEntityName(intentTopicName.trim());
+        setPostCreateTopicType(intentTopicType.toLowerCase());
+        setShowPostCreateDateModal(true);
+      }
+
+      setClassification(null);
+      resetState();
+      setActiveType(null);
+      navigate("/map");
+    } catch (err: any) {
+      toast({
+        title: "Failed to create topic",
+        description: err.message || "Could not create the topic.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingIntentTopic(false);
     }
   };
 
@@ -657,33 +727,114 @@ export default function CapturePage() {
 
       {classification && !isClassifying && 'user_intent' in classification && classification.user_intent && (
         <div className="mt-6 border border-border rounded-md p-6 space-y-5" data-testid="card-user-intent">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground mb-3">Not a capture</p>
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-md bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5">
-                <MessageCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-foreground" data-testid="text-user-intent-title">
-                  This looks like a request, not intelligence
-                </p>
-                <p className="text-sm text-muted-foreground" data-testid="text-user-intent-message">
-                  {classification.message}
-                </p>
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold text-foreground" data-testid="text-user-intent-title">
+              Want to start tracking this?
+            </h3>
+            <p className="text-sm text-muted-foreground" data-testid="text-user-intent-message">
+              {classification.description
+                ? `It looks like you want to track ${classification.entity_name}${classification.description ? `, ${classification.description.charAt(0).toLowerCase()}${classification.description.slice(1).replace(/\.$/, '')}` : ''}.`
+                : `It looks like you want to track ${classification.entity_name}.`}
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Topic name</label>
+              <Input
+                value={intentTopicName}
+                onChange={(e) => setIntentTopicName(e.target.value)}
+                placeholder="Enter topic name"
+                className="h-10"
+                data-testid="input-intent-topic-name"
+              />
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Category</label>
+              <select
+                value={intentCategory}
+                onChange={(e) => {
+                  setIntentCategory(e.target.value);
+                  if (e.target.value !== "__new__") setIntentNewCategoryName("");
+                }}
+                className="w-full h-10 px-3 rounded-md border border-border bg-background text-foreground text-sm"
+                data-testid="select-intent-category"
+              >
+                <option value="">Select a category...</option>
+                {(workspaceData?.workspace?.categories || []).map((cat) => (
+                  <option key={cat.name} value={cat.name}>{cat.name}</option>
+                ))}
+                <option value="__new__">+ Create new category</option>
+              </select>
+              {intentCategory === "__new__" && (
+                <Input
+                  value={intentNewCategoryName}
+                  onChange={(e) => setIntentNewCategoryName(e.target.value)}
+                  placeholder="New category name"
+                  className="h-10 mt-2"
+                  data-testid="input-intent-new-category"
+                  autoFocus
+                />
+              )}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Topic type</label>
+              <div className="flex flex-wrap gap-2" data-testid="pills-intent-topic-type">
+                {(["competitor", "regulation", "project", "person", "trend", "technology", "event", "general"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setIntentTopicType(t)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      intentTopicType === t
+                        ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                        : "bg-background text-foreground border-border hover:border-[#1e3a5f]/40"
+                    }`}
+                    data-testid={`pill-intent-type-${t}`}
+                  >
+                    {topicTypeDisplayNames[t] || t}
+                  </button>
+                ))}
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-end">
-            <Button
-              variant="outline"
+
+          <div className="flex items-center justify-between pt-1">
+            <button
+              type="button"
               onClick={() => {
                 setClassification(null);
                 setPendingContent("");
                 setPendingType("");
+                setIntentTopicName("");
+                setIntentCategory("");
+                setIntentNewCategoryName("");
+                setIntentTopicType("general");
               }}
+              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               data-testid="button-dismiss-intent"
             >
-              Got it
+              Dismiss
+            </button>
+            <Button
+              onClick={handleCreateIntentTopic}
+              disabled={isCreatingIntentTopic || !intentTopicName.trim() || (!intentCategory || (intentCategory === "__new__" && !intentNewCategoryName.trim()))}
+              className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+              data-testid="button-create-intent-topic"
+            >
+              {isCreatingIntentTopic ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Create topic
+                </span>
+              )}
             </Button>
           </div>
         </div>
