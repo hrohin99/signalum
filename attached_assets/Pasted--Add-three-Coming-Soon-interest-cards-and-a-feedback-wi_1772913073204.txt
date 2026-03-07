@@ -1,0 +1,12 @@
+"Add three 'Coming Soon' interest cards and a feedback widget to the app.
+COMING SOON CARDS
+Create a feature_interest table: id, tenant_id, user_id, feature_name, created_at. One record per user per feature.
+Card 1 — AI Visibility: add to competitor topic full screen view, below Monitored URLs. Amber 'Coming Soon' badge. Text: 'See how often your competitors are mentioned in ChatGPT, Perplexity, and Gemini — and why they get cited.' Navy 'I'm Interested' button. On click: insert feature_interest record (feature_name: ai_visibility), disable button, show 'Interest noted'.
+Card 2 — Email Capture: add to Settings below My Product card. Amber 'Coming Soon' badge. Text: 'Forward any competitor newsletter or announcement to your personal Watchloom address and it files automatically.' Same interest button (feature_name: email_capture).
+Card 3 — Search Your Intelligence: add to the top navigation bar as a disabled search icon with a tooltip 'Coming Soon — search everything in your workspace'. Also add a card in Settings below Email Capture. Text: 'Ask questions across all your captured intelligence. Find anything across every topic, category, and update instantly.' Same interest button (feature_name: search).
+FEEDBACK WIDGET
+A small navy button fixed bottom-right on all authenticated screens. Label: 'Feedback' with a speech bubble icon.
+On click: modal with title 'Share your thoughts', a textarea (placeholder: 'What's working? What's missing? What's confusing?'), three mood pills: 😊 Loving it / 😐 It's okay / 😕 Struggling, and a navy Send button.
+On submit: save to feedback table (id, tenant_id, user_id, mood, message, created_at). Send email to hrohin99@gmail.com via nodemailer — subject: 'Watchloom feedback — [mood]', body: message + user email + tenant_id. Show green toast: 'Thanks — your feedback goes directly to the founder.' Close modal.
+Wrap the feedback button in env var FEEDBACK_ENABLED (default true) so it can be hidden later with one config change.
+Do not change the landing page or any other functionality."
