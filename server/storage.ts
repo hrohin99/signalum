@@ -1,7 +1,7 @@
 import { eq, desc, and, lt, gte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -46,6 +46,9 @@ export interface IStorage {
   isWorkspaceReady(userId: string): Promise<boolean>;
   getWorkspaceContext(tenantId: string): Promise<WorkspaceContext | undefined>;
   upsertWorkspaceContext(data: InsertWorkspaceContext): Promise<WorkspaceContext>;
+  getMonitoredUrlsByEntity(tenantId: string, entityId: string): Promise<MonitoredUrl[]>;
+  createMonitoredUrl(data: InsertMonitoredUrl): Promise<MonitoredUrl>;
+  deleteMonitoredUrl(id: string, tenantId: string, entityId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -390,6 +393,29 @@ export class DatabaseStorage implements IStorage {
       .values(data)
       .returning();
     return created;
+  }
+  async getMonitoredUrlsByEntity(tenantId: string, entityId: string): Promise<MonitoredUrl[]> {
+    return db
+      .select()
+      .from(monitoredUrls)
+      .where(and(eq(monitoredUrls.tenantId, tenantId), eq(monitoredUrls.entityId, entityId)))
+      .orderBy(desc(monitoredUrls.createdAt));
+  }
+
+  async createMonitoredUrl(data: InsertMonitoredUrl): Promise<MonitoredUrl> {
+    const [created] = await db
+      .insert(monitoredUrls)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async deleteMonitoredUrl(id: string, tenantId: string, entityId: string): Promise<boolean> {
+    const deleted = await db
+      .delete(monitoredUrls)
+      .where(and(eq(monitoredUrls.id, id), eq(monitoredUrls.tenantId, tenantId), eq(monitoredUrls.entityId, entityId)))
+      .returning();
+    return deleted.length > 0;
   }
 }
 

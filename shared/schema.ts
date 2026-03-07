@@ -242,6 +242,27 @@ export interface SiblingInferenceResult {
   reasoning: string;
 }
 
+export const monitoredUrls = pgTable("monitored_urls", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  entityId: text("entity_id").notNull(),
+  url: text("url").notNull(),
+  urlCategory: text("url_category").notNull(),
+  checkFrequency: text("check_frequency").notNull().default("daily"),
+  isActive: integer("is_active").notNull().default(1),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("monitored_urls_entity_id_idx").on(table.entityId),
+]);
+
+export const insertMonitoredUrlSchema = createInsertSchema(monitoredUrls).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertMonitoredUrl = z.infer<typeof insertMonitoredUrlSchema>;
+export type MonitoredUrl = typeof monitoredUrls.$inferSelect;
+
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull(),

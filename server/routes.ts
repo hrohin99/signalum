@@ -2563,5 +2563,64 @@ Rules:
     }
   });
 
+  const createMonitoredUrlSchema = z.object({
+    url: z.string().url("Please enter a valid URL"),
+    urlCategory: z.enum(["pricing", "product", "news", "careers", "custom"]),
+    checkFrequency: z.enum(["daily", "every_3_days", "weekly"]).default("daily"),
+    isActive: z.number().optional().default(1),
+  });
+
+  app.get("/api/topics/:entityId/monitored-urls", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId } = req.params;
+      const urls = await storage.getMonitoredUrlsByEntity(tenantId, entityId);
+      return res.json({ monitoredUrls: urls });
+    } catch (error: any) {
+      console.error("Get monitored URLs error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/topics/:entityId/monitored-urls", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId } = req.params;
+      const parsed = createMonitoredUrlSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors.map(e => e.message).join(", ") });
+      }
+
+      const created = await storage.createMonitoredUrl({
+        tenantId,
+        entityId,
+        url: parsed.data.url,
+        urlCategory: parsed.data.urlCategory,
+        checkFrequency: parsed.data.checkFrequency,
+        isActive: parsed.data.isActive,
+      });
+
+      return res.status(201).json({ monitoredUrl: created });
+    } catch (error: any) {
+      console.error("Create monitored URL error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/topics/:entityId/monitored-urls/:urlId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId, urlId } = req.params;
+      const deleted = await storage.deleteMonitoredUrl(urlId, tenantId, entityId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Monitored URL not found" });
+      }
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete monitored URL error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

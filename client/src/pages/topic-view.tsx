@@ -51,7 +51,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate } from "@shared/schema";
+import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl } from "@shared/schema";
 
 function detectMultipleEntities(name: string): string[] | null {
   if (!name.includes(",")) return null;
@@ -317,6 +317,9 @@ function TopicViewContent({
             categories={categories}
           />
           <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
+          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
+            <MonitoredUrlsCard entity={entity} />
+          )}
           <InlineCaptureCard entity={entity} categoryName={categoryName} />
           <AIInsightsCard entity={entity} categoryName={categoryName} captures={captures} />
         </div>
@@ -2086,6 +2089,244 @@ function DatesAndDeadlinesCard({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+const urlCategoryOptions = [
+  { value: "pricing", label: "Pricing", color: "bg-blue-100 text-blue-800" },
+  { value: "product", label: "Product", color: "bg-purple-100 text-purple-800" },
+  { value: "news", label: "News", color: "bg-green-100 text-green-800" },
+  { value: "careers", label: "Careers", color: "bg-amber-100 text-amber-800" },
+  { value: "custom", label: "Custom", color: "bg-gray-100 text-gray-800" },
+];
+
+const frequencyOptions = [
+  { value: "daily", label: "Daily" },
+  { value: "every_3_days", label: "Every 3 days" },
+  { value: "weekly", label: "Weekly" },
+];
+
+function MonitoredUrlsCard({ entity }: { entity: ExtractedEntity }) {
+  const { toast } = useToast();
+  const entityId = entity.name;
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [formUrl, setFormUrl] = useState("");
+  const [formCategory, setFormCategory] = useState("pricing");
+  const [formFrequency, setFormFrequency] = useState("daily");
+
+  const { data: urlsData, isLoading } = useQuery<{ monitoredUrls: MonitoredUrl[] }>({
+    queryKey: ["/api/topics", entityId, "monitored-urls"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/topics/${encodeURIComponent(entityId)}/monitored-urls`);
+      return res.json();
+    },
+  });
+
+  const urls = urlsData?.monitoredUrls ?? [];
+
+  const resetForm = () => {
+    setFormUrl("");
+    setFormCategory("pricing");
+    setFormFrequency("daily");
+  };
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { url: string; urlCategory: string; checkFrequency: string }) => {
+      const res = await apiRequest("POST", `/api/topics/${encodeURIComponent(entityId)}/monitored-urls`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", entityId, "monitored-urls"] });
+      setShowAddModal(false);
+      resetForm();
+      toast({ title: "URL added successfully.", className: "bg-green-50 border-green-200 text-green-800" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (urlId: string) => {
+      const res = await apiRequest("DELETE", `/api/topics/${encodeURIComponent(entityId)}/monitored-urls/${urlId}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/topics", entityId, "monitored-urls"] });
+      toast({ title: "URL removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleAdd = () => {
+    if (!formUrl.trim()) return;
+    createMutation.mutate({
+      url: formUrl.trim(),
+      urlCategory: formCategory,
+      checkFrequency: formFrequency,
+    });
+  };
+
+  const getCategoryPill = (category: string) => {
+    const opt = urlCategoryOptions.find(o => o.value === category);
+    return opt || { label: category, color: "bg-gray-100 text-gray-800" };
+  };
+
+  const getFrequencyLabel = (freq: string) => {
+    const opt = frequencyOptions.find(o => o.value === freq);
+    return opt?.label || freq;
+  };
+
+  const truncateUrl = (url: string) => {
+    try {
+      const parsed = new URL(url);
+      const display = parsed.hostname + parsed.pathname;
+      return display.length > 40 ? display.slice(0, 37) + "..." : display;
+    } catch {
+      return url.length > 40 ? url.slice(0, 37) + "..." : url;
+    }
+  };
+
+  return (
+    <>
+      <Card data-testid="card-monitored-urls">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-[#1e3a5f]" />
+              <h3 className="font-semibold text-[#1e3a5f]" data-testid="text-monitored-urls-title">Monitored URLs</h3>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddModal(true)}
+              data-testid="button-add-monitored-url"
+            >
+              <Plus className="w-3.5 h-3.5 mr-1" />
+              Add
+            </Button>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : urls.length === 0 ? (
+            <p className="text-sm text-muted-foreground" data-testid="text-no-urls">No URLs yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {urls.map((monitoredUrl) => {
+                const pill = getCategoryPill(monitoredUrl.urlCategory);
+                return (
+                  <div
+                    key={monitoredUrl.id}
+                    className="flex items-center gap-2 py-2 px-2 rounded-md hover:bg-gray-50 group"
+                    data-testid={`row-monitored-url-${monitoredUrl.id}`}
+                  >
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ${pill.color}`} data-testid={`badge-category-${monitoredUrl.id}`}>
+                      {pill.label}
+                    </span>
+                    <a
+                      href={monitoredUrl.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:underline truncate flex-1 min-w-0"
+                      title={monitoredUrl.url}
+                      data-testid={`link-url-${monitoredUrl.id}`}
+                    >
+                      {truncateUrl(monitoredUrl.url)}
+                    </a>
+                    <span className="text-xs text-muted-foreground shrink-0" data-testid={`text-frequency-${monitoredUrl.id}`}>
+                      {getFrequencyLabel(monitoredUrl.checkFrequency)}
+                    </span>
+                    <button
+                      onClick={() => deleteMutation.mutate(monitoredUrl.id)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-400 hover:text-red-500 shrink-0"
+                      data-testid={`button-remove-url-${monitoredUrl.id}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent data-testid="dialog-add-monitored-url">
+          <DialogHeader>
+            <DialogTitle>Add Monitored URL</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">URL</label>
+              <Input
+                placeholder="https://example.com/pricing"
+                value={formUrl}
+                onChange={(e) => setFormUrl(e.target.value)}
+                data-testid="input-monitored-url"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Category</label>
+              <div className="flex flex-wrap gap-2">
+                {urlCategoryOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setFormCategory(opt.value)}
+                    className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-all ${
+                      formCategory === opt.value
+                        ? `${opt.color} border-current ring-1 ring-current/20`
+                        : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                    }`}
+                    data-testid={`button-category-${opt.value}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">Check Frequency</label>
+              <div className="flex flex-wrap gap-2">
+                {frequencyOptions.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setFormFrequency(opt.value)}
+                    className={`text-xs px-3 py-1.5 rounded-full font-medium border transition-all ${
+                      formFrequency === opt.value
+                        ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-gray-300"
+                    }`}
+                    data-testid={`button-frequency-${opt.value}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowAddModal(false); resetForm(); }} data-testid="button-cancel-add-url">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAdd}
+              disabled={!formUrl.trim() || createMutation.isPending}
+              data-testid="button-save-monitored-url"
+            >
+              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
