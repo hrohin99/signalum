@@ -43,3 +43,5 @@ Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui compo
 - **Perplexity AI:** Web research for automated competitor and topic intelligence gathering (via `server/perplexityService.ts`).
 - **node-cron:** Schedules daily ambient search.
 - **PostgreSQL:** Primary database.
+- **pdf-parse:** Server-side PDF text extraction for document captures.
+- **mammoth:** Server-side DOCX text extraction for document captures.

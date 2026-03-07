@@ -5,6 +5,11 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID, createHmac } from "crypto";
 import multer from "multer";
 import jwt from "jsonwebtoken";
+import * as pdfParseModule from "pdf-parse";
+import mammoth from "mammoth";
+import path from "path";
+
+const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 import { storage } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
 import type { ExtractionResult, ExtractedCategory, ExtractedEntity, SiblingInferenceResult } from "@shared/schema";
@@ -552,6 +557,51 @@ User's description: ${description}`
     } catch (error: any) {
       console.error("Extract error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/extract-document", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ message: "No file uploaded" });
+      }
+
+      const ext = path.extname(file.originalname).toLowerCase();
+
+      if (ext === ".doc") {
+        return res.status(400).json({ message: "Legacy .doc files are not supported. Please save as .docx and try again." });
+      }
+
+      if (![".pdf", ".docx", ".txt", ".md", ".csv", ".json"].includes(ext)) {
+        return res.status(400).json({ message: "Unsupported file type. Please upload a PDF or Word document." });
+      }
+
+      let extractedText = "";
+
+      if (ext === ".pdf") {
+        const pdfData = await pdfParse(file.buffer);
+        extractedText = pdfData.text;
+      } else if (ext === ".docx") {
+        const result = await mammoth.extractRawText({ buffer: file.buffer });
+        extractedText = result.value;
+      } else {
+        extractedText = file.buffer.toString("utf-8");
+      }
+
+      const trimmed = extractedText.trim();
+      if (!trimmed) {
+        return res.status(400).json({ message: "We could not extract readable text from this file. It may be a scanned document. Try copying the text and using Text Note instead." });
+      }
+
+      return res.json({
+        text: trimmed,
+        filename: file.originalname,
+        characterCount: trimmed.length,
+      });
+    } catch (error: any) {
+      console.error("Document extraction error:", error);
+      return res.status(500).json({ message: "Failed to extract text from the document. Please try again." });
     }
   });
 

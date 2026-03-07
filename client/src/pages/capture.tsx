@@ -102,6 +102,8 @@ export default function CapturePage() {
   const [intentTopicType, setIntentTopicType] = useState("general");
   const [isCreatingIntentTopic, setIsCreatingIntentTopic] = useState(false);
 
+  const [extractionInfo, setExtractionInfo] = useState<{ filename: string; characterCount: number } | null>(null);
+
   const [showPostCreateDateModal, setShowPostCreateDateModal] = useState(false);
   const [postCreateEntityName, setPostCreateEntityName] = useState("");
   const [postCreateTopicType, setPostCreateTopicType] = useState("");
@@ -135,6 +137,7 @@ export default function CapturePage() {
     setShowManualPicker(false);
     setSelectedManualCategory("");
     setIsCreatingCategory(false);
+    setExtractionInfo(null);
   }, []);
 
   const datePromptTypeLabel = (type: string) => {
@@ -418,9 +421,42 @@ export default function CapturePage() {
   const handleDocumentSubmit = async () => {
     if (!selectedFile) return;
 
-    const text = await selectedFile.text();
-    const content = `[File: ${selectedFile.name}]\n${text.slice(0, 5000)}`;
-    classifyContent(content, "document");
+    setIsClassifying(true);
+    setExtractionInfo(null);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        toast({ title: "Not authenticated", variant: "destructive" });
+        setIsClassifying(false);
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+
+      const extractRes = await fetch("/api/extract-document", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
+
+      const extractData = await extractRes.json();
+
+      if (!extractRes.ok) {
+        toast({ title: "Document error", description: extractData.message, variant: "destructive" });
+        setIsClassifying(false);
+        return;
+      }
+
+      setExtractionInfo({ filename: extractData.filename, characterCount: extractData.characterCount });
+
+      const content = `[File: ${extractData.filename}]\n${extractData.text.slice(0, 5000)}`;
+      classifyContent(content, "document");
+    } catch (err: any) {
+      toast({ title: "Extraction failed", description: err.message || "Could not extract text from document.", variant: "destructive" });
+      setIsClassifying(false);
+    }
   };
 
   const startRecording = async () => {
@@ -722,6 +758,15 @@ export default function CapturePage() {
             <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin" />
             <p className="text-muted-foreground">AI is classifying your capture...</p>
           </div>
+        </div>
+      )}
+
+      {extractionInfo && classification && !isClassifying && (
+        <div className="mt-4 flex items-center gap-2 px-3 py-2 rounded-md bg-[#1e3a5f]/5 border border-[#1e3a5f]/15" data-testid="text-extraction-info">
+          <FileText className="w-4 h-4 text-[#1e3a5f] shrink-0" />
+          <p className="text-sm text-[#1e3a5f]">
+            Extracted {extractionInfo.characterCount.toLocaleString()} characters from {extractionInfo.filename}
+          </p>
         </div>
       )}
 
