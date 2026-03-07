@@ -2622,5 +2622,79 @@ Rules:
     }
   });
 
+  app.post("/api/feature-interest", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const userId = (req as any).userId;
+      const schema = z.object({ featureName: z.enum(["ai_visibility", "email_capture", "search"]) });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors.map(e => e.message).join(", ") });
+      }
+      const result = await storage.createFeatureInterest({ tenantId, userId, featureName: parsed.data.featureName });
+      return res.status(201).json({ featureInterest: result });
+    } catch (error: any) {
+      console.error("Feature interest error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/feature-interest", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const interests = await storage.getFeatureInterestByUser(userId);
+      return res.json({ interests });
+    } catch (error: any) {
+      console.error("Get feature interests error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/feedback", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const userId = (req as any).userId;
+      const userEmail = (req as any).userEmail;
+      const schema = z.object({
+        mood: z.enum(["loving_it", "its_okay", "struggling"]),
+        message: z.string().min(1).max(5000),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors.map(e => e.message).join(", ") });
+      }
+      const result = await storage.createFeedback({ tenantId, userId, mood: parsed.data.mood, message: parsed.data.message });
+
+      const moodLabels: Record<string, string> = { loving_it: "😊 Loving it", its_okay: "😐 It's okay", struggling: "😕 Struggling" };
+      const moodLabel = moodLabels[parsed.data.mood] || parsed.data.mood;
+
+      try {
+        const nodemailer = await import("nodemailer");
+        const transporter = nodemailer.default.createTransport({
+          host: process.env.SMTP_HOST || "smtp.gmail.com",
+          port: parseInt(process.env.SMTP_PORT || "587"),
+          secure: false,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        });
+        await transporter.sendMail({
+          from: process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@watchloom.com",
+          to: "hrohin99@gmail.com",
+          subject: `Watchloom feedback — ${moodLabel}`,
+          text: `${parsed.data.message}\n\nUser: ${userEmail}\nTenant: ${tenantId}`,
+        });
+      } catch (emailErr) {
+        console.error("Failed to send feedback email:", emailErr);
+      }
+
+      return res.status(201).json({ feedback: result });
+    } catch (error: any) {
+      console.error("Feedback error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

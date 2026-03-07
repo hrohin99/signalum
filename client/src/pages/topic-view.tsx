@@ -52,6 +52,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl } from "@shared/schema";
+import { ComingSoonCard } from "@/components/coming-soon-card";
+import { Eye } from "lucide-react";
 
 function detectMultipleEntities(name: string): string[] | null {
   if (!name.includes(",")) return null;
@@ -319,6 +321,9 @@ function TopicViewContent({
           <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <MonitoredUrlsCard entity={entity} />
+          )}
+          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
+            <AIVisibilityCard />
           )}
           <InlineCaptureCard entity={entity} categoryName={categoryName} />
           <AIInsightsCard entity={entity} categoryName={categoryName} captures={captures} />
@@ -3052,5 +3057,16 @@ function DisambiguationCard({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function AIVisibilityCard() {
+  return (
+    <ComingSoonCard
+      featureName="ai_visibility"
+      title="AI Visibility"
+      description="See how often your competitors are mentioned in ChatGPT, Perplexity, and Gemini — and why they get cited."
+      icon={<Eye className="w-5 h-5 text-[#1e3a5f]" />}
+    />
   );
 }

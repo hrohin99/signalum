@@ -263,6 +263,41 @@ export const insertMonitoredUrlSchema = createInsertSchema(monitoredUrls).omit({
 export type InsertMonitoredUrl = z.infer<typeof insertMonitoredUrlSchema>;
 export type MonitoredUrl = typeof monitoredUrls.$inferSelect;
 
+export const featureInterest = pgTable("feature_interest", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  featureName: text("feature_name").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  unique("feature_interest_user_feature").on(table.userId, table.featureName),
+]);
+
+export const insertFeatureInterestSchema = createInsertSchema(featureInterest).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFeatureInterest = z.infer<typeof insertFeatureInterestSchema>;
+export type FeatureInterest = typeof featureInterest.$inferSelect;
+
+export const feedback = pgTable("feedback", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  mood: text("mood").notNull(),
+  message: text("message").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertFeedbackSchema = createInsertSchema(feedback).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
+export type Feedback = typeof feedback.$inferSelect;
+
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull(),

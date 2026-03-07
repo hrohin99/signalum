@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, User, Pencil, Package } from "lucide-react";
+import { LogOut, User, Pencil, Package, Mail, Search } from "lucide-react";
+import { ComingSoonCard } from "@/components/coming-soon-card";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -202,6 +203,20 @@ export default function SettingsPage() {
             </form>
           </CardContent>
         </Card>
+
+        <ComingSoonCard
+          featureName="email_capture"
+          title="Email Capture"
+          description="Forward any competitor newsletter or announcement to your personal Watchloom address and it files automatically."
+          icon={<Mail className="w-5 h-5 text-[#1e3a5f]" />}
+        />
+
+        <ComingSoonCard
+          featureName="search"
+          title="Search Your Intelligence"
+          description="Ask questions across all your captured intelligence. Find anything across every topic, category, and update instantly."
+          icon={<Search className="w-5 h-5 text-[#1e3a5f]" />}
+        />
 
         <Button
           variant="outline"

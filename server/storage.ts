@@ -1,7 +1,7 @@
 import { eq, desc, and, lt, gte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -49,6 +49,9 @@ export interface IStorage {
   getMonitoredUrlsByEntity(tenantId: string, entityId: string): Promise<MonitoredUrl[]>;
   createMonitoredUrl(data: InsertMonitoredUrl): Promise<MonitoredUrl>;
   deleteMonitoredUrl(id: string, tenantId: string, entityId: string): Promise<boolean>;
+  createFeatureInterest(data: InsertFeatureInterest): Promise<FeatureInterest>;
+  getFeatureInterestByUser(userId: string): Promise<FeatureInterest[]>;
+  createFeedback(data: InsertFeedback): Promise<Feedback>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -416,6 +419,37 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(monitoredUrls.id, id), eq(monitoredUrls.tenantId, tenantId), eq(monitoredUrls.entityId, entityId)))
       .returning();
     return deleted.length > 0;
+  }
+
+  async createFeatureInterest(data: InsertFeatureInterest): Promise<FeatureInterest> {
+    const [created] = await db
+      .insert(featureInterest)
+      .values(data)
+      .onConflictDoNothing()
+      .returning();
+    if (!created) {
+      const [existing] = await db
+        .select()
+        .from(featureInterest)
+        .where(and(eq(featureInterest.userId, data.userId), eq(featureInterest.featureName, data.featureName)));
+      return existing;
+    }
+    return created;
+  }
+
+  async getFeatureInterestByUser(userId: string): Promise<FeatureInterest[]> {
+    return db
+      .select()
+      .from(featureInterest)
+      .where(eq(featureInterest.userId, userId));
+  }
+
+  async createFeedback(data: InsertFeedback): Promise<Feedback> {
+    const [created] = await db
+      .insert(feedback)
+      .values(data)
+      .returning();
+    return created;
   }
 }
 
