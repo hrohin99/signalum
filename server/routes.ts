@@ -580,13 +580,26 @@ User's description: ${description}`
       let extractedText = "";
 
       if (ext === ".pdf") {
-        const pdfData = await pdfParse(file.buffer);
-        extractedText = pdfData.text;
+        try {
+          const pdfData = await pdfParse(file.buffer);
+          extractedText = pdfData.text;
+          console.log(`PDF text extraction complete: ${extractedText.length} characters extracted`);
+        } catch (pdfError: any) {
+          console.error("pdf-parse error:", pdfError);
+          return res.status(400).json({ message: "Could not read this PDF. Please try copying the text and using Text Note instead." });
+        }
       } else if (ext === ".docx") {
-        const result = await mammoth.extractRawText({ buffer: file.buffer });
-        extractedText = result.value;
+        try {
+          const result = await mammoth.extractRawText({ buffer: file.buffer });
+          extractedText = result.value;
+          console.log(`DOCX text extraction complete: ${extractedText.length} characters extracted`);
+        } catch (docxError: any) {
+          console.error("mammoth error:", docxError);
+          return res.status(400).json({ message: "Could not read this DOCX file. Please try copying the text and using Text Note instead." });
+        }
       } else {
         extractedText = file.buffer.toString("utf-8");
+        console.log(`Text file extraction complete: ${extractedText.length} characters extracted`);
       }
 
       const trimmed = extractedText.trim();
