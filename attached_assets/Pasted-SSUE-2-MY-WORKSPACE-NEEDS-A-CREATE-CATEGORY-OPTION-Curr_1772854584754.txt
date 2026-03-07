@@ -1,0 +1,32 @@
+SSUE 2 — MY WORKSPACE NEEDS A CREATE CATEGORY OPTION
+Currently My Workspace only allows creating topics. There is no way to create a new category.
+Add a "New category" option in two places:
+Place 1 — Left panel category list
+At the bottom of the category list in the left panel, add a small text button: a plus icon followed by "New category" in slate grey DM Sans 13px. On click: show an inline text input directly in the left panel where the button was. Placeholder: "Category name". On Enter or clicking a small checkmark: create the category, add it to the list, select it automatically, dismiss the input. On Escape: dismiss without creating.
+Place 2 — Empty workspace state
+If the user has no categories at all, show a centred empty state with:
+- Headline: "Your workspace is empty"
+- Subtext: "Start by creating a category to organise your topics."
+- Navy button: "Create your first category" — clicking this focuses the inline input in the left panel
+Category creation API:
+POST /api/categories with body: { name, tenant_id }
+Returns the created category. If this route already exists use it. If not, create it.
+After category creation: automatically select the new category in the left panel and show an inline prompt in the right panel: "Category created. Add your first topic to [category name]." with a text input to type a topic name directly.
+---
+ADDITIONAL — TOPIC CREATION FROM WORKSPACE
+When a category is selected and the right panel shows the topic list, add a visible "+ Add topic" button at the top of the right panel topic list, not just at the bottom or hidden.
+The button: navy outline, navy text, plus icon, "Add topic", DM Sans 14px, border-radius 8px, padding 8px 16px.
+On click: show an inline creation row at the top of the topic list with:
+- Text input for topic name
+- Type pill selector (compact — small pills)
+- Add button and Cancel link
+On add: create the topic under the selected category, show it in the list immediately, trigger background enrichment and Perplexity seeding for the new topic.
+---
+PRESERVATION RULES:
+- Do not change the landing page
+- Do not change authentication
+- Do not break existing capture flow, routing, or inbox
+- The intent detection card replacement must preserve the existing "Got it" dismiss behaviour as the Dismiss option
+- All new category and topic creation must include tenant_id
+- Build in order: capture intent card first, then category creation in workspace, then topic creation button
+- Test that existing categories and topics still load after changes"

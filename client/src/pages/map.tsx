@@ -307,24 +307,22 @@ function WorkspaceLoadingState() {
   );
 }
 
-function WorkspaceEmptyState({ onRefresh, isRefreshing }: { onRefresh: () => void; isRefreshing: boolean }) {
+function WorkspaceEmptyState({ onRefresh, isRefreshing, onCreateCategory }: { onRefresh: () => void; isRefreshing: boolean; onCreateCategory: () => void }) {
   return (
     <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-empty-state">
       <div className="w-12 h-12 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-4">
         <Shield className="w-6 h-6 text-white" />
       </div>
-      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-empty-headline">Your workspace is almost ready</h3>
+      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-empty-headline">Your workspace is empty</h3>
       <p className="text-sm text-muted-foreground max-w-sm mb-6">
-        We are still setting things up. This usually takes less than a minute.
+        Start by creating a category to organise your topics.
       </p>
       <Button
         className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-6"
-        onClick={onRefresh}
-        disabled={isRefreshing}
-        data-testid="button-refresh-workspace"
+        onClick={onCreateCategory}
+        data-testid="button-create-first-category"
       >
-        {isRefreshing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-        Refresh workspace
+        Create your first category
       </Button>
     </div>
   );
@@ -341,6 +339,12 @@ export default function MapPage() {
   const [pollingState, setPollingState] = useState<"idle" | "polling" | "timeout">("idle");
   const [isManualRefreshing, setIsManualRefreshing] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [showTopAddTopic, setShowTopAddTopic] = useState(false);
+  const [topAddTopicName, setTopAddTopicName] = useState("");
+  const [topAddTopicType, setTopAddTopicType] = useState("general");
+  const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
   const pollingStartRef = useRef<number | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -543,7 +547,7 @@ export default function MapPage() {
   const activeCategory = categories.find((c) => c.name === effectiveCategory);
 
   const addEntityMutation = useMutation({
-    mutationFn: async (data: { categoryName: string; entityName: string; entityType: string }) => {
+    mutationFn: async (data: { categoryName: string; entityName: string; entityType: string; topicType?: string }) => {
       const res = await apiRequest("POST", "/api/add-entity", data);
       return res.json();
     },
@@ -554,6 +558,50 @@ export default function MapPage() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const newCategoryInputRef = useRef<HTMLInputElement>(null);
+
+  const addCategoryMutation = useMutation({
+    mutationFn: async (data: { categoryName: string }) => {
+      const res = await apiRequest("POST", "/api/add-category", {
+        categoryName: data.categoryName,
+        categoryDescription: "",
+      });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      setSelectedCategory(variables.categoryName);
+      setNewCategoryName("");
+      setShowNewCategoryInput(false);
+      setJustCreatedCategory(variables.categoryName);
+      setTimeout(() => setJustCreatedCategory(null), 8000);
+      toast({ title: "Category created", description: `"${variables.categoryName}" has been added to your workspace.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const handleCreateCategory = () => {
+    const name = newCategoryName.trim();
+    if (!name) return;
+    addCategoryMutation.mutate({ categoryName: name });
+  };
+
+  const handleTopAddTopic = () => {
+    const name = topAddTopicName.trim();
+    if (!name || !effectiveCategory) return;
+    addEntityMutation.mutate({
+      categoryName: effectiveCategory,
+      entityName: name,
+      entityType: "other",
+      topicType: topAddTopicType,
+    });
+    setTopAddTopicName("");
+    setTopAddTopicType("general");
+    setShowTopAddTopic(false);
+  };
 
   const handleNudgeAdd = (name: string) => {
     if (!effectiveCategory) return;
@@ -623,11 +671,62 @@ export default function MapPage() {
     );
   }
 
+  const handleEmptyStateCreateCategory = () => {
+    setShowNewCategoryInput(true);
+    setTimeout(() => newCategoryInputRef.current?.focus(), 100);
+  };
+
   if (categories.length === 0 && !wsLoading) {
     if (pollingState === "timeout") {
       return (
-        <div className="p-8 max-w-4xl mx-auto">
-          <WorkspaceEmptyState onRefresh={handleManualRefresh} isRefreshing={isManualRefreshing} />
+        <div className="p-8 max-w-6xl mx-auto">
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
+            <p className="text-muted-foreground mt-1">0 categories, 0 topics</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3 px-1">Categories</p>
+              {showNewCategoryInput ? (
+                <div className="flex items-center gap-1.5 px-1">
+                  <Input
+                    ref={newCategoryInputRef}
+                    placeholder="Category name"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleCreateCategory();
+                      if (e.key === "Escape") { setShowNewCategoryInput(false); setNewCategoryName(""); }
+                    }}
+                    className="h-8 text-sm flex-1"
+                    data-testid="input-new-category"
+                    autoFocus
+                  />
+                  <button
+                    onClick={handleCreateCategory}
+                    disabled={!newCategoryName.trim() || addCategoryMutation.isPending}
+                    className="text-[#1e3a5f] hover:text-[#1e3a5f]/80 disabled:opacity-40 p-1"
+                    data-testid="button-confirm-new-category"
+                  >
+                    {addCategoryMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleEmptyStateCreateCategory}
+                  className="flex items-center gap-1.5 text-slate-500 hover:text-[#1e3a5f] text-[13px] px-1 py-1 transition-colors"
+                  style={{ fontFamily: "'DM Sans', sans-serif" }}
+                  data-testid="button-new-category"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  New category
+                </button>
+              )}
+            </div>
+            <div className="md:col-span-2">
+              <WorkspaceEmptyState onRefresh={handleManualRefresh} isRefreshing={isManualRefreshing} onCreateCategory={handleEmptyStateCreateCategory} />
+            </div>
+          </div>
         </div>
       );
     }
@@ -720,6 +819,44 @@ export default function MapPage() {
               </button>
             );
           })}
+          {showNewCategoryInput ? (
+            <div className="flex items-center gap-1.5 px-1 mt-1">
+              <Input
+                ref={newCategoryInputRef}
+                placeholder="Category name"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateCategory();
+                  if (e.key === "Escape") { setShowNewCategoryInput(false); setNewCategoryName(""); }
+                }}
+                className="h-8 text-sm flex-1"
+                data-testid="input-new-category"
+                autoFocus
+              />
+              <button
+                onClick={handleCreateCategory}
+                disabled={!newCategoryName.trim() || addCategoryMutation.isPending}
+                className="text-[#1e3a5f] hover:text-[#1e3a5f]/80 disabled:opacity-40 p-1"
+                data-testid="button-confirm-new-category"
+              >
+                {addCategoryMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => {
+                setShowNewCategoryInput(true);
+                setTimeout(() => newCategoryInputRef.current?.focus(), 100);
+              }}
+              className="flex items-center gap-1.5 text-slate-500 hover:text-[#1e3a5f] text-[13px] px-1 py-1 mt-1 transition-colors"
+              style={{ fontFamily: "'DM Sans', sans-serif" }}
+              data-testid="button-new-category"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              New category
+            </button>
+          )}
         </div>
 
         <div className="md:col-span-2">
@@ -730,6 +867,37 @@ export default function MapPage() {
                 <p className="text-sm text-muted-foreground mt-0.5">{activeCategory.description}</p>
               </div>
 
+              {justCreatedCategory === activeCategory.name && activeCategory.entities.length === 0 && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 mb-2 space-y-3" data-testid="text-category-created-prompt">
+                  <p className="text-sm text-emerald-700">
+                    Category created. Add your first topic to <span className="font-medium">{activeCategory.name}</span>.
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Type a topic name..."
+                      value={topAddTopicName}
+                      onChange={(e) => setTopAddTopicName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleTopAddTopic();
+                      }}
+                      className="flex-1 h-8 text-sm bg-white"
+                      data-testid="input-first-topic-name"
+                      autoFocus
+                    />
+                    <Button
+                      size="sm"
+                      className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-4 h-8"
+                      disabled={!topAddTopicName.trim() || addEntityMutation.isPending}
+                      onClick={handleTopAddTopic}
+                      data-testid="button-first-topic-add"
+                    >
+                      {addEntityMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+                      Add
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               {activeCategory.entities.length === 0 ? (
                 <EmptyCategoryNudge
                   categoryName={activeCategory.name}
@@ -738,9 +906,80 @@ export default function MapPage() {
                 />
               ) : (
                 <>
-                  <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground px-1">
-                    Topics ({activeCategory.entities.length})
-                  </p>
+                  <div className="flex items-center justify-between px-1">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                      Topics ({activeCategory.entities.length})
+                    </p>
+                    {!showTopAddTopic && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowTopAddTopic(true)}
+                        className="text-[#1e3a5f] border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/5 rounded-lg text-sm h-8 px-4"
+                        style={{ fontFamily: "'DM Sans', sans-serif", fontSize: "14px" }}
+                        data-testid="button-top-add-topic"
+                      >
+                        <Plus className="w-4 h-4 mr-1" />
+                        Add topic
+                      </Button>
+                    )}
+                  </div>
+
+                  {showTopAddTopic && (
+                    <div className="border border-border rounded-lg p-3 space-y-3 bg-card" data-testid="inline-top-add-topic">
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Topic name"
+                          value={topAddTopicName}
+                          onChange={(e) => setTopAddTopicName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleTopAddTopic();
+                            if (e.key === "Escape") { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); }
+                          }}
+                          className="flex-1 h-9 text-sm"
+                          data-testid="input-top-add-topic-name"
+                          autoFocus
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-1.5" data-testid="pills-top-add-topic-type">
+                        {(["competitor", "regulation", "project", "person", "trend", "technology", "event", "general"] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => setTopAddTopicType(t)}
+                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                              topAddTopicType === t
+                                ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                                : "bg-background text-foreground border-border hover:border-[#1e3a5f]/40"
+                            }`}
+                            data-testid={`pill-top-type-${t}`}
+                          >
+                            {topicTypeMap[t]?.icon} {topicTypeMap[t]?.displayName || t}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-4 h-8"
+                          disabled={!topAddTopicName.trim() || addEntityMutation.isPending}
+                          onClick={handleTopAddTopic}
+                          data-testid="button-top-add-topic-confirm"
+                        >
+                          {addEntityMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+                          Add
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); }}
+                          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                          data-testid="button-top-add-topic-cancel"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     {activeCategory.entities.map((entity) => {

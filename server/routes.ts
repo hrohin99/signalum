@@ -882,7 +882,7 @@ Return only the summary paragraph, no JSON, no formatting.`
   app.post("/api/add-entity", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const { categoryName, entityName, entityType } = req.body;
+      const { categoryName, entityName, entityType, topicType } = req.body;
 
       if (!categoryName || !entityName) {
         return res.status(400).json({ message: "Missing categoryName or entityName" });
@@ -898,6 +898,9 @@ Return only the summary paragraph, no JSON, no formatting.`
 
       const allowedEntityTypes = ["person", "company", "topic", "technology", "regulation", "event", "location", "other"];
       const safeEntityType = (typeof entityType === "string" && allowedEntityTypes.includes(entityType)) ? entityType : "other";
+
+      const validTopicTypesForEntity = ["competitor", "project", "regulation", "person", "trend", "account", "technology", "event", "deal", "risk", "general"];
+      const safeTopicType = (typeof topicType === "string" && validTopicTypesForEntity.includes(topicType.toLowerCase())) ? topicType.toLowerCase() : "general";
 
       const workspace = await storage.getWorkspaceByUserId(userId);
       if (!workspace) {
@@ -915,7 +918,7 @@ Return only the summary paragraph, no JSON, no formatting.`
         return res.status(400).json({ message: "Entity already exists in this category" });
       }
 
-      const newEntity: ExtractedEntity = { name: entityName, type: safeEntityType, topic_type: 'general', related_topic_ids: [], priority: 'medium' };
+      const newEntity: ExtractedEntity = { name: entityName, type: safeEntityType, topic_type: safeTopicType, related_topic_ids: [], priority: 'medium' };
 
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName);
