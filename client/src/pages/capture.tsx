@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, Calendar } from "lucide-react";
+import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, Calendar, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -124,6 +131,8 @@ export default function CapturePage() {
   const [multiMatchConfirmed, setMultiMatchConfirmed] = useState<Set<number>>(new Set());
   const [isConfirmingAll, setIsConfirmingAll] = useState(false);
   const [savingCards, setSavingCards] = useState<Set<number>>(new Set());
+  const [multiMatchCategoryOverrides, setMultiMatchCategoryOverrides] = useState<Record<number, string>>({});
+  const [changingCategoryIndex, setChangingCategoryIndex] = useState<number | null>(null);
 
   const [showPostCreateDateModal, setShowPostCreateDateModal] = useState(false);
   const [postCreateEntityName, setPostCreateEntityName] = useState("");
@@ -140,9 +149,10 @@ export default function CapturePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const hasIntentClassification = classification !== null && 'user_intent' in classification && classification.user_intent;
+  const hasMultiMatch = classification !== null && 'multi_match' in classification && classification.multi_match;
   const { data: workspaceData } = useQuery<{ exists: boolean; workspace: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace/current"],
-    enabled: showManualPicker || hasIntentClassification,
+    enabled: showManualPicker || hasIntentClassification || hasMultiMatch,
   });
 
   const resetState = useCallback(() => {
@@ -163,7 +173,20 @@ export default function CapturePage() {
     setMultiMatchConfirmed(new Set());
     setIsConfirmingAll(false);
     setSavingCards(new Set());
+    setMultiMatchCategoryOverrides({});
+    setChangingCategoryIndex(null);
   }, []);
+
+  const getResolvedCategoryForMatch = useCallback((match: MultiMatchItem, index: number): string | null => {
+    if (multiMatchCategoryOverrides[index]) return multiMatchCategoryOverrides[index];
+    if (match.suggested_category?.name) return match.suggested_category.name;
+    if (match.category) return match.category;
+    const categories = workspaceData?.workspace?.categories || [];
+    const competitorCategory = categories.find(c => c.name.toLowerCase() === "competitor landscape");
+    if (competitorCategory) return competitorCategory.name;
+    if (categories.length > 0) return categories[0].name;
+    return null;
+  }, [multiMatchCategoryOverrides, workspaceData]);
 
   const datePromptTypeLabel = (type: string) => {
     if (type === "regulation") return "regulation";
@@ -361,13 +384,21 @@ export default function CapturePage() {
     const entityName = match.suggested_entity_name;
     if (!entityName) return;
 
-    const categoryName = match.suggested_category?.name || match.category;
-    const categoryDescription = match.suggested_category?.description || "";
-    if (!categoryName) return;
+    let categoryName = getResolvedCategoryForMatch(match, index);
+
+    if (!categoryName) {
+      categoryName = "Competitor Landscape";
+    }
+
+    const isOverridden = !!multiMatchCategoryOverrides[index];
+    const hasSuggestedCategory = !!match.suggested_category && !isOverridden;
+    const categories = workspaceData?.workspace?.categories || [];
+    const categoryExists = categories.some(c => c.name === categoryName);
 
     setSavingCards(prev => new Set(prev).add(index));
     try {
-      if (match.suggested_category) {
+      if (hasSuggestedCategory || !categoryExists) {
+        const categoryDescription = hasSuggestedCategory ? (match.suggested_category?.description || "") : "";
         await apiRequest("POST", "/api/add-category", {
           categoryName,
           categoryDescription,
@@ -427,15 +458,20 @@ export default function CapturePage() {
       try {
         const isNewTopic = !match.entity_id;
         if (isNewTopic && match.suggested_entity_name) {
-          const catName = match.suggested_category?.name || match.category;
+          let catName = getResolvedCategoryForMatch(match, index);
           if (!catName) {
-            failCount++;
-            continue;
+            catName = "Competitor Landscape";
           }
-          if (match.suggested_category) {
+          const isOverridden = !!multiMatchCategoryOverrides[index];
+          const hasSuggestedCategory = !!match.suggested_category && !isOverridden;
+          const allCategories = workspaceData?.workspace?.categories || [];
+          const categoryExists = allCategories.some(c => c.name === catName);
+
+          if (hasSuggestedCategory || !categoryExists) {
+            const categoryDescription = hasSuggestedCategory ? (match.suggested_category?.description || "") : "";
             await apiRequest("POST", "/api/add-category", {
               categoryName: catName,
-              categoryDescription: match.suggested_category.description || "",
+              categoryDescription,
               entityName: match.suggested_entity_name,
               entityType: "topic",
               topicType: match.suggested_topic_type || "general",
@@ -1186,7 +1222,7 @@ export default function CapturePage() {
 
             if (isConfirmedItem) {
               const displayEntity = match.entity_id || match.suggested_entity_name || "topic";
-              const displayCategory = match.category || match.suggested_category?.name || "category";
+              const displayCategory = multiMatchCategoryOverrides[index] || match.category || match.suggested_category?.name || getResolvedCategoryForMatch(match, index) || "category";
               return (
                 <div key={index} className="border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20 rounded-md p-4" data-testid={`multi-match-card-confirmed-${index}`}>
                   <div className="flex items-center gap-2">
@@ -1213,12 +1249,56 @@ export default function CapturePage() {
                             <Plus className="w-3 h-3 mr-1" />
                             {match.suggested_entity_name || "New topic"}
                           </Badge>
-                          {match.suggested_category && (
-                            <>
-                              <span className="text-sm text-muted-foreground">in new category</span>
-                              <Badge variant="outline">{match.suggested_category.name}</Badge>
-                            </>
-                          )}
+                          {(() => {
+                            const resolvedCategory = getResolvedCategoryForMatch(match, index);
+                            const displayCat = resolvedCategory || "Competitor Landscape";
+                            const isSuggested = !!match.suggested_category && !multiMatchCategoryOverrides[index];
+                            return (
+                              <>
+                                <span className="text-sm text-muted-foreground">
+                                  {isSuggested ? "in new category" : "in"}
+                                </span>
+                                {changingCategoryIndex === index ? (
+                                  <div className="flex items-center gap-2" data-testid={`select-category-change-${index}`}>
+                                    <Select
+                                      value={multiMatchCategoryOverrides[index] || displayCat}
+                                      onValueChange={(value) => {
+                                        setMultiMatchCategoryOverrides(prev => ({ ...prev, [index]: value }));
+                                        setChangingCategoryIndex(null);
+                                      }}
+                                    >
+                                      <SelectTrigger className="h-7 text-xs w-auto min-w-[140px]">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {(workspaceData?.workspace?.categories || []).map(cat => (
+                                          <SelectItem key={cat.name} value={cat.name}>{cat.name}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <button
+                                      className="text-xs text-muted-foreground hover:text-foreground"
+                                      onClick={() => setChangingCategoryIndex(null)}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <Badge variant="outline" data-testid={`badge-category-${index}`}>{displayCat}</Badge>
+                                    <button
+                                      className="text-xs text-[#1e3a5f] hover:underline flex items-center gap-0.5"
+                                      onClick={() => setChangingCategoryIndex(index)}
+                                      data-testid={`button-change-category-${index}`}
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                      Change
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
                         </>
                       ) : (
                         <>
