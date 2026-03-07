@@ -1,0 +1,19 @@
+"Redesign the Watchloom landing page with the following changes. Keep navy #1e3a5f, existing fonts, all authenticated app screens, routing, and backend completely unchanged.RULES: No em dashes anywhere. No unverified stats. No 'first 50 users' language.---ANIMATIONS: Add these globally using CSS only (no JS animation libraries):
+- All sections: fade up on scroll using Intersection Observer. Each section starts opacity 0, translateY 30px, transitions to opacity 1, translateY 0 over 0.6s ease-out when it enters the viewport.
+- Stagger child elements within sections with animation-delay increments of 0.1s per child.
+- Hero headline: each word fades in sequentially on page load, 0.08s stagger per word.
+- Stats bar numbers: count up from 0 to their value over 1.5s when scrolled into view.
+- Feature cards: subtle lift on hover — translateY -4px, box-shadow deepens, 0.2s ease.
+- Topic pill strip: continuous horizontal scroll animation, pauses on hover.
+- Tab switcher in product demo: smooth 250ms crossfade between panels.
+- Nav: adds subtle backdrop blur and border-bottom shadow when user scrolls past 60px.---SECTION 1 — NAVBAR: Keep existing logo and Sign In button. Replace nav links with: How it works, Features (triggers a dropdown), Pricing. The Features dropdown is Snagit-style: a wide panel that opens on hover, left side shows a product screenshot of the Watchloom workspace (use a styled placeholder div in navy showing a mini workspace mockup), right side has two columns:Column 1 header "For Competitors":
+Battlecards — Ready for your next sales conversation
+Capability Matrix — Compare features across every competitor
+Pricing Intelligence — Track pricing changes over time
+Hiring Signals — Know where they are investing
+Strategic Direction — Understand where they are headingColumn 2 header "For Everything Else":
+Regulations and Deadlines — Never miss a compliance date
+Industry Trends — Stay ahead of market shifts
+Key Accounts — Track what matters to your customers
+Daily Brief — One morning email with the so what
+Coming Soon badge next to: AI Visibility, Email Capture, SearchDropdown appears on hover, disappears on mouse leave, smooth 0.2s fade.
