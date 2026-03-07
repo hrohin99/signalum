@@ -2840,5 +2840,205 @@ Rules:
     }
   });
 
+  app.get("/api/capabilities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const capabilities = await storage.getWorkspaceCapabilities(tenantId);
+      return res.json({ capabilities });
+    } catch (error: any) {
+      console.error("Get capabilities error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/capabilities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { name } = req.body;
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ message: "Capability name is required" });
+      }
+      const existing = await storage.getWorkspaceCapabilities(tenantId);
+      if (existing.length >= 12) {
+        return res.status(400).json({ message: "Maximum of 12 capabilities allowed" });
+      }
+      const capability = await storage.createWorkspaceCapability({
+        tenantId,
+        name: name.trim(),
+        displayOrder: existing.length,
+      });
+      return res.json({ capability });
+    } catch (error: any) {
+      console.error("Create capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/capabilities/reorder", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { orderedIds } = req.body;
+      if (!Array.isArray(orderedIds)) {
+        return res.status(400).json({ message: "orderedIds array is required" });
+      }
+      await storage.reorderWorkspaceCapabilities(tenantId, orderedIds);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Reorder capabilities error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/capabilities/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { name } = req.body;
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ message: "Capability name is required" });
+      }
+      const updated = await storage.updateWorkspaceCapability(req.params.id, tenantId, { name: name.trim() });
+      if (!updated) {
+        return res.status(404).json({ message: "Capability not found" });
+      }
+      return res.json({ capability: updated });
+    } catch (error: any) {
+      console.error("Update capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/capabilities/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const deleted = await storage.deleteWorkspaceCapability(req.params.id, tenantId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Capability not found" });
+      }
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/competitor-capabilities/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const caps = await storage.getCompetitorCapabilities(tenantId, decodeURIComponent(req.params.entityId));
+      return res.json({ competitorCapabilities: caps });
+    } catch (error: any) {
+      console.error("Get competitor capabilities error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/competitor-capabilities/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { capabilityId, status, evidence } = req.body;
+      if (!capabilityId || !status) {
+        return res.status(400).json({ message: "capabilityId and status are required" });
+      }
+      const validStatuses = ["yes", "no", "partial", "unknown"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: "Invalid status. Must be: yes, no, partial, or unknown" });
+      }
+      const result = await storage.upsertCompetitorCapability(
+        tenantId,
+        decodeURIComponent(req.params.entityId),
+        capabilityId,
+        status,
+        evidence !== undefined ? evidence : null
+      );
+      return res.json({ competitorCapability: result });
+    } catch (error: any) {
+      console.error("Upsert competitor capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/all-competitor-capabilities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const caps = await storage.getAllCompetitorCapabilities(tenantId);
+      return res.json({ competitorCapabilities: caps });
+    } catch (error: any) {
+      console.error("Get all competitor capabilities error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/capabilities/suggest", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      let primaryDomain = "technology";
+      try {
+        const wsContext = await storage.getWorkspaceContext(tenantId);
+        if (wsContext?.primaryDomain) {
+          primaryDomain = wsContext.primaryDomain;
+        }
+      } catch (err) {
+        console.error("Failed to fetch workspace context for suggestions:", err);
+      }
+
+      const anthropic = getAnthropicClient();
+      const response = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 200,
+        messages: [{
+          role: "user",
+          content: `You are helping a user set up competitive intelligence capabilities for their market. Their primary domain is: "${primaryDomain}".
+
+Suggest exactly 3 short, specific market capabilities relevant to this domain. Each should be a concise capability name (2-5 words) that a company in this market might or might not have.
+
+Examples for cybersecurity: "Passive liveness detection", "Real-time threat monitoring", "Zero-trust architecture"
+Examples for fintech: "Instant settlements", "Multi-currency support", "Open banking APIs"
+
+Return ONLY a JSON array of 3 strings. No explanation.`
+        }]
+      });
+
+      const text = response.content[0].type === "text" ? response.content[0].text : "";
+      let suggestions: string[] = [];
+      try {
+        const match = text.match(/\[[\s\S]*\]/);
+        if (match) {
+          suggestions = JSON.parse(match[0]);
+        }
+      } catch {
+        suggestions = ["Real-time analytics", "API integrations", "Enterprise SSO"];
+      }
+
+      return res.json({ suggestions: suggestions.slice(0, 3) });
+    } catch (error: any) {
+      console.error("Suggest capabilities error:", error);
+      return res.json({ suggestions: ["Real-time analytics", "API integrations", "Enterprise SSO"] });
+    }
+  });
+
+  app.post("/api/capabilities/detect", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { content } = req.body;
+      if (!content) {
+        return res.json({ matches: [] });
+      }
+      const capabilities = await storage.getWorkspaceCapabilities(tenantId);
+      if (capabilities.length === 0) {
+        return res.json({ matches: [] });
+      }
+
+      const contentLower = content.toLowerCase();
+      const matches = capabilities.filter(cap =>
+        contentLower.includes(cap.name.toLowerCase())
+      );
+
+      return res.json({ matches: matches.map(m => ({ id: m.id, name: m.name })) });
+    } catch (error: any) {
+      console.error("Detect capabilities error:", error);
+      return res.json({ matches: [] });
+    }
+  });
+
   return httpServer;
 }

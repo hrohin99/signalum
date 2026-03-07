@@ -5,6 +5,12 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   FolderOpen,
   Tag,
   ChevronRight,
@@ -14,11 +20,14 @@ import {
   Shield,
   Check,
   RefreshCw,
+  BarChart3,
+  Download,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, Capture, TopicDate } from "@shared/schema";
+import type { ExtractedCategory, ExtractedEntity, Capture, TopicDate, WorkspaceCapability, CompetitorCapability } from "@shared/schema";
 
 interface TopicDateWithDaysUntil extends TopicDate {
   days_until: number;
@@ -342,6 +351,7 @@ export default function MapPage() {
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showTopAddTopic, setShowTopAddTopic] = useState(false);
+  const [showCompareModal, setShowCompareModal] = useState(false);
   const [topAddTopicName, setTopAddTopicName] = useState("");
   const [topAddTopicType, setTopAddTopicType] = useState("general");
   const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
@@ -743,12 +753,32 @@ export default function MapPage() {
       {showWelcome && <WelcomeModal onDismiss={handleDismissWelcome} />}
       {seedingActive && <SeedingBanner />}
 
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
-        <p className="text-muted-foreground mt-1">
-          {categories.length} categories, {categories.reduce((a, c) => a + c.entities.length, 0)} topics, {captures.length} updates
-        </p>
+      <div className="mb-8 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
+          <p className="text-muted-foreground mt-1">
+            {categories.length} categories, {categories.reduce((a, c) => a + c.entities.length, 0)} topics, {captures.length} updates
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowCompareModal(true)}
+          className="gap-1.5 text-[#1e3a5f] border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/5"
+          data-testid="button-compare"
+        >
+          <BarChart3 className="w-4 h-4" />
+          Compare
+        </Button>
       </div>
+
+      {showCompareModal && (
+        <CompareModal
+          categories={categories}
+          open={showCompareModal}
+          onOpenChange={setShowCompareModal}
+        />
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="space-y-2">
@@ -1040,6 +1070,194 @@ export default function MapPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+const compareStatusConfig: Record<string, { emoji: string; label: string; bgClass: string; textClass: string }> = {
+  yes: { emoji: "\u2705", label: "Yes", bgClass: "bg-green-100", textClass: "text-green-800" },
+  no: { emoji: "\u274C", label: "No", bgClass: "bg-red-100", textClass: "text-red-800" },
+  partial: { emoji: "\u26A0\uFE0F", label: "Partial", bgClass: "bg-amber-100", textClass: "text-amber-800" },
+  unknown: { emoji: "\u2753", label: "Unknown", bgClass: "bg-slate-100", textClass: "text-slate-500" },
+};
+
+function CompareModal({
+  categories,
+  open,
+  onOpenChange,
+}: {
+  categories: ExtractedCategory[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { toast } = useToast();
+  const tableRef = useRef<HTMLDivElement>(null);
+
+  const { data: capData } = useQuery<{ capabilities: WorkspaceCapability[] }>({
+    queryKey: ["/api/capabilities"],
+  });
+
+  const { data: allCompCaps } = useQuery<{ competitorCapabilities: CompetitorCapability[] }>({
+    queryKey: ["/api/all-competitor-capabilities"],
+  });
+
+  const { data: productData } = useQuery<{ productContext: any }>({
+    queryKey: ["/api/product-context"],
+  });
+
+  const capabilities = capData?.capabilities || [];
+  const competitorCaps = allCompCaps?.competitorCapabilities || [];
+
+  const competitors = categories.flatMap(cat =>
+    cat.entities
+      .filter(e => (e.topic_type || "general").toLowerCase() === "competitor")
+      .map(e => ({ name: e.name, categoryName: cat.name }))
+  );
+
+  const myProductName = productData?.productContext?.productName || "My Product";
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ entityId, capabilityId, status }: { entityId: string; capabilityId: string; status: string }) => {
+      const res = await apiRequest("PUT", `/api/competitor-capabilities/${encodeURIComponent(entityId)}`, {
+        capabilityId,
+        status,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/all-competitor-capabilities"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const getStatus = (entityId: string, capId: string) => {
+    const found = competitorCaps.find(cc => cc.entityId === entityId && cc.capabilityId === capId);
+    return found?.status || "unknown";
+  };
+
+  const handleExportImage = async () => {
+    if (!tableRef.current) return;
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const canvas = await html2canvas(tableRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+      });
+      const link = document.createElement("a");
+      link.download = "capability-comparison.png";
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+      toast({ title: "Exported", description: "Comparison saved as PNG." });
+    } catch (err) {
+      toast({ title: "Export failed", description: "Could not export the comparison.", variant: "destructive" });
+    }
+  };
+
+  if (capabilities.length === 0) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Capability Comparison</DialogTitle>
+          </DialogHeader>
+          <div className="py-8 text-center">
+            <p className="text-muted-foreground">No capabilities defined yet. Add capabilities in Settings to compare.</p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  const columns = [
+    { id: "__my_product__", name: myProductName, isMyProduct: true },
+    ...competitors.map(c => ({ id: c.name, name: c.name, isMyProduct: false })),
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-auto p-0">
+        <div className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-semibold text-foreground" data-testid="text-compare-title">Capability Comparison</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">Compare capabilities across your product and competitors.</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportImage}
+              className="gap-1.5"
+              data-testid="button-export-comparison"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Export as image
+            </Button>
+          </div>
+
+          <div ref={tableRef} className="overflow-x-auto">
+            <table className="w-full border-collapse min-w-[600px]" data-testid="table-comparison">
+              <thead>
+                <tr>
+                  <th className="text-left text-xs font-medium text-muted-foreground px-3 py-2 border-b border-border bg-slate-50 min-w-[180px]">
+                    Capability
+                  </th>
+                  {columns.map((col) => (
+                    <th
+                      key={col.id}
+                      className={`text-center text-xs font-medium px-3 py-2 border-b border-border min-w-[120px] ${
+                        col.isMyProduct ? "bg-[#1e3a5f] text-white" : "bg-slate-50 text-muted-foreground"
+                      }`}
+                      data-testid={`header-${col.id}`}
+                    >
+                      {col.name}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {capabilities.map((cap) => (
+                  <tr key={cap.id} className="border-b border-border/50 last:border-0">
+                    <td className="text-sm font-medium text-foreground px-3 py-3 bg-white">
+                      {cap.name}
+                    </td>
+                    {columns.map((col) => {
+                      const status = getStatus(col.id, cap.id);
+                      const cfg = compareStatusConfig[status] || compareStatusConfig.unknown;
+                      return (
+                        <td key={col.id} className="text-center px-3 py-3 bg-white">
+                          <div className="flex justify-center gap-1">
+                            {(["yes", "no", "partial", "unknown"] as const).map((s) => {
+                              const sCfg = compareStatusConfig[s];
+                              const isActive = status === s;
+                              return (
+                                <button
+                                  key={s}
+                                  onClick={() => updateMutation.mutate({ entityId: col.id, capabilityId: cap.id, status: s })}
+                                  className={`w-7 h-7 rounded-full text-xs flex items-center justify-center transition-all ${
+                                    isActive
+                                      ? `${sCfg.bgClass} ${sCfg.textClass} ring-1 ring-current/20`
+                                      : "bg-transparent text-slate-300 hover:bg-slate-100 hover:text-slate-500"
+                                  }`}
+                                  title={sCfg.label}
+                                  data-testid={`compare-status-${col.id}-${cap.id}-${s}`}
+                                >
+                                  {sCfg.emoji}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

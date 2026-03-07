@@ -299,6 +299,46 @@ export const insertFeedbackSchema = createInsertSchema(feedback).omit({
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 export type Feedback = typeof feedback.$inferSelect;
 
+export const workspaceCapabilities = pgTable("workspace_capabilities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  name: text("name").notNull(),
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("workspace_capabilities_tenant_id_idx").on(table.tenantId),
+]);
+
+export const insertWorkspaceCapabilitySchema = createInsertSchema(workspaceCapabilities).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertWorkspaceCapability = z.infer<typeof insertWorkspaceCapabilitySchema>;
+export type WorkspaceCapability = typeof workspaceCapabilities.$inferSelect;
+
+export const competitorCapabilities = pgTable("competitor_capabilities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  entityId: text("entity_id").notNull(),
+  capabilityId: uuid("capability_id").notNull(),
+  status: text("status").notNull().default("unknown"),
+  evidence: text("evidence"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  unique("competitor_capabilities_entity_capability").on(table.entityId, table.capabilityId),
+  index("competitor_capabilities_tenant_id_idx").on(table.tenantId),
+  index("competitor_capabilities_entity_id_idx").on(table.entityId),
+]);
+
+export const insertCompetitorCapabilitySchema = createInsertSchema(competitorCapabilities).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertCompetitorCapability = z.infer<typeof insertCompetitorCapabilitySchema>;
+export type CompetitorCapability = typeof competitorCapabilities.$inferSelect;
+
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull(),

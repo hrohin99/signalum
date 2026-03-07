@@ -154,6 +154,8 @@ export default function CapturePage() {
   const [dismissedDateIndices, setDismissedDateIndices] = useState<Set<number>>(new Set());
   const [trackingDateIndex, setTrackingDateIndex] = useState<number | null>(null);
 
+  const [capabilityPrompt, setCapabilityPrompt] = useState<{ capabilityName: string; capabilityId: string; entityName: string } | null>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -161,9 +163,10 @@ export default function CapturePage() {
 
   const hasIntentClassification = classification !== null && 'user_intent' in classification && classification.user_intent;
   const hasMultiMatch = classification !== null && 'multi_match' in classification && classification.multi_match;
+  const hasClassification = classification !== null;
   const { data: workspaceData } = useQuery<{ exists: boolean; workspace: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace/current"],
-    enabled: showManualPicker || hasIntentClassification || hasMultiMatch,
+    enabled: showManualPicker || hasIntentClassification || hasMultiMatch || hasClassification,
   });
 
   const resetState = useCallback(() => {
@@ -190,6 +193,7 @@ export default function CapturePage() {
     setTrackedDateIndices(new Set());
     setDismissedDateIndices(new Set());
     setTrackingDateIndex(null);
+    setCapabilityPrompt(null);
   }, []);
 
   const getResolvedCategoryForMatch = useCallback((match: MultiMatchItem, index: number): string | null => {
@@ -367,6 +371,46 @@ export default function CapturePage() {
     }
   };
 
+  const checkCapabilityMention = async (content: string, entityName: string) => {
+    try {
+      const res = await apiRequest("POST", "/api/capabilities/detect", { content });
+      const data = await res.json();
+      if (data.matches && data.matches.length > 0) {
+        const firstMatch = data.matches[0];
+        setCapabilityPrompt({ capabilityName: firstMatch.name, capabilityId: firstMatch.id, entityName });
+      }
+    } catch (err) {
+    }
+  };
+
+  const handleCapabilityStatusSelect = async (status: string) => {
+    if (!capabilityPrompt) return;
+    try {
+      await apiRequest("PUT", `/api/competitor-capabilities/${encodeURIComponent(capabilityPrompt.entityName)}`, {
+        capabilityId: capabilityPrompt.capabilityId,
+        status,
+      });
+      toast({
+        title: "Capability updated",
+        description: `${capabilityPrompt.capabilityName} set to ${status} for ${capabilityPrompt.entityName}.`,
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+    } catch (err) {
+    }
+    setCapabilityPrompt(null);
+  };
+
+  const isCompetitorTopic = (entityName: string) => {
+    const categories = workspaceData?.workspace?.categories || [];
+    for (const cat of categories) {
+      const entity = cat.entities.find(e => e.name === entityName);
+      if (entity && (entity.topic_type || "general").toLowerCase() === "competitor") {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const handleConfirmCapture = async (entity?: string, category?: string) => {
     if (!pendingContent) return;
     const matchedEntity = entity || (classification?.matched ? classification.matchedEntity : "");
@@ -388,6 +432,10 @@ export default function CapturePage() {
         title: "Captured",
         description: `Saved to ${matchedEntity} in ${matchedCategory}.`,
       });
+
+      if (matchedEntity && isCompetitorTopic(matchedEntity)) {
+        await checkCapabilityMention(pendingContent, matchedEntity);
+      }
 
       resetState();
       setActiveType(null);
@@ -1709,6 +1757,40 @@ export default function CapturePage() {
           <p className="text-muted-foreground">
             Select a capture type above to get started.
           </p>
+        </div>
+      )}
+
+      {capabilityPrompt && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white border border-border shadow-xl rounded-xl p-4 max-w-md w-full animate-in slide-in-from-bottom-4" data-testid="capability-detection-prompt">
+          <div className="flex items-start justify-between mb-3">
+            <p className="text-sm text-foreground">
+              This capture mentions <span className="font-semibold text-[#1e3a5f]">{capabilityPrompt.capabilityName}</span>. Update <span className="font-semibold">{capabilityPrompt.entityName}</span>'s capability status?
+            </p>
+            <button
+              onClick={() => setCapabilityPrompt(null)}
+              className="text-slate-400 hover:text-slate-600 ml-2 shrink-0"
+              data-testid="button-dismiss-capability-prompt"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            {([
+              { status: "yes", emoji: "\u2705", label: "Yes", bgClass: "bg-green-100 hover:bg-green-200 text-green-800" },
+              { status: "no", emoji: "\u274C", label: "No", bgClass: "bg-red-100 hover:bg-red-200 text-red-800" },
+              { status: "partial", emoji: "\u26A0\uFE0F", label: "Partial", bgClass: "bg-amber-100 hover:bg-amber-200 text-amber-800" },
+              { status: "unknown", emoji: "\u2753", label: "Unknown", bgClass: "bg-slate-100 hover:bg-slate-200 text-slate-600" },
+            ] as const).map((opt) => (
+              <button
+                key={opt.status}
+                onClick={() => handleCapabilityStatusSelect(opt.status)}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${opt.bgClass}`}
+                data-testid={`button-capability-status-${opt.status}`}
+              >
+                {opt.emoji} {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

@@ -52,9 +52,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl } from "@shared/schema";
+import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability } from "@shared/schema";
 import { ComingSoonCard } from "@/components/coming-soon-card";
-import { Eye } from "lucide-react";
+import { Eye, Crosshair } from "lucide-react";
 
 function detectMultipleEntities(name: string): string[] | null {
   if (!name.includes(",")) return null;
@@ -309,6 +309,9 @@ function TopicViewContent({
             widgetConfig={widgetConfig}
             allCaptures={allCaptures}
           />
+          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
+            <CompetitorCapabilitiesCard entityName={entity.name} />
+          )}
         </div>
 
         <div className="lg:w-[35%] space-y-6">
@@ -1039,6 +1042,173 @@ function QuickStatsWidget({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+const statusConfig: Record<string, { emoji: string; label: string; bgClass: string; textClass: string }> = {
+  yes: { emoji: "\u2705", label: "Yes", bgClass: "bg-green-100", textClass: "text-green-800" },
+  no: { emoji: "\u274C", label: "No", bgClass: "bg-red-100", textClass: "text-red-800" },
+  partial: { emoji: "\u26A0\uFE0F", label: "Partial", bgClass: "bg-amber-100", textClass: "text-amber-800" },
+  unknown: { emoji: "\u2753", label: "Unknown", bgClass: "bg-slate-100", textClass: "text-slate-500" },
+};
+
+function CompetitorCapabilitiesCard({ entityName }: { entityName: string }) {
+  const { toast } = useToast();
+  const entityId = entityName;
+
+  const { data: capData } = useQuery<{ capabilities: WorkspaceCapability[] }>({
+    queryKey: ["/api/capabilities"],
+  });
+
+  const { data: compCapData } = useQuery<{ competitorCapabilities: CompetitorCapability[] }>({
+    queryKey: ["/api/competitor-capabilities", entityId],
+  });
+
+  const capabilities = capData?.capabilities || [];
+  const competitorCaps = compCapData?.competitorCapabilities || [];
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ capabilityId, status, evidence }: { capabilityId: string; status: string; evidence?: string | null }) => {
+      const res = await apiRequest("PUT", `/api/competitor-capabilities/${encodeURIComponent(entityId)}`, {
+        capabilityId,
+        status,
+        evidence,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/competitor-capabilities", entityId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/all-competitor-capabilities"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  if (capabilities.length === 0) {
+    return null;
+  }
+
+  const getCapStatus = (capId: string) => {
+    const found = competitorCaps.find(cc => cc.capabilityId === capId);
+    return found?.status || "unknown";
+  };
+
+  const getCapEvidence = (capId: string) => {
+    const found = competitorCaps.find(cc => cc.capabilityId === capId);
+    return found?.evidence || "";
+  };
+
+  const getCapUpdatedAt = (capId: string) => {
+    const found = competitorCaps.find(cc => cc.capabilityId === capId);
+    if (!found?.updatedAt) return null;
+    return new Date(found.updatedAt);
+  };
+
+  return (
+    <Card data-testid="card-competitor-capabilities">
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Crosshair className="w-4 h-4 text-[#1e3a5f]" />
+          <span className="text-sm font-semibold text-[#1e3a5f]">Capabilities</span>
+        </div>
+
+        <div className="space-y-3">
+          {capabilities.map((cap) => {
+            const currentStatus = getCapStatus(cap.id);
+            const evidence = getCapEvidence(cap.id);
+            const updatedAt = getCapUpdatedAt(cap.id);
+
+            return (
+              <CapabilityRow
+                key={cap.id}
+                cap={cap}
+                currentStatus={currentStatus}
+                evidence={evidence}
+                updatedAt={updatedAt}
+                onStatusChange={(status) => updateMutation.mutate({ capabilityId: cap.id, status })}
+                onEvidenceChange={(ev) => updateMutation.mutate({ capabilityId: cap.id, status: currentStatus, evidence: ev })}
+              />
+            );
+          })}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function CapabilityRow({
+  cap,
+  currentStatus,
+  evidence,
+  updatedAt,
+  onStatusChange,
+  onEvidenceChange,
+}: {
+  cap: WorkspaceCapability;
+  currentStatus: string;
+  evidence: string;
+  updatedAt: Date | null;
+  onStatusChange: (status: string) => void;
+  onEvidenceChange: (evidence: string) => void;
+}) {
+  const [localEvidence, setLocalEvidence] = useState(evidence);
+
+  useEffect(() => {
+    setLocalEvidence(evidence);
+  }, [evidence]);
+
+  return (
+    <div className="border border-border/50 rounded-lg p-3" data-testid={`capability-row-${cap.id}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-foreground">{cap.name}</span>
+        {updatedAt && (
+          <span className="text-[10px] text-slate-400" data-testid={`capability-updated-${cap.id}`}>
+            Updated {updatedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </span>
+        )}
+      </div>
+      <div className="flex gap-1.5 mb-2">
+        {(["yes", "no", "partial", "unknown"] as const).map((s) => {
+          const cfg = statusConfig[s];
+          const isActive = currentStatus === s;
+          return (
+            <button
+              key={s}
+              onClick={() => onStatusChange(s)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                isActive
+                  ? `${cfg.bgClass} ${cfg.textClass} ring-1 ring-current/20`
+                  : "bg-slate-50 text-slate-400 hover:bg-slate-100"
+              }`}
+              data-testid={`capability-status-${cap.id}-${s}`}
+            >
+              {cfg.emoji} {cfg.label}
+            </button>
+          );
+        })}
+      </div>
+      {currentStatus !== "unknown" && (
+        <input
+          type="text"
+          value={localEvidence}
+          onChange={(e) => setLocalEvidence(e.target.value)}
+          onBlur={() => {
+            if (localEvidence !== evidence) {
+              onEvidenceChange(localEvidence);
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          placeholder="Add a note or source..."
+          className="w-full text-xs bg-slate-50 border border-border/50 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]/30 placeholder:text-slate-300"
+          data-testid={`capability-evidence-${cap.id}`}
+        />
+      )}
+    </div>
   );
 }
 

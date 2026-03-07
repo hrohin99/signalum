@@ -1,7 +1,7 @@
-import { eq, desc, and, lt, gte, sql } from "drizzle-orm";
+import { eq, desc, and, lt, gte, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability } from "@shared/schema";
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -59,6 +59,14 @@ export interface IStorage {
   getCaptureCountByUser(userId: string): Promise<number>;
   updateWeeklyDigest(userId: string, enabled: boolean): Promise<void>;
   getUsersWithWeeklyDigest(): Promise<UserProfile[]>;
+  getWorkspaceCapabilities(tenantId: string): Promise<WorkspaceCapability[]>;
+  createWorkspaceCapability(data: InsertWorkspaceCapability): Promise<WorkspaceCapability>;
+  updateWorkspaceCapability(id: string, tenantId: string, data: Partial<InsertWorkspaceCapability>): Promise<WorkspaceCapability | undefined>;
+  deleteWorkspaceCapability(id: string, tenantId: string): Promise<boolean>;
+  reorderWorkspaceCapabilities(tenantId: string, orderedIds: string[]): Promise<void>;
+  getCompetitorCapabilities(tenantId: string, entityId: string): Promise<CompetitorCapability[]>;
+  getAllCompetitorCapabilities(tenantId: string): Promise<CompetitorCapability[]>;
+  upsertCompetitorCapability(tenantId: string, entityId: string, capabilityId: string, status: string, evidence?: string | null): Promise<CompetitorCapability>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -506,6 +514,92 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(userProfiles)
       .where(eq(userProfiles.weeklyDigestEnabled, 1));
+  }
+
+  async getWorkspaceCapabilities(tenantId: string): Promise<WorkspaceCapability[]> {
+    return db
+      .select()
+      .from(workspaceCapabilities)
+      .where(eq(workspaceCapabilities.tenantId, tenantId))
+      .orderBy(asc(workspaceCapabilities.displayOrder));
+  }
+
+  async createWorkspaceCapability(data: InsertWorkspaceCapability): Promise<WorkspaceCapability> {
+    const [created] = await db
+      .insert(workspaceCapabilities)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async updateWorkspaceCapability(id: string, tenantId: string, data: Partial<InsertWorkspaceCapability>): Promise<WorkspaceCapability | undefined> {
+    const [updated] = await db
+      .update(workspaceCapabilities)
+      .set(data)
+      .where(and(eq(workspaceCapabilities.id, id), eq(workspaceCapabilities.tenantId, tenantId)))
+      .returning();
+    return updated;
+  }
+
+  async deleteWorkspaceCapability(id: string, tenantId: string): Promise<boolean> {
+    const result = await db
+      .delete(workspaceCapabilities)
+      .where(and(eq(workspaceCapabilities.id, id), eq(workspaceCapabilities.tenantId, tenantId)))
+      .returning();
+    return result.length > 0;
+  }
+
+  async reorderWorkspaceCapabilities(tenantId: string, orderedIds: string[]): Promise<void> {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db
+        .update(workspaceCapabilities)
+        .set({ displayOrder: i })
+        .where(and(eq(workspaceCapabilities.id, orderedIds[i]), eq(workspaceCapabilities.tenantId, tenantId)));
+    }
+  }
+
+  async getCompetitorCapabilities(tenantId: string, entityId: string): Promise<CompetitorCapability[]> {
+    return db
+      .select()
+      .from(competitorCapabilities)
+      .where(and(eq(competitorCapabilities.tenantId, tenantId), eq(competitorCapabilities.entityId, entityId)));
+  }
+
+  async getAllCompetitorCapabilities(tenantId: string): Promise<CompetitorCapability[]> {
+    return db
+      .select()
+      .from(competitorCapabilities)
+      .where(eq(competitorCapabilities.tenantId, tenantId));
+  }
+
+  async upsertCompetitorCapability(tenantId: string, entityId: string, capabilityId: string, status: string, evidence?: string | null): Promise<CompetitorCapability> {
+    const existing = await db
+      .select()
+      .from(competitorCapabilities)
+      .where(and(
+        eq(competitorCapabilities.tenantId, tenantId),
+        eq(competitorCapabilities.entityId, entityId),
+        eq(competitorCapabilities.capabilityId, capabilityId)
+      ));
+
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(competitorCapabilities)
+        .set({ status, evidence: evidence ?? existing[0].evidence, updatedAt: new Date() })
+        .where(and(
+          eq(competitorCapabilities.tenantId, tenantId),
+          eq(competitorCapabilities.entityId, entityId),
+          eq(competitorCapabilities.capabilityId, capabilityId)
+        ))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(competitorCapabilities)
+        .values({ tenantId, entityId, capabilityId, status, evidence })
+        .returning();
+      return created;
+    }
   }
 }
 

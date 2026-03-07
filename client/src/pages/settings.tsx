@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -9,8 +9,278 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, User, Pencil, Package, Mail, Search, Bell } from "lucide-react";
+import { LogOut, User, Pencil, Package, Mail, Search, Bell, GripVertical, X, Plus, Loader2, Crosshair } from "lucide-react";
 import { ComingSoonCard } from "@/components/coming-soon-card";
+import type { WorkspaceCapability } from "@shared/schema";
+
+function CapabilitiesCard() {
+  const { toast } = useToast();
+  const [newCapName, setNewCapName] = useState("");
+  const [showAddInput, setShowAddInput] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  const { data: capData, isLoading } = useQuery<{ capabilities: WorkspaceCapability[] }>({
+    queryKey: ["/api/capabilities"],
+  });
+
+  const { data: suggestionsData, isLoading: suggestionsLoading } = useQuery<{ suggestions: string[] }>({
+    queryKey: ["/api/capabilities/suggest"],
+    queryFn: async () => {
+      const res = await apiRequest("POST", "/api/capabilities/suggest", {});
+      return res.json();
+    },
+    enabled: !isLoading && (!capData?.capabilities || capData.capabilities.length === 0),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const capabilities = capData?.capabilities || [];
+
+  const addMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiRequest("POST", "/api/capabilities", { name });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/capabilities"] });
+      setNewCapName("");
+      setShowAddInput(false);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const res = await apiRequest("PUT", `/api/capabilities/${id}`, { name });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/capabilities"] });
+      setEditingId(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/capabilities/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/capabilities"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      await apiRequest("PUT", "/api/capabilities/reorder", { orderedIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/capabilities"] });
+    },
+  });
+
+  const handleAdd = () => {
+    if (newCapName.trim()) {
+      addMutation.mutate(newCapName.trim());
+    }
+  };
+
+  const handleSuggestionClick = (suggestion: string) => {
+    addMutation.mutate(suggestion);
+  };
+
+  const handleEditSave = () => {
+    if (editingId && editingName.trim()) {
+      updateMutation.mutate({ id: editingId, name: editingName.trim() });
+    }
+  };
+
+  const handleDragStart = (index: number) => {
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = (index: number) => {
+    if (dragIndex === null || dragIndex === index) {
+      setDragIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const items = [...capabilities];
+    const [moved] = items.splice(dragIndex, 1);
+    items.splice(index, 0, moved);
+    reorderMutation.mutate(items.map(i => i.id));
+    setDragIndex(null);
+    setDragOverIndex(null);
+  };
+
+  useEffect(() => {
+    if (showAddInput && addInputRef.current) {
+      addInputRef.current.focus();
+    }
+  }, [showAddInput]);
+
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      editInputRef.current.focus();
+    }
+  }, [editingId]);
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center gap-4 mb-2">
+          <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
+            <Crosshair className="w-5 h-5 text-[#1e3a5f]" />
+          </div>
+          <div>
+            <h3 className="font-medium text-foreground" data-testid="text-capabilities-header">Market Capabilities</h3>
+            <p className="text-sm text-[#1e3a5f]">Define the capabilities that matter in your market. Watchloom will track these across all your competitors.</p>
+          </div>
+        </div>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <div className="mt-4 space-y-1">
+            {capabilities.length === 0 && !showAddInput && (
+              <div className="space-y-3">
+                {suggestionsLoading ? (
+                  <div className="flex items-center gap-2 py-3">
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Generating suggestions...</span>
+                  </div>
+                ) : suggestionsData?.suggestions && suggestionsData.suggestions.length > 0 ? (
+                  <div className="py-2">
+                    <p className="text-xs text-muted-foreground mb-2">Suggested for your market:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestionsData.suggestions.map((suggestion, i) => (
+                        <button
+                          key={i}
+                          onClick={() => handleSuggestionClick(suggestion)}
+                          disabled={addMutation.isPending}
+                          className="px-3 py-1.5 rounded-full text-sm bg-slate-100 text-slate-500 hover:bg-[#1e3a5f]/10 hover:text-[#1e3a5f] transition-colors cursor-pointer border border-slate-200"
+                          data-testid={`button-suggestion-${i}`}
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {capabilities.map((cap, index) => (
+              <div
+                key={cap.id}
+                draggable
+                onDragStart={() => handleDragStart(index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDrop={() => handleDrop(index)}
+                onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                className={`flex items-center gap-2 px-2 py-2 rounded-lg group transition-colors ${
+                  dragOverIndex === index ? "bg-[#1e3a5f]/5 border border-[#1e3a5f]/20" : "hover:bg-slate-50 border border-transparent"
+                }`}
+                data-testid={`row-capability-${cap.id}`}
+              >
+                <GripVertical className="w-4 h-4 text-slate-300 cursor-grab flex-shrink-0" />
+                {editingId === cap.id ? (
+                  <Input
+                    ref={editInputRef}
+                    value={editingName}
+                    onChange={(e) => setEditingName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleEditSave();
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    onBlur={handleEditSave}
+                    className="h-7 text-sm flex-1"
+                    data-testid="input-edit-capability"
+                  />
+                ) : (
+                  <span className="text-sm flex-1" data-testid={`text-capability-name-${cap.id}`}>{cap.name}</span>
+                )}
+                <button
+                  onClick={() => { setEditingId(cap.id); setEditingName(cap.name); }}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-[#1e3a5f] transition-opacity"
+                  data-testid={`button-edit-capability-${cap.id}`}
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={() => deleteMutation.mutate(cap.id)}
+                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-opacity"
+                  data-testid={`button-delete-capability-${cap.id}`}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ))}
+
+            {showAddInput ? (
+              <div className="flex items-center gap-2 px-2 py-1">
+                <Input
+                  ref={addInputRef}
+                  value={newCapName}
+                  onChange={(e) => setNewCapName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAdd();
+                    if (e.key === "Escape") { setShowAddInput(false); setNewCapName(""); }
+                  }}
+                  placeholder="e.g. Passive liveness detection"
+                  className="h-8 text-sm flex-1"
+                  data-testid="input-new-capability"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleAdd}
+                  disabled={!newCapName.trim() || addMutation.isPending}
+                  className="h-8 bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+                  data-testid="button-save-capability"
+                >
+                  {addMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
+                </Button>
+              </div>
+            ) : (
+              capabilities.length < 12 && (
+                <button
+                  onClick={() => setShowAddInput(true)}
+                  className="flex items-center gap-1.5 text-[#1e3a5f] hover:text-[#1e3a5f]/80 text-sm px-2 py-2 transition-colors"
+                  data-testid="button-add-capability"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add capability
+                </button>
+              )
+            )}
+
+            {capabilities.length >= 12 && (
+              <p className="text-xs text-muted-foreground px-2 pt-1">Maximum of 12 capabilities reached.</p>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
@@ -258,6 +528,8 @@ export default function SettingsPage() {
             </form>
           </CardContent>
         </Card>
+
+        <CapabilitiesCard />
 
         <ComingSoonCard
           featureName="email_capture"

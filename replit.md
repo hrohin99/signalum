@@ -36,7 +36,8 @@ Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui compo
 
 **Core Technical Implementations:**
 - **API-driven communication:** RESTful API endpoints handle all frontend-backend interactions.
-- **Database Schema:** Key tables include `user_profiles`, `workspaces` (with JSONB for categories/entities), `captures`, `briefs`, `topic_type_configs`, `product_context`, `battlecards`, `topic_dates`, `monitored_urls`, `workspace_context`, `feature_interest`, and `feedback`.
+- **Capabilities System:** User-defined market capabilities tracked across competitors. Workspace capabilities (max 12) defined in Settings with drag-to-reorder. Competitor capability statuses (yes/no/partial/unknown) with evidence notes in competitor topic views. Comparison matrix modal on My Workspace page. AI capability detection during capture routing suggests status updates when captures mention capability names. Tables: `workspace_capabilities`, `competitor_capabilities`.
+- **Database Schema:** Key tables include `user_profiles`, `workspaces` (with JSONB for categories/entities), `captures`, `briefs`, `topic_type_configs`, `product_context`, `battlecards`, `topic_dates`, `monitored_urls`, `workspace_context`, `feature_interest`, `feedback`, `workspace_capabilities`, and `competitor_capabilities`.
 - **Auth and User Management:** Supabase integration for robust authentication and email verification via Resend, including a 3-step signup flow.
 - **AI Integration:** Anthropic Claude is used for advanced natural language processing.
 - **Null Safety & Error Handling:** Implemented with `ErrorBoundary`, database schema safety checks, and consistent null-safe access patterns for JSONB fields. Background jobs are non-blocking and robustly handle errors.
