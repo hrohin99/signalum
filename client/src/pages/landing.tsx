@@ -1,45 +1,105 @@
 import { Link, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles } from "lucide-react";
-
-const TYPING_TEXT = "Acme Corp just announced a new enterprise pricing tier targeting mid-market customers.";
+import { Sparkles, Shield, Lock, Eye } from "lucide-react";
 
 const SCROLLING_TAGS = [
-  "Competitors", "Industry Trends", "News Articles", "Meeting Notes",
-  "Market Shifts", "Company Updates", "Product Launches", "Policy Changes",
-  "Pricing Moves", "Research Papers", "Social Signals", "Technology Shifts",
-  "People to Watch", "Funding News", "Emerging Topics",
+  "Competitor", "Regulation", "Trend", "Key Account", "Project",
+  "Event", "Technology", "Person", "Hiring Signal", "Industry News",
 ];
 
-const TRACK_CARDS = [
+const FEATURE_CARDS = [
   {
-    emoji: "🏢",
     title: "Your Competitors",
-    text: "A rival just updated their pricing and launched a new feature. You found out this morning, before your next customer call.",
+    text: "A rival updates their pricing and launches a feature. You find out that morning, before your next customer call. Battlecards auto-update. Capability comparisons stay current. You walk in prepared.",
+    highlighted: true,
   },
   {
-    emoji: "📰",
-    title: "News & Trends",
-    text: "Three major stories broke in your industry this week. Watchloom pulled them together so you did not have to.",
+    title: "Regulations and Deadlines",
+    text: "Compliance dates buried in documents get extracted automatically. You see them in your daily brief before they become a crisis. Hard deadlines shown in red. Never blindsided again.",
   },
   {
-    emoji: "💡",
-    title: "Ideas & Research",
-    text: "That article you bookmarked at midnight is now part of your morning brief, filed under the right topic automatically.",
+    title: "Hiring Signals",
+    text: "Strategic hires reveal where a competitor is investing before any announcement. A sudden cluster of AI engineering roles tells you more than a press release.",
   },
   {
-    emoji: "🌐",
-    title: "Websites & Products",
-    text: "A competitor's website changed overnight. New pricing, new messaging. You noticed before your sales team had to ask.",
+    title: "Pricing Intelligence",
+    text: "Track competitor pricing over time in a structured table. Every change captured, dated, and sourced. Know before your sales team has to ask.",
   },
   {
-    emoji: "📢",
-    title: "Topics You Care About",
-    text: "Anything happening in a space you follow gets captured, summarised, and waiting for you each morning.",
+    title: "Industry Trends",
+    text: "Three major stories broke in your space this week. Watchloom pulled them together so you did not have to.",
+  },
+  {
+    title: "Key Accounts",
+    text: "Track what is happening at accounts that matter to you. News, leadership changes, signals that affect your relationship.",
+  },
+  {
+    title: "Meeting Notes and Conversations",
+    text: "Drop in notes from a customer call or colleague conversation. Watchloom files the intelligence automatically and connects it to what you already track.",
+  },
+  {
+    title: "Anything You Define",
+    text: "You tell Watchloom what matters in plain English. It builds your workspace, tracks it, and briefs you on it every morning. No setup, no configuration, no IT required.",
+    goldBorder: true,
   },
 ];
+
+const FEATURES_COL1 = [
+  { name: "Battlecards", desc: "Ready for your next sales conversation" },
+  { name: "Capability Matrix", desc: "Compare features across every competitor" },
+  { name: "Pricing Intelligence", desc: "Track pricing changes over time" },
+  { name: "Hiring Signals", desc: "Know where they are investing" },
+  { name: "Strategic Direction", desc: "Understand where they are heading" },
+];
+
+const FEATURES_COL2 = [
+  { name: "Regulations and Deadlines", desc: "Never miss a compliance date" },
+  { name: "Industry Trends", desc: "Stay ahead of market shifts" },
+  { name: "Key Accounts", desc: "Track what matters to your customers" },
+  { name: "Daily Brief", desc: "One morning email with the so what" },
+];
+
+const COMING_SOON_FEATURES = ["AI Visibility", "Email Capture", "Search"];
+
+function useInView(threshold = 0.15) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
+      { threshold }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+
+  return { ref, visible };
+}
+
+function CountUp({ end, suffix = "", duration = 1500 }: { end: number; suffix?: string; duration?: number }) {
+  const { ref, visible } = useInView(0.3);
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!visible) return;
+    const startTime = performance.now();
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(eased * end));
+      if (progress < 1) requestAnimationFrame(animate);
+    };
+    requestAnimationFrame(animate);
+  }, [visible, end, duration]);
+
+  return <span ref={ref}>{value}{suffix}</span>;
+}
 
 function HeroTrackingInput() {
   const [trackingInput, setTrackingInput] = useState("");
@@ -65,10 +125,11 @@ function HeroTrackingInput() {
     <div className="mx-auto" style={{ maxWidth: 700, marginTop: 32 }}>
       <div
         style={{
-          border: "2px solid #1e3a5f",
+          border: "2px solid rgba(255,255,255,0.3)",
           borderRadius: 12,
           padding: 16,
-          backgroundColor: "#ffffff",
+          backgroundColor: "rgba(255,255,255,0.1)",
+          backdropFilter: "blur(8px)",
         }}
         data-testid="hero-tracking-input"
       >
@@ -82,7 +143,7 @@ function HeroTrackingInput() {
           style={{
             border: "none",
             padding: "4px 0",
-            color: "#334155",
+            color: "#ffffff",
             backgroundColor: "transparent",
             fontSize: 15,
           }}
@@ -93,8 +154,8 @@ function HeroTrackingInput() {
           disabled={!trackingInput.trim()}
           className="w-full flex items-center justify-center gap-2 mt-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
           style={{
-            backgroundColor: "#1e3a5f",
-            color: "#ffffff",
+            backgroundColor: "#ffffff",
+            color: "#1e3a5f",
             padding: "12px 0",
             fontSize: 16,
           }}
@@ -104,369 +165,102 @@ function HeroTrackingInput() {
           Build my workspace
         </button>
       </div>
-      <p className="text-sm mt-3 text-center" style={{ color: "#64748b" }} data-testid="text-hero-trust">
+      <p className="text-sm mt-3 text-center" style={{ color: "rgba(255,255,255,0.6)" }} data-testid="text-hero-trust">
         Free for 14 days. No credit card required.
       </p>
     </div>
   );
 }
 
-function ProductMockup() {
+function FeaturesDropdown({ show }: { show: boolean }) {
   return (
     <div
-      className="mx-auto"
       style={{
-        maxWidth: 960,
-        marginTop: 48,
-        marginBottom: 48,
+        position: "absolute",
+        top: "100%",
+        left: "50%",
+        transform: "translateX(-50%)",
+        width: 860,
+        backgroundColor: "#ffffff",
         borderRadius: 12,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04)",
-        overflow: "hidden",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.08)",
         border: "1px solid #e2e8f0",
+        opacity: show ? 1 : 0,
+        pointerEvents: show ? "auto" : "none",
+        transition: "opacity 0.2s ease",
+        zIndex: 1001,
+        overflow: "hidden",
       }}
-      data-testid="mockup-product-frame"
+      data-testid="dropdown-features"
     >
-      <style>{`
-        @keyframes mockupStage1 {
-          0% { opacity: 1; }
-          30.33% { opacity: 1; }
-          33.33% { opacity: 0; }
-          96% { opacity: 0; }
-          100% { opacity: 1; }
-        }
-        @keyframes mockupStage2 {
-          0% { opacity: 0; }
-          30% { opacity: 0; }
-          33.33% { opacity: 1; }
-          63.66% { opacity: 1; }
-          66.66% { opacity: 0; }
-          100% { opacity: 0; }
-        }
-        @keyframes mockupStage3 {
-          0% { opacity: 0; }
-          63% { opacity: 0; }
-          66.66% { opacity: 1; }
-          96.33% { opacity: 1; }
-          100% { opacity: 0; }
-        }
-        @keyframes typingWidth {
-          0% { max-width: 0; }
-          11.11% { max-width: 0; }
-          33.33% { max-width: 100%; }
-          100% { max-width: 100%; }
-        }
-        @keyframes blinkCaret {
-          0%, 100% { border-right-color: #1e3a5f; }
-          50% { border-right-color: transparent; }
-        }
-        @keyframes spinnerRotate {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-        @keyframes spinnerFade {
-          0% { opacity: 1; }
-          50% { opacity: 1; }
-          55% { opacity: 0; }
-          100% { opacity: 0; }
-        }
-        @keyframes resultReveal {
-          0% { opacity: 0; }
-          50% { opacity: 0; }
-          55% { opacity: 1; }
-          100% { opacity: 1; }
-        }
-        @keyframes countBadge {
-          0% { content: "3"; }
-          50% { content: "3"; }
-          60% { content: "4"; }
-          100% { content: "4"; }
-        }
-        @keyframes badgeCount3 {
-          0% { opacity: 1; }
-          50% { opacity: 1; }
-          55% { opacity: 0; }
-          100% { opacity: 0; }
-        }
-        @keyframes badgeCount4 {
-          0% { opacity: 0; }
-          50% { opacity: 0; }
-          55% { opacity: 1; }
-          100% { opacity: 1; }
-        }
-        @keyframes summaryFlash {
-          0% { opacity: 0.4; }
-          40% { opacity: 0.4; }
-          55% { opacity: 1; }
-          70% { opacity: 0.6; }
-          85% { opacity: 1; }
-          100% { opacity: 1; }
-        }
-      `}</style>
-
-      <div
-        className="flex items-center gap-2 px-4"
-        style={{ backgroundColor: "#f1f5f9", height: 36, borderBottom: "1px solid #e2e8f0" }}
-      >
-        <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#ef4444", display: "inline-block" }} />
-        <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#f59e0b", display: "inline-block" }} />
-        <span style={{ width: 10, height: 10, borderRadius: "50%", backgroundColor: "#22c55e", display: "inline-block" }} />
-      </div>
-
-      <div style={{ position: "relative", minHeight: 320, backgroundColor: "#ffffff" }}>
-
+      <div className="flex">
         <div
-          data-testid="mockup-stage-capture"
           style={{
-            position: "absolute",
-            inset: 0,
-            padding: 40,
+            width: 300,
+            backgroundColor: "#1e3a5f",
+            padding: 24,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            alignItems: "center",
-            animation: "mockupStage1 9s infinite",
           }}
         >
-          <div style={{ width: "100%", maxWidth: 480 }}>
-            <div className="text-sm font-semibold mb-3" style={{ color: "#1e3a5f" }}>
-              Capture
+          <div style={{ borderRadius: 8, padding: 20, backgroundColor: "rgba(255,255,255,0.08)" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
+                <rect width="32" height="32" rx="6" fill="rgba(255,255,255,0.15)" />
+                <path d="M8 10l4 12 4-8 4 8 4-12" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              </svg>
+              <span style={{ color: "#ffffff", fontSize: 12, fontWeight: 600 }}>Watchloom Workspace</span>
             </div>
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 8,
-                padding: "14px 16px",
-                minHeight: 80,
-                backgroundColor: "#f8fafc",
-                marginBottom: 16,
-              }}
-            >
-              <span
-                style={{
-                  display: "inline-block",
-                  fontFamily: "'DM Mono', 'Courier New', monospace",
-                  fontSize: 12,
-                  color: "#334155",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  borderRight: "2px solid #1e3a5f",
-                  animation: `typingWidth 9s steps(${TYPING_TEXT.length}, end) infinite, blinkCaret 0.7s step-end infinite`,
-                  maxWidth: `${TYPING_TEXT.length}ch`,
-                  lineHeight: 1.6,
-                }}
-              >
-                {TYPING_TEXT}
-              </span>
+            <div className="flex gap-2 mb-2">
+              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.15)" }} />
+              <div style={{ flex: 2, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.1)" }} />
             </div>
-            <button
-              style={{
-                backgroundColor: "#1e3a5f",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: 6,
-                padding: "10px 28px",
-                fontSize: 13,
-                fontWeight: 600,
-                cursor: "default",
-              }}
-            >
-              Submit
-            </button>
+            <div className="flex gap-2 mb-2">
+              <div style={{ flex: 2, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.12)" }} />
+              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.08)" }} />
+            </div>
+            <div className="flex gap-2 mb-3">
+              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.1)" }} />
+              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.15)" }} />
+            </div>
+            <div className="flex gap-1.5">
+              {["Competitors", "Trends", "Dates"].map((l) => (
+                <span key={l} style={{ fontSize: 8, color: "rgba(255,255,255,0.7)", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 4, padding: "2px 6px" }}>{l}</span>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div
-          data-testid="mockup-stage-routing"
-          style={{
-            position: "absolute",
-            inset: 0,
-            padding: 40,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            animation: "mockupStage2 9s infinite",
-          }}
-        >
-          <div style={{ width: "100%", maxWidth: 480 }}>
-            <div className="text-sm font-semibold mb-4" style={{ color: "#1e3a5f" }}>
-              AI Routing
-            </div>
-            <div
-              style={{
-                border: "1px solid #e2e8f0",
-                borderRadius: 8,
-                padding: 20,
-                backgroundColor: "#f8fafc",
-                position: "relative",
-              }}
-            >
-              <div style={{ animation: "spinnerFade 3s infinite", position: "absolute", top: 20, left: "50%", transform: "translateX(-50%)" }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" style={{ animation: "spinnerRotate 0.8s linear infinite" }}>
-                  <circle cx="12" cy="12" r="10" stroke="#e2e8f0" strokeWidth="2.5" />
-                  <path d="M12 2a10 10 0 0 1 10 10" stroke="#1e3a5f" strokeWidth="2.5" strokeLinecap="round" />
-                </svg>
-              </div>
-
-              <div style={{ animation: "resultReveal 3s infinite" }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold" style={{ color: "#334155" }}>Matched to:</span>
-                    <span
-                      className="text-xs font-medium rounded-full px-2.5 py-0.5"
-                      style={{ backgroundColor: "#1e3a5f", color: "#ffffff" }}
-                    >
-                      Acme Corp
-                    </span>
-                  </div>
-                  <span
-                    className="text-xs font-medium rounded-full px-2.5 py-0.5"
-                    style={{ backgroundColor: "#dcfce7", color: "#16a34a" }}
-                  >
-                    Confirmed
-                  </span>
+        <div className="flex-1 p-6">
+          <div className="grid grid-cols-2 gap-8">
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>For Competitors</p>
+              {FEATURES_COL1.map((f) => (
+                <div key={f.name} className="mb-3" data-testid={`dropdown-feature-${f.name.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "#1e3a5f" }}>{f.name}</p>
+                  <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{f.desc}</p>
                 </div>
-                <p className="text-xs leading-relaxed" style={{ color: "#64748b", fontStyle: "italic" }}>
-                  Pricing strategy update — filed under Competitors.
-                </p>
-              </div>
+              ))}
             </div>
-          </div>
-        </div>
-
-        <div
-          data-testid="mockup-stage-map"
-          style={{
-            position: "absolute",
-            inset: 0,
-            display: "flex",
-            animation: "mockupStage3 9s infinite",
-          }}
-        >
-          <div
-            style={{
-              width: 240,
-              minWidth: 240,
-              backgroundColor: "#f8fafc",
-              borderRight: "1px solid #e2e8f0",
-              padding: "20px 0",
-            }}
-          >
-            <div
-              className="text-xs font-bold uppercase tracking-wider px-5 mb-4"
-              style={{ color: "#1e3a5f" }}
-            >
-              Intelligence Map
-            </div>
-
-            <div
-              className="flex items-center justify-between px-5 py-2.5 text-sm"
-              style={{
-                color: "#1e3a5f",
-                backgroundColor: "#eef2f7",
-                borderLeft: "3px solid #1e3a5f",
-                fontWeight: 600,
-              }}
-            >
-              <span>Competitors</span>
-              <span
-                className="text-xs font-medium rounded-full px-2 py-0.5"
-                style={{ backgroundColor: "#1e3a5f", color: "#ffffff", position: "relative" }}
-              >
-                <span style={{ animation: "badgeCount3 3s infinite" }}>3</span>
-                <span style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", animation: "badgeCount4 3s infinite" }}>4</span>
-              </span>
-            </div>
-
-            {[
-              { label: "Regulations", count: 2 },
-              { label: "Industry News", count: 4 },
-            ].map((cat) => (
-              <div
-                key={cat.label}
-                className="flex items-center justify-between px-5 py-2.5 text-sm"
-                style={{
-                  color: "#1e3a5f",
-                  backgroundColor: "transparent",
-                  borderLeft: "3px solid transparent",
-                  fontWeight: 400,
-                }}
-              >
-                <span>{cat.label}</span>
-                <span
-                  className="text-xs font-medium rounded-full px-2 py-0.5"
-                  style={{ backgroundColor: "#e2e8f0", color: "#64748b" }}
-                >
-                  {cat.count}
-                </span>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex-1 p-6" style={{ backgroundColor: "#ffffff" }}>
-            <div className="mb-1">
-              <span className="text-xl font-bold" style={{ color: "#1e3a5f" }}>Acme Corp</span>
-            </div>
-            <span
-              className="inline-block text-xs rounded-full px-2.5 py-0.5 mb-5"
-              style={{ backgroundColor: "#f1f5f9", color: "#64748b" }}
-            >
-              Competitors
-            </span>
-
-            <div className="mb-5">
-              <div className="flex items-center gap-1.5 mb-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                </svg>
-                <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>AI Summary</span>
-              </div>
-              <p
-                className="text-xs leading-relaxed"
-                style={{ color: "#64748b", animation: "summaryFlash 3s infinite" }}
-              >
-                Acme Corp announced a new enterprise pricing tier targeting mid-market customers. This signals a strategic shift upmarket and may impact competitive positioning.
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2.5">
-              <div
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
-                style={{ backgroundColor: "#f8fafc", border: "1px solid #f1f5f9" }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <span className="text-xs flex-shrink-0" style={{ color: "#94a3b8" }}>Mar 5, 2026</span>
-                <span className="text-xs flex-1" style={{ color: "#334155" }}>New enterprise pricing tier announced.</span>
-                <span
-                  className="text-xs font-medium rounded-full px-2 py-0.5 flex-shrink-0"
-                  style={{ backgroundColor: "#dcfce7", color: "#16a34a" }}
-                >
-                  Confirmed
-                </span>
-              </div>
-              <div
-                className="flex items-center gap-3 rounded-lg px-3 py-2.5"
-                style={{ backgroundColor: "#f8fafc", border: "1px solid #f1f5f9" }}
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" />
-                  <line x1="8" y1="2" x2="8" y2="6" />
-                  <line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-                <span className="text-xs flex-shrink-0" style={{ color: "#94a3b8" }}>Mar 4, 2026</span>
-                <span className="text-xs flex-1" style={{ color: "#334155" }}>Homepage messaging shifted toward enterprise buyers.</span>
-                <span
-                  className="text-xs font-medium rounded-full px-2 py-0.5 flex-shrink-0"
-                  style={{ backgroundColor: "#dcfce7", color: "#16a34a" }}
-                >
-                  Confirmed
-                </span>
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>For Everything Else</p>
+              {FEATURES_COL2.map((f) => (
+                <div key={f.name} className="mb-3" data-testid={`dropdown-feature-${f.name.toLowerCase().replace(/\s+/g, "-")}`}>
+                  <p style={{ fontSize: 14, fontWeight: 600, color: "#1e3a5f" }}>{f.name}</p>
+                  <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{f.desc}</p>
+                </div>
+              ))}
+              <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12, marginTop: 8 }}>
+                <p style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>COMING SOON</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {COMING_SOON_FEATURES.map((f) => (
+                    <span key={f} style={{ fontSize: 11, color: "#64748b", backgroundColor: "#f1f5f9", borderRadius: 4, padding: "2px 8px" }}>
+                      {f}
+                      <span style={{ fontSize: 9, color: "#f59e0b", marginLeft: 4, fontWeight: 600 }}>Soon</span>
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -479,25 +273,104 @@ function ProductMockup() {
 export default function LandingPage() {
   const [waitlistEmail, setWaitlistEmail] = useState("");
   const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
+  const [navScrolled, setNavScrolled] = useState(false);
+  const [featuresOpen, setFeaturesOpen] = useState(false);
+  const featuresTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const onScroll = () => setNavScrolled(window.scrollY > 60);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const openFeatures = useCallback(() => {
+    if (featuresTimeoutRef.current) clearTimeout(featuresTimeoutRef.current);
+    setFeaturesOpen(true);
+  }, []);
+
+  const closeFeatures = useCallback(() => {
+    featuresTimeoutRef.current = setTimeout(() => setFeaturesOpen(false), 150);
+  }, []);
+
+  const s1 = useInView();
+  const s2 = useInView();
+  const s3 = useInView();
+  const s4 = useInView();
+  const s5 = useInView();
+  const s6 = useInView();
+  const s7 = useInView();
+  const s8 = useInView();
+  const s9 = useInView();
+  const s10 = useInView();
 
   return (
-    <div className="min-h-screen bg-white" style={{ fontFamily: "'DM Sans', sans-serif", scrollBehavior: "smooth" }}>
+    <div className="min-h-screen" style={{ fontFamily: "'DM Sans', sans-serif", scrollBehavior: "smooth" }}>
       <style>{`
         @keyframes scrollTags {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
         }
         html { scroll-behavior: smooth; }
+
+        .fade-section {
+          opacity: 0;
+          transform: translateY(30px);
+          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .fade-section.visible {
+          opacity: 1;
+          transform: translateY(0);
+        }
+        .fade-child {
+          opacity: 0;
+          transform: translateY(30px);
+          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .fade-section.visible .fade-child { opacity: 1; transform: translateY(0); }
+        .fade-section.visible .fade-child:nth-child(1) { transition-delay: 0s; }
+        .fade-section.visible .fade-child:nth-child(2) { transition-delay: 0.1s; }
+        .fade-section.visible .fade-child:nth-child(3) { transition-delay: 0.2s; }
+        .fade-section.visible .fade-child:nth-child(4) { transition-delay: 0.3s; }
+        .fade-section.visible .fade-child:nth-child(5) { transition-delay: 0.4s; }
+        .fade-section.visible .fade-child:nth-child(6) { transition-delay: 0.5s; }
+        .fade-section.visible .fade-child:nth-child(7) { transition-delay: 0.6s; }
+        .fade-section.visible .fade-child:nth-child(8) { transition-delay: 0.7s; }
+        .fade-section.visible .fade-child:nth-child(9) { transition-delay: 0.8s; }
+
+        .feature-card {
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .feature-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+        }
+
+        .hero-word {
+          opacity: 0;
+          display: inline-block;
+          animation: heroWordIn 0.4s ease-out forwards;
+        }
+        @keyframes heroWordIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .tag-strip:hover .tag-scroll {
+          animation-play-state: paused;
+        }
       `}</style>
 
       {/* NAVBAR */}
       <nav
         className="fixed top-0 left-0 w-full flex items-center justify-between"
         style={{
-          backgroundColor: "#ffffff",
-          borderBottom: "1px solid #e2e8f0",
+          backgroundColor: navScrolled ? "rgba(255,255,255,0.95)" : "#ffffff",
+          backdropFilter: navScrolled ? "blur(12px)" : "none",
+          borderBottom: navScrolled ? "1px solid rgba(0,0,0,0.08)" : "1px solid #e2e8f0",
+          boxShadow: navScrolled ? "0 1px 8px rgba(0,0,0,0.06)" : "none",
           padding: "16px 24px",
           zIndex: 1000,
+          transition: "all 0.3s ease",
         }}
         data-testid="navbar-landing"
       >
@@ -511,7 +384,7 @@ export default function LandingPage() {
           </span>
         </div>
 
-        <div className="hidden md:flex items-center gap-8">
+        <div className="hidden md:flex items-center gap-8" style={{ position: "relative" }}>
           <a
             href="#how-it-works"
             className="font-medium transition-opacity hover:opacity-70"
@@ -520,21 +393,30 @@ export default function LandingPage() {
           >
             How it works
           </a>
+          <div
+            style={{ position: "relative" }}
+            onMouseEnter={openFeatures}
+            onMouseLeave={closeFeatures}
+          >
+            <span
+              className="font-medium cursor-pointer transition-opacity hover:opacity-70"
+              style={{ color: "#64748b", fontSize: 15 }}
+              data-testid="link-nav-features"
+            >
+              Features
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ display: "inline-block", marginLeft: 4, verticalAlign: "middle" }}>
+                <path d="M2 4l3 3 3-3" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <FeaturesDropdown show={featuresOpen} />
+          </div>
           <a
-            href="#what-you-can-track"
+            href="#pricing"
             className="font-medium transition-opacity hover:opacity-70"
             style={{ color: "#64748b", fontSize: 15 }}
-            data-testid="link-nav-track"
+            data-testid="link-nav-pricing"
           >
-            What you can track
-          </a>
-          <a
-            href="#coming-soon"
-            className="font-medium transition-opacity hover:opacity-70"
-            style={{ color: "#64748b", fontSize: 15 }}
-            data-testid="link-nav-coming-soon"
-          >
-            Coming soon
+            Pricing
           </a>
         </div>
 
@@ -548,99 +430,53 @@ export default function LandingPage() {
               Sign In
             </button>
           </Link>
-          <Link href="/signup">
-            <button
-              className="px-4 py-2 rounded-lg font-medium text-white transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#1e3a5f", fontSize: 16 }}
-              data-testid="button-nav-start-trial"
-            >
-              Start Free Trial
-            </button>
-          </Link>
         </div>
       </nav>
 
-      {/* SECTION 1 - HERO */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "120px 40px 0 40px", marginTop: 68 }}>
+      {/* SECTION 2 - HERO */}
+      <section
+        className="w-full"
+        style={{
+          backgroundColor: "#1e3a5f",
+          padding: "140px 40px 80px 40px",
+          marginTop: 68,
+          background: "linear-gradient(180deg, #1e3a5f 0%, #162d4a 100%)",
+        }}
+      >
         <div className="max-w-[900px] mx-auto text-center">
-          <div
-            className="inline-block rounded-full px-4 py-1.5 text-xs font-medium mb-8"
-            style={{ backgroundColor: "#f0f4f8", color: "#1e3a5f" }}
-            data-testid="badge-hero-pill"
-          >
-            Your AI intelligence workspace
-          </div>
-
           <h1
-            className="tracking-tight leading-tight mb-6"
-            style={{ color: "#1e3a5f", fontSize: 72, fontWeight: 800 }}
+            style={{ fontSize: 64, fontWeight: 700, lineHeight: 1.15, marginBottom: 24, fontFamily: "'Playfair Display', serif" }}
             data-testid="text-hero-headline"
           >
-            Know more. Miss nothing.
+            {"Intelligence without the overwhelm.".split(" ").map((word, i) => (
+              <span
+                key={i}
+                className="hero-word"
+                style={{ animationDelay: `${i * 0.08}s`, color: "#ffffff", marginRight: "0.3em" }}
+              >
+                {word}
+              </span>
+            ))}
           </h1>
 
           <p
-            className="max-w-[640px] mx-auto mb-10"
-            style={{ color: "#64748b", fontSize: 20, lineHeight: 1.7 }}
+            className="max-w-[680px] mx-auto mb-10 hero-word"
+            style={{
+              color: "rgba(255,255,255,0.65)",
+              fontSize: 19,
+              lineHeight: 1.75,
+              animationDelay: "0.5s",
+            }}
             data-testid="text-hero-subheadline"
           >
-            Most professionals spend 5 or more hours every month manually searching for news, tracking competitors, and piecing together what changed in their industry. Watchloom's AI agents do all of that automatically, crawling the internet continuously so you wake up every morning already knowing what matters.
+            Every day you get hit with competitor moves, regulation changes, customer conversations, and industry noise. Watchloom turns all of it into one clear brief that tells you what changed and what to do about it.
           </p>
-
-          <div
-            className="max-w-[860px] mx-auto mb-10 rounded-lg"
-            style={{
-              backgroundColor: "#f8fafc",
-              padding: "32px 0",
-            }}
-            data-testid="stats-bar"
-          >
-            <div
-              className="hidden md:flex items-stretch justify-center"
-              style={{ gap: 0 }}
-            >
-              <div className="flex-1 flex items-center justify-center text-center px-4">
-                <div>
-                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-hours">5+ hours</div>
-                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>saved every month per user</div>
-                </div>
-              </div>
-              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
-              <div className="flex-1 flex items-center justify-center text-center px-4">
-                <div>
-                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-schedule">Daily, weekly or monthly</div>
-                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>briefings on your schedule</div>
-                </div>
-              </div>
-              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
-              <div className="flex-1 flex items-center justify-center text-center px-4">
-                <div>
-                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-topic">Any topic</div>
-                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>set up in plain English</div>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-center gap-6 md:hidden">
-              <div className="text-center">
-                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>5+ hours</div>
-                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>saved every month per user</div>
-              </div>
-              <div className="text-center">
-                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>Daily, weekly or monthly</div>
-                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>briefings on your schedule</div>
-              </div>
-              <div className="text-center">
-                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>Any topic</div>
-                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>set up in plain English</div>
-              </div>
-            </div>
-          </div>
 
           <div className="flex items-center justify-center gap-4 mb-0">
             <Link href="/signup">
               <button
                 className="px-8 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90"
-                style={{ backgroundColor: "#1e3a5f", color: "#ffffff", fontSize: 16 }}
+                style={{ backgroundColor: "#ffffff", color: "#1e3a5f", fontSize: 16 }}
                 data-testid="button-get-started"
               >
                 Get Started Free
@@ -649,7 +485,7 @@ export default function LandingPage() {
             <Link href="/signin">
               <button
                 className="px-8 py-3 rounded-lg font-semibold border-2 transition-opacity hover:opacity-80"
-                style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "#ffffff", fontSize: 16 }}
+                style={{ color: "#ffffff", borderColor: "rgba(255,255,255,0.4)", backgroundColor: "transparent", fontSize: 16 }}
                 data-testid="button-sign-in-hero"
               >
                 Sign In
@@ -659,16 +495,80 @@ export default function LandingPage() {
 
           <HeroTrackingInput />
         </div>
+      </section>
 
-        <div className="max-w-[960px] mx-auto px-4">
-          <ProductMockup />
+      {/* SECTION 3 - STATS BAR */}
+      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "0" }}>
+        <div
+          ref={s1.ref}
+          className={`fade-section ${s1.visible ? "visible" : ""}`}
+          style={{ maxWidth: 860, margin: "0 auto", padding: "40px 0" }}
+        >
+          <div
+            className="max-w-[860px] mx-auto rounded-lg"
+            style={{ backgroundColor: "#f8fafc", padding: "32px 0" }}
+            data-testid="stats-bar"
+          >
+            <div className="hidden md:flex items-stretch justify-center" style={{ gap: 0 }}>
+              <div className="flex-1 flex items-center justify-center text-center px-4 fade-child">
+                <div>
+                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-setup">
+                    <CountUp end={3} suffix=" min" />
+                  </div>
+                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Average setup time</div>
+                </div>
+              </div>
+              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
+              <div className="flex-1 flex items-center justify-center text-center px-4 fade-child">
+                <div>
+                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-topics">
+                    <CountUp end={11} />
+                  </div>
+                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Topic types supported</div>
+                </div>
+              </div>
+              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
+              <div className="flex-1 flex items-center justify-center text-center px-4 fade-child">
+                <div>
+                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-brief">
+                    <CountUp end={7} suffix="am" />
+                  </div>
+                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Daily brief delivered</div>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-6 md:hidden">
+              <div className="text-center">
+                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>
+                  <CountUp end={3} suffix=" min" />
+                </div>
+                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Average setup time</div>
+              </div>
+              <div className="text-center">
+                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>
+                  <CountUp end={11} />
+                </div>
+                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Topic types supported</div>
+              </div>
+              <div className="text-center">
+                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>
+                  <CountUp end={7} suffix="am" />
+                </div>
+                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Daily brief delivered</div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* SECTION 1.5 - THE REAL PROBLEM */}
-      <section className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 40px" }}>
+      {/* SECTION 4 - PROBLEM SECTION */}
+      <section
+        ref={s2.ref}
+        className={`w-full fade-section ${s2.visible ? "visible" : ""}`}
+        style={{ backgroundColor: "#f8fafc", padding: "80px 40px" }}
+      >
         <div className="mx-auto flex flex-col md:flex-row items-start gap-10" style={{ maxWidth: 1040 }}>
-          <div className="w-full md:w-[55%]">
+          <div className="w-full md:w-[55%] fade-child">
             <p
               className="font-semibold uppercase mb-4"
               style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
@@ -694,7 +594,7 @@ export default function LandingPage() {
             </p>
           </div>
 
-          <div className="w-full md:w-[45%]">
+          <div className="w-full md:w-[45%] fade-child">
             <div
               style={{
                 backgroundColor: "#ffffff",
@@ -742,19 +642,19 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 2 - SCROLLING TAG STRIP */}
+      {/* SECTION 5 - TOPIC PILL STRIP */}
       <section
-        className="w-full overflow-hidden"
+        className="w-full overflow-hidden tag-strip"
         style={{ backgroundColor: "#f8fafc", padding: "40px 0" }}
       >
         <div
-          className="flex whitespace-nowrap"
+          className="flex whitespace-nowrap tag-scroll"
           style={{
-            animation: "scrollTags 40s linear infinite",
+            animation: "scrollTags 30s linear infinite",
             width: "fit-content",
           }}
         >
-          {[...SCROLLING_TAGS, ...SCROLLING_TAGS].map((tag, i) => (
+          {[...SCROLLING_TAGS, ...SCROLLING_TAGS, ...SCROLLING_TAGS].map((tag, i) => (
             <span
               key={`${tag}-${i}`}
               className="inline-block text-sm font-medium rounded-full px-4 py-2 mx-1.5 flex-shrink-0"
@@ -762,6 +662,7 @@ export default function LandingPage() {
                 backgroundColor: "#ffffff",
                 color: "#1e3a5f",
               }}
+              data-testid={`pill-tag-${i}`}
             >
               {tag}
             </span>
@@ -769,10 +670,15 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 3 - HOW IT WORKS */}
-      <section id="how-it-works" className="w-full" style={{ backgroundColor: "#ffffff", padding: "80px 40px", scrollMarginTop: 80 }}>
+      {/* SECTION 6 - HOW IT WORKS */}
+      <section
+        id="how-it-works"
+        ref={s3.ref}
+        className={`w-full fade-section ${s3.visible ? "visible" : ""}`}
+        style={{ backgroundColor: "#ffffff", padding: "80px 40px", scrollMarginTop: 80 }}
+      >
         <div className="max-w-[1040px] mx-auto">
-          <div className="text-center mb-16">
+          <div className="text-center mb-16 fade-child">
             <p
               className="font-semibold uppercase mb-3"
               style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
@@ -784,12 +690,12 @@ export default function LandingPage() {
               style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
               data-testid="text-how-headline"
             >
-              Simple by design. Powerful by default.
+              From scattered noise to one clear answer.
             </h2>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-6 md:gap-0 items-start">
-            <div className="text-center px-4">
+            <div className="text-center px-4 fade-child">
               <div
                 className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5"
                 style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
@@ -819,7 +725,7 @@ export default function LandingPage() {
               </svg>
             </div>
 
-            <div className="text-center px-4">
+            <div className="text-center px-4 fade-child">
               <div
                 className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5"
                 style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
@@ -851,7 +757,7 @@ export default function LandingPage() {
               </svg>
             </div>
 
-            <div className="text-center px-4">
+            <div className="text-center px-4 fade-child">
               <div
                 className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5"
                 style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
@@ -883,11 +789,77 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 3.5 - SOCIAL PROOF */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 40px" }}>
+      {/* SECTION 7 - FEATURE CARDS */}
+      <section
+        id="what-you-can-track"
+        ref={s4.ref}
+        className={`w-full fade-section ${s4.visible ? "visible" : ""}`}
+        style={{ backgroundColor: "#f8fafc", padding: "80px 40px", scrollMarginTop: 80 }}
+      >
+        <div className="max-w-[1100px] mx-auto">
+          <div className="text-center mb-16 fade-child">
+            <p
+              className="font-semibold uppercase mb-3"
+              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
+              data-testid="text-track-label"
+            >
+              What can you track?
+            </p>
+            <h2
+              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
+              data-testid="text-track-headline"
+            >
+              Whatever you need to stay on top of, Watchloom has got it
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {FEATURE_CARDS.map((card, idx) => (
+              <div
+                key={card.title}
+                className="rounded-lg feature-card fade-child"
+                style={{
+                  backgroundColor: card.highlighted ? "#1e3a5f" : "#ffffff",
+                  border: card.goldBorder ? "2px solid #d4a843" : card.highlighted ? "none" : "1px solid #e2e8f0",
+                  borderRadius: 8,
+                  padding: 24,
+                }}
+                data-testid={`card-feature-${idx}`}
+              >
+                <h3
+                  className="mb-2"
+                  style={{
+                    color: card.highlighted ? "#ffffff" : "#1e3a5f",
+                    fontSize: 18,
+                    fontWeight: 600,
+                  }}
+                >
+                  {card.title}
+                </h3>
+                <p
+                  style={{
+                    color: card.highlighted ? "rgba(255,255,255,0.8)" : "#64748b",
+                    fontSize: 15,
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {card.text}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* SECTION 8 - TESTIMONIALS */}
+      <section
+        ref={s5.ref}
+        className={`w-full fade-section ${s5.visible ? "visible" : ""}`}
+        style={{ backgroundColor: "#ffffff", padding: "60px 40px" }}
+      >
         <div className="mx-auto" style={{ maxWidth: 1040 }}>
           <p
-            className="text-center font-semibold uppercase mb-8"
+            className="text-center font-semibold uppercase mb-8 fade-child"
             style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
             data-testid="text-social-proof-label"
           >
@@ -896,7 +868,7 @@ export default function LandingPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5" data-testid="social-proof-grid">
             <div
-              className="flex flex-col"
+              className="flex flex-col fade-child"
               style={{
                 backgroundColor: "#f8fafc",
                 border: "1px solid #e2e8f0",
@@ -915,7 +887,7 @@ export default function LandingPage() {
             </div>
 
             <div
-              className="flex flex-col"
+              className="flex flex-col fade-child"
               style={{
                 backgroundColor: "#f8fafc",
                 border: "1px solid #e2e8f0",
@@ -934,7 +906,7 @@ export default function LandingPage() {
             </div>
 
             <div
-              className="flex flex-col"
+              className="flex flex-col fade-child"
               style={{
                 backgroundColor: "#f8fafc",
                 border: "1px solid #e2e8f0",
@@ -955,78 +927,69 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 4 - TRACK ANYTHING SHOWCASE */}
-      <section id="what-you-can-track" className="w-full" style={{ backgroundColor: "#f8fafc", padding: "80px 40px", scrollMarginTop: 80 }}>
-        <div className="max-w-[1100px] mx-auto">
-          <div className="text-center mb-16">
-            <p
-              className="font-semibold uppercase mb-3"
-              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
-              data-testid="text-track-label"
-            >
-              What can you track?
-            </p>
-            <h2
-              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
-              data-testid="text-track-headline"
-            >
-              Whatever you need to stay on top of, Watchloom's got it
-            </h2>
-            <p
-              className="mt-3"
-              style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
-              data-testid="text-track-subheadline"
-            >
-              You define what matters. We track it, file it, and brief you on it every morning.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5" style={{ gridAutoRows: "1fr" }}>
-            {TRACK_CARDS.map((card) => (
+      {/* SECTION 9 - TRUST SECTION */}
+      <section
+        ref={s6.ref}
+        className={`w-full fade-section ${s6.visible ? "visible" : ""}`}
+        style={{ backgroundColor: "#ffffff", padding: "80px 40px" }}
+      >
+        <div className="max-w-[1040px] mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center fade-child" data-testid="trust-data">
               <div
-                key={card.title}
-                className="rounded-lg p-6"
-                style={{
-                  backgroundColor: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: 8,
-                  padding: 24,
-                }}
-                data-testid={`card-track-${card.title.toLowerCase().replace(/[^a-z]/g, "-")}`}
+                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4"
+                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
               >
-                <div className="text-2xl mb-3">{card.emoji}</div>
-                <h3 className="mb-2" style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}>
-                  {card.title}
-                </h3>
-                <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                  {card.text}
-                </p>
+                <Shield size={24} color="#1e3a5f" />
               </div>
-            ))}
-
-            <div
-              className="rounded-lg p-6"
-              style={{
-                backgroundColor: "#1e3a5f",
-                borderRadius: 8,
-                padding: 24,
-              }}
-              data-testid="card-track-anything"
-            >
-              <div className="text-2xl mb-3">✳️</div>
-              <h3 className="mb-2 text-white" style={{ fontSize: 18, fontWeight: 600 }}>
-                Anything You Define
+              <h3 style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
+                Your data never trains our models
               </h3>
-              <p className="text-white" style={{ fontSize: 15, lineHeight: 1.6 }}>
-                You tell us what matters in plain English. We build your tracking workspace automatically, no setup, no configuration, no IT required.
+              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
+                Everything you capture stays in your workspace.
+              </p>
+            </div>
+
+            <div className="text-center fade-child" data-testid="trust-isolation">
+              <div
+                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4"
+                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
+              >
+                <Lock size={24} color="#1e3a5f" />
+              </div>
+              <h3 style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
+                Isolated by design
+              </h3>
+              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
+                Your workspace is completely isolated from every other user. Row-level security at the database level.
+              </p>
+            </div>
+
+            <div className="text-center fade-child" data-testid="trust-sensitive">
+              <div
+                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4"
+                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
+              >
+                <Eye size={24} color="#1e3a5f" />
+              </div>
+              <h3 style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
+                Built for sensitive work
+              </h3>
+              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
+                Designed for teams handling competitive, regulatory, and strategic intelligence.
               </p>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 4.5 - COMING SOON TEASER */}
-      <section id="coming-soon" className="w-full" style={{ backgroundColor: "#ffffff", padding: "60px 40px", scrollMarginTop: 80 }}>
+      {/* SECTION 10 - COMING SOON (Ask Watchloom) */}
+      <section
+        id="coming-soon"
+        ref={s7.ref}
+        className={`w-full fade-section ${s7.visible ? "visible" : ""}`}
+        style={{ backgroundColor: "#ffffff", padding: "60px 40px", scrollMarginTop: 80 }}
+      >
         <div className="mx-auto" style={{ maxWidth: 860 }}>
           <div
             style={{
@@ -1139,33 +1102,39 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 5 - FINAL CTA */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "96px 40px" }}>
+      {/* SECTION 11 - FINAL CTA */}
+      <section
+        ref={s8.ref}
+        className={`w-full fade-section ${s8.visible ? "visible" : ""}`}
+        style={{ backgroundColor: "#ffffff", padding: "96px 40px" }}
+      >
         <div className="max-w-[860px] mx-auto text-center">
           <h2
-            className="mb-4"
+            className="mb-4 fade-child"
             style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
             data-testid="text-cta-headline"
           >
-            Stay ahead of everything that matters to you
+            Start your day already knowing what matters.
           </h2>
           <p
-            className="mb-10"
+            className="mb-10 fade-child"
             style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
             data-testid="text-cta-subtext"
           >
-            Join professionals who have stopped wasting hours on manual research. Watchloom tracks everything, briefs you on schedule, and gives you that time back.
+            Three minutes to set up. One brief every morning. No more being caught off guard.
           </p>
-          <Link href="/signup">
-            <button
-              className="px-10 py-4 rounded-lg font-semibold transition-opacity hover:opacity-90"
-              style={{ backgroundColor: "#1e3a5f", color: "#ffffff", fontSize: 16 }}
-              data-testid="button-cta-get-started"
-            >
-              Start Your Free 14-Day Trial
-            </button>
-          </Link>
-          <p className="text-sm mt-4" style={{ color: "#64748b" }}>
+          <div className="fade-child">
+            <Link href="/signup">
+              <button
+                className="px-10 py-4 rounded-lg font-semibold transition-opacity hover:opacity-90"
+                style={{ backgroundColor: "#1e3a5f", color: "#ffffff", fontSize: 16 }}
+                data-testid="button-cta-get-started"
+              >
+                Get Started Free
+              </button>
+            </Link>
+          </div>
+          <p className="text-sm mt-4 fade-child" style={{ color: "#64748b" }}>
             Free for 14 days. No credit card required. Set up in under 3 minutes.
           </p>
         </div>
