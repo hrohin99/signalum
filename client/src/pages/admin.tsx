@@ -128,7 +128,7 @@ export default function AdminPage() {
 
       <section data-testid="section-feature-interest">
         <h2 className="text-lg font-semibold text-[#1e3a5f] mb-4">Feature Interest</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {featureData.map((feature) => (
             <div
               key={feature.featureName}

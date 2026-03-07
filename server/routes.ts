@@ -2750,10 +2750,16 @@ Rules:
 
   app.get("/api/admin/stats", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
     try {
+      const { data: { users: allUsers }, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      if (usersError) throw usersError;
+      const emailMap = new Map<string, string>();
+      for (const u of allUsers) {
+        if (u.id && u.email) emailMap.set(u.id, u.email);
+      }
+
       const feedbackResult = await pool.query(
-        `SELECT au.email, f.id, f.mood, f.message, f.created_at
+        `SELECT f.id, f.user_id, f.mood, f.message, f.created_at
          FROM feedback f
-         LEFT JOIN auth.users au ON f.user_id = au.id
          ORDER BY f.created_at DESC`
       );
       const feedbackData = feedbackResult.rows.map(r => ({
@@ -2761,13 +2767,12 @@ Rules:
         mood: r.mood,
         message: r.message,
         createdAt: r.created_at,
-        userEmail: r.email || "unknown",
+        userEmail: emailMap.get(r.user_id) || "unknown",
       }));
 
       const featureResult = await pool.query(
-        `SELECT au.email, fi.feature_name, fi.created_at
+        `SELECT fi.user_id, fi.feature_name, fi.created_at
          FROM feature_interest fi
-         LEFT JOIN auth.users au ON fi.user_id = au.id
          ORDER BY fi.created_at DESC`
       );
       const featureMap: Record<string, { featureName: string; count: number; emails: string[] }> = {};
@@ -2776,29 +2781,24 @@ Rules:
           featureMap[r.feature_name] = { featureName: r.feature_name, count: 0, emails: [] };
         }
         featureMap[r.feature_name].count++;
-        const email = r.email || "unknown";
+        const email = emailMap.get(r.user_id) || "unknown";
         if (!featureMap[r.feature_name].emails.includes(email)) {
           featureMap[r.feature_name].emails.push(email);
         }
       }
-      const features = ["AI Visibility", "Email Capture", "Search"];
-      const featureData = features.map(name => featureMap[name] || { featureName: name, count: 0, emails: [] });
+      const featureData = Object.values(featureMap);
 
-      const usersResult = await pool.query(
-        `SELECT au.id, au.email, au.created_at, au.last_sign_in_at
-         FROM auth.users au
-         ORDER BY au.created_at DESC`
-      );
-      const usersData = await Promise.all(usersResult.rows.map(async (r) => {
-        const topicCount = await storage.getTopicCountByUser(r.id);
+      const usersData = await Promise.all(allUsers.map(async (u) => {
+        const topicCount = await storage.getTopicCountByUser(u.id);
         return {
-          userId: r.id,
-          email: r.email || "unknown",
-          createdAt: r.created_at,
-          lastSignIn: r.last_sign_in_at || null,
+          userId: u.id,
+          email: u.email || "unknown",
+          createdAt: u.created_at,
+          lastSignIn: u.last_sign_in_at || null,
           topicCount,
         };
       }));
+      usersData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
       return res.json({ feedback: feedbackData, featureInterest: featureData, users: usersData });
     } catch (error: any) {
