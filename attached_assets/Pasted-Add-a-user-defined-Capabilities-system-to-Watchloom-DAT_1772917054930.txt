@@ -1,0 +1,21 @@
+Add a user-defined Capabilities system to Watchloom.
+DATABASE
+Create two tables:
+- workspace_capabilities: id, tenant_id, name (e.g. 'Passive liveness detection'), display_order, created_at
+- competitor_capabilities: id, tenant_id, entity_id, capability_id, status (yes/no/partial/unknown, default unknown), evidence (text, nullable — one sentence explaining why), updated_at
+SETTINGS — CAPABILITIES SECTION
+In Settings under My Product, add a Capabilities card. Header: 'Market Capabilities' with subtext: 'Define the capabilities that matter in your market. Watchloom will track these across all your competitors.'
+Show existing capabilities as draggable rows (display_order). Each row: capability name, edit pencil, delete X. An 'Add capability' button at the bottom opens an inline text input. Save adds the row. Limit 12 capabilities.
+On first visit with no capabilities, show three suggested examples as grey placeholder pills based on workspace context (use Claude to generate 3 relevant suggestions from workspace_context.primary_domain). Clicking a suggestion adds it.
+COMPETITOR TOPIC — CAPABILITIES CARD
+Add a Capabilities card to competitor topic full screen views, below Strategic Direction.
+Shows each workspace capability as a row with: capability name, a status selector (four options shown as pills: ✅ Yes / ❌ No / ⚠️ Partial / ❓ Unknown — default Unknown), and a small evidence text field that appears when status is set (placeholder: 'Add a note or source...').
+Clicking a status pill saves immediately (no save button needed). Show last updated timestamp per row.
+COMPARISON VIEW
+Add a 'Compare' button to the My Workspace top bar. Opens a full-screen modal.
+Shows a matrix table: rows are capabilities, columns are: My Product (first, navy header) + each competitor topic in the workspace.
+Each cell shows the status pill. My Product column is filled from a new capabilities section on the My Product settings card (same pill selector). Unknown cells show ❓ in grey.
+A small 'Export as image' button at the top right captures the table as a PNG download.
+AI CAPABILITY DETECTION
+When a capture is routed to a competitor topic, check if the capture content mentions any workspace capability names. If a match is found, after the routing confirmation show a prompt: 'This capture mentions [capability name]. Update [competitor]'s capability status?' with the four status pills inline. Clicking one saves and dismisses.
+Do not change the landing page or any other functionality."
