@@ -1,0 +1,31 @@
+"Fix the /admin page. Two bugs need to be resolved.
+BUG 1 — WRONG DATA SCOPE: The queries for feature_interest and feedback are filtering by the current user's tenant_id. Remove ALL tenant_id filters from the admin queries. The admin page must return data from ALL users, not just the logged-in user.
+BUG 2 — AUTH.USERS JOIN FAILING: The join to auth.users requires the Supabase service role key, not the anon key. Fix the admin data fetching route as follows:
+In the /api/admin/stats route, use the Supabase admin client (initialised with SUPABASE_SERVICE_ROLE_KEY, not the regular client). If SUPABASE_SERVICE_ROLE_KEY is not yet in Replit Secrets, add a clear error message in the console: 'SUPABASE_SERVICE_ROLE_KEY is missing — admin queries will fail'.
+The three queries must be:
+Query 1 — All feedback:
+sqlSELECT f.id, f.mood, f.message, f.created_at, au.email
+FROM feedback f
+LEFT JOIN auth.users au ON f.user_id = au.id
+ORDER BY f.created_at DESC
+Query 2 — All feature interest:
+sqlSELECT fi.feature_name, fi.created_at, au.email
+FROM feature_interest fi
+LEFT JOIN auth.users au ON fi.user_id = au.id
+ORDER BY fi.created_at DESC
+Query 3 — All users with activity:
+sqlSELECT au.email, au.created_at, au.last_sign_in_at,
+COUNT(DISTINCT e.id) as topic_count
+FROM auth.users au
+LEFT JOIN entities e ON e.tenant_id = au.id
+GROUP BY au.id, au.email, au.created_at, au.last_sign_in_at
+ORDER BY au.created_at DESC
+Display on the admin page:
+- Feedback section: table with columns Email, Mood, Message, Date. Show total count above the table.
+- Feature Interest section: group by feature_name, show count per feature and list of emails under each.
+- Users section: table with columns Email, Joined, Last Active, Topics Created.
+The /api/admin/stats route must verify the requesting user email is hrohin99@gmail.com before returning any data. Return 403 for anyone else.
+Do not change anything else."
+
+While that runs, get your service role key:
+Go to Supabase project settings → API → copy the service_role key (not the anon key). Add it to Replit Secrets as SUPABASE_SERVICE_ROLE_KEY. This is the missing piece — without it, the auth.users join will always fail silently regardless of how the query is written.
