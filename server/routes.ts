@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID, createHmac } from "crypto";
 import multer from "multer";
 import jwt from "jsonwebtoken";
-import { PDFParse } from "pdf-parse";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import mammoth from "mammoth";
 import path from "path";
 import { storage } from "./storage";
@@ -580,14 +580,30 @@ User's description: ${description}`
 
       if (ext === ".pdf") {
         try {
-          const parser = new PDFParse();
-          await parser.load(file.buffer);
-          extractedText = await parser.getText();
-          console.log(`[extract-document] PDF extraction result: ${extractedText.length} characters extracted`);
-          parser.destroy();
+          const data = new Uint8Array(file.buffer);
+          const doc = await pdfjsLib.getDocument({ data, disableWorker: true }).promise;
+          let fullText = '';
+          for (let i = 1; i <= doc.numPages; i++) {
+            const page = await doc.getPage(i);
+            const content = await page.getTextContent();
+            const pageText = content.items.map((item: any) => item.str).join(' ');
+            fullText += pageText + '\n';
+          }
+          extractedText = fullText.trim();
+          console.log(`[extract-document] pdfjs-dist extraction result: ${extractedText.length} characters extracted`);
         } catch (pdfError: any) {
-          console.error("pdf-parse error:", pdfError);
-          return res.status(400).json({ message: "Could not read this PDF. Please try copying the text and using Text Note instead." });
+          console.error("pdfjs-dist error:", pdfError);
+          try {
+            const rawText = file.buffer.toString("utf-8");
+            const matches = rawText.match(/[\x20-\x7E]{20,}/g);
+            if (matches && matches.length > 0) {
+              extractedText = matches.join('\n').trim();
+            }
+            console.log(`[extract-document] Fallback regex extraction result: ${extractedText.length} characters extracted`);
+          } catch (fallbackError: any) {
+            console.error("Fallback extraction error:", fallbackError);
+            return res.status(400).json({ message: "Could not read this PDF. Please try copying the text and using Text Note instead." });
+          }
         }
       } else if (ext === ".docx") {
         try {
