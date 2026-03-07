@@ -23,7 +23,7 @@ Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui compo
 - **Battlecards:** AI-enhanced competitive analysis tools with auto-fill and manual update capabilities.
 - **Key Dates Management:** Tracks and manages specific dates/deadlines for topics. AI date extraction automatically detects dates/deadlines from capture text during classification (`/api/classify` includes `extracted_dates` in response) and via a dedicated `/api/extract-dates` endpoint for inline captures. Extracted dates appear as actionable cards with Track/Ignore buttons on the capture page and as inline prompts on the topic detail view.
 - **Topic Type-Specific Behavior:** Provides contextual prompts and automated date modals for regulation, risk, and event topics.
-- **Ambient Search System:** Schedules daily web searches using Perplexity AI for all tenants, deduplicating findings and creating captures and notifications. Supports manual, per-topic searches and customizable search settings.
+- **Ambient Search System:** Schedules daily web searches using Perplexity AI for all tenants, deduplicating findings and creating captures and notifications. Supports manual, per-topic searches and customizable search settings. Competitor searches now also detect hiring signals (leadership hires, AI/ML roles, market expansion roles) which are tagged with `[signal_type:hiring_signal]` in matchReason and displayed with a briefcase icon and amber "Hiring signal" pill in the updates feed.
 - **Sibling Topic Inference:** AI-powered disambiguation for new topics based on existing workspace context or category names, determining domain, confidence, and reasoning.
 - **Confidence Indicator:** Displays the scope and confidence of AI summaries in the UI.
 - **Disambiguation UI:** Provides banners and modals for confirming or refining AI-inferred contexts and selecting specific aspects for topic focus.
@@ -31,6 +31,7 @@ Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui compo
 - **Monitored URLs:** Allows users to track specific URLs for competitor topics. Supports URL categories (pricing/product/news/careers/custom) and configurable check frequencies (daily/every 3 days/weekly). Card appears in the right column of competitor topic full-screen views below Dates and Deadlines.
 - **Coming Soon Interest Cards:** Three feature interest cards (AI Visibility, Email Capture, Search Your Intelligence) with "I'm Interested" buttons that record user interest. AI Visibility appears in competitor topic views below Monitored URLs. Email Capture and Search cards appear in Settings below My Product. A disabled search icon with tooltip is in the top navigation bar.
 - **Feedback Widget:** Fixed bottom-right button on all authenticated screens. Opens modal with mood pills and textarea. Saves to `feedback` table and emails feedback to founder via nodemailer. Controlled by `VITE_FEEDBACK_ENABLED` env var (default true).
+- **Weekly Digest Email:** Optional weekly summary email sent every Monday at 8am UTC via node-cron. Toggle in Settings under Notifications card. Covers last 7 days of captures, prioritizes high-signal updates, includes hiring signals detected and deadlines within 30 days. Generated via Anthropic Claude and sent via Resend. Stored as `weekly_digest_enabled` boolean on user_profiles. Backend endpoint: POST `/api/digest/weekly`. Generation logic in `server/weeklyDigest.ts`.
 
 **Core Technical Implementations:**
 - **API-driven communication:** RESTful API endpoints handle all frontend-backend interactions.
@@ -44,7 +45,7 @@ Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui compo
 - **Resend:** Transactional email services.
 - **Replit AI Integrations (Anthropic Claude):** AI capabilities for content extraction, classification, transcription, and insight generation.
 - **Perplexity AI:** Web research for automated competitor and topic intelligence gathering (via `server/perplexityService.ts`).
-- **node-cron:** Schedules daily ambient search.
+- **node-cron:** Schedules daily ambient search and weekly Monday digest emails.
 - **PostgreSQL:** Primary database.
 - **pdfjs-dist:** Server-side PDF text extraction for document captures (with regex fallback for resilience).
 - **mammoth:** Server-side DOCX text extraction for document captures.

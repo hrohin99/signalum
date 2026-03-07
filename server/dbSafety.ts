@@ -75,5 +75,14 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring topic_dates indexes:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      ALTER TABLE user_profiles ADD COLUMN IF NOT EXISTS weekly_digest_enabled INTEGER NOT NULL DEFAULT 0
+    `);
+    console.log("[DBSafety] weekly_digest_enabled column verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring weekly_digest_enabled column:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

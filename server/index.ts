@@ -149,6 +149,62 @@ app.use((req, res, next) => {
       });
 
       log("Ambient search cron scheduled for 6:00 AM UTC daily", "cron");
+
+      cron.schedule("0 8 * * 1", async () => {
+        log("Weekly digest triggered by cron", "cron");
+        try {
+          if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+            log("Skipping weekly digest: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY not set", "cron");
+            return;
+          }
+
+          const { storage } = await import("./storage");
+          const { generateWeeklyDigest } = await import("./weeklyDigest");
+          const { sendWeeklyDigestEmail } = await import("./email");
+          const { createClient } = await import("@supabase/supabase-js");
+
+          const supabaseAdmin = createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_ROLE_KEY
+          );
+
+          const users = await storage.getUsersWithWeeklyDigest();
+          log(`Found ${users.length} user(s) with weekly digest enabled`, "cron");
+
+          for (const user of users) {
+            try {
+              const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(user.userId);
+              if (!authUser?.user?.email) {
+                log(`No email found for user ${user.userId}, skipping`, "cron");
+                continue;
+              }
+
+              const digest = await generateWeeklyDigest(user.userId);
+              if (!digest) {
+                log(`No digest generated for user ${user.userId} (no workspace or recent captures)`, "cron");
+                continue;
+              }
+
+              const emailResult = await sendWeeklyDigestEmail(authUser.user.email, digest.content);
+              if (emailResult.success) {
+                log(`Weekly digest sent to ${authUser.user.email}`, "cron");
+              } else {
+                log(`Failed to email digest to ${authUser.user.email}: ${emailResult.error}`, "cron");
+              }
+            } catch (userError) {
+              console.error(`[cron] Weekly digest failed for user ${user.userId}:`, userError);
+            }
+          }
+
+          log(`Weekly digest processing complete`, "cron");
+        } catch (error) {
+          console.error("[cron] Weekly digest failed:", error);
+        }
+      }, {
+        timezone: "UTC",
+      });
+
+      log("Weekly digest cron scheduled for Monday 8:00 AM UTC", "cron");
     },
   );
 })();

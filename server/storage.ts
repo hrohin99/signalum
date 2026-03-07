@@ -52,6 +52,8 @@ export interface IStorage {
   createFeatureInterest(data: InsertFeatureInterest): Promise<FeatureInterest>;
   getFeatureInterestByUser(userId: string): Promise<FeatureInterest[]>;
   createFeedback(data: InsertFeedback): Promise<Feedback>;
+  updateWeeklyDigest(userId: string, enabled: boolean): Promise<void>;
+  getUsersWithWeeklyDigest(): Promise<UserProfile[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -450,6 +452,20 @@ export class DatabaseStorage implements IStorage {
       .values(data)
       .returning();
     return created;
+  }
+
+  async updateWeeklyDigest(userId: string, enabled: boolean): Promise<void> {
+    await db
+      .update(userProfiles)
+      .set({ weeklyDigestEnabled: enabled ? 1 : 0 })
+      .where(eq(userProfiles.userId, userId));
+  }
+
+  async getUsersWithWeeklyDigest(): Promise<UserProfile[]> {
+    return db
+      .select()
+      .from(userProfiles)
+      .where(eq(userProfiles.weeklyDigestEnabled, 1));
   }
 }
 

@@ -42,6 +42,7 @@ import {
   Trash2,
   Globe,
   ThumbsDown,
+  Briefcase,
 } from "lucide-react";
 import {
   Popover,
@@ -1221,11 +1222,15 @@ function ManualSearchButton({
 function CaptureSourceIndicator({ capture }: { capture: Capture }) {
   const sourceUrlMatch = capture.content.match(/\n\nSource: (https?:\/\/[^\s]+)/);
   const sourceUrl = sourceUrlMatch ? sourceUrlMatch[1] : null;
+  const isHiringSignal = capture.matchReason?.includes("[signal_type:hiring_signal]");
 
-  let icon: typeof Globe | typeof Pencil = Pencil;
+  let icon: typeof Globe | typeof Pencil | typeof Briefcase = Pencil;
   let label = "Added manually";
 
-  if (capture.type === "web_search") {
+  if (isHiringSignal) {
+    icon = Briefcase;
+    label = "Hiring signal";
+  } else if (capture.type === "web_search") {
     icon = Globe;
     label = "Web search";
   } else if (capture.matchReason?.includes("Direct update from topic view")) {
@@ -1238,7 +1243,12 @@ function CaptureSourceIndicator({ capture }: { capture: Capture }) {
 
   const SourceIcon = icon;
 
-  const content = (
+  const pillContent = isHiringSignal ? (
+    <span className="inline-flex items-center gap-1 text-[11px]" data-testid={`source-indicator-${capture.id}`}>
+      <SourceIcon className="w-3 h-3 text-amber-600" />
+      <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-medium">Hiring signal</span>
+    </span>
+  ) : (
     <span className="inline-flex items-center gap-1 text-[11px] text-slate-500" data-testid={`source-indicator-${capture.id}`}>
       <SourceIcon className="w-3 h-3 text-[#1e3a5f]" />
       <span>{label}</span>
@@ -1251,16 +1261,20 @@ function CaptureSourceIndicator({ capture }: { capture: Capture }) {
         href={sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-[#1e3a5f] hover:underline mt-2 transition-colors"
+        className={`inline-flex items-center gap-1 text-[11px] mt-2 transition-colors ${isHiringSignal ? "text-amber-600 hover:text-amber-800" : "text-slate-500 hover:text-[#1e3a5f]"} hover:underline`}
         data-testid={`source-link-${capture.id}`}
       >
-        <SourceIcon className="w-3 h-3 text-[#1e3a5f]" />
-        <span>{label}</span>
+        <SourceIcon className={`w-3 h-3 ${isHiringSignal ? "text-amber-600" : "text-[#1e3a5f]"}`} />
+        {isHiringSignal ? (
+          <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-medium">Hiring signal</span>
+        ) : (
+          <span>{label}</span>
+        )}
       </a>
     );
   }
 
-  return <div className="mt-2">{content}</div>;
+  return <div className="mt-2">{pillContent}</div>;
 }
 
 function UpdatesFeedWidget({
@@ -1279,13 +1293,14 @@ function UpdatesFeedWidget({
         <ScrollArea className="max-h-[500px]">
           <div className="space-y-3 pr-2">
             {captures.map((cap) => {
-              const Icon = captureTypeIcons[cap.type] || FileText;
+              const isHiring = cap.matchReason?.includes("[signal_type:hiring_signal]");
+              const Icon = isHiring ? Briefcase : (captureTypeIcons[cap.type] || FileText);
               return (
                 <Card key={cap.id} className="border-border/60" data-testid={`card-update-${cap.id}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0 mt-1">
-                        <Icon className="w-4 h-4 text-[#1e3a5f]" />
+                      <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 mt-1 ${isHiring ? "bg-amber-100" : "bg-[#1e3a5f]/10"}`}>
+                        <Icon className={`w-4 h-4 ${isHiring ? "text-amber-600" : "text-[#1e3a5f]"}`} />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[15px] text-foreground whitespace-pre-wrap break-words leading-relaxed">

@@ -10,6 +10,7 @@ export const userProfiles = pgTable("user_profiles", {
   welcomeDismissed: integer("welcome_dismissed").default(0).notNull(),
   historicalSeedingCompleted: integer("historical_seeding_completed").default(0).notNull(),
   workspaceReady: integer("workspace_ready").default(0).notNull(),
+  weeklyDigestEnabled: integer("weekly_digest_enabled").default(0).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

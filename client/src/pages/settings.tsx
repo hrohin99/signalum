@@ -7,8 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, User, Pencil, Package, Mail, Search } from "lucide-react";
+import { LogOut, User, Pencil, Package, Mail, Search, Bell } from "lucide-react";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 
 export default function SettingsPage() {
@@ -36,6 +37,30 @@ export default function SettingsPage() {
   }, [productData]);
 
   const hasSavedProduct = !!productData?.productContext;
+
+  const { data: digestData } = useQuery<{ weeklyDigestEnabled: boolean }>({
+    queryKey: ["/api/settings/weekly-digest"],
+  });
+
+  const digestMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const res = await apiRequest("PUT", "/api/settings/weekly-digest", { enabled });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/weekly-digest"] });
+      toast({
+        title: data.weeklyDigestEnabled ? "Weekly digest enabled" : "Weekly digest disabled",
+        description: data.weeklyDigestEnabled
+          ? "You'll receive a Monday morning summary email."
+          : "You won't receive weekly digest emails.",
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
 
   const saveProductMutation = useMutation({
     mutationFn: async () => {
@@ -102,6 +127,36 @@ export default function SettingsPage() {
                 <Label className="text-sm text-muted-foreground">Email</Label>
                 <p className="text-sm mt-1" data-testid="text-user-email">{user?.email}</p>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-[#1e3a5f]" />
+              </div>
+              <div>
+                <h3 className="font-medium text-foreground" data-testid="text-notifications-header">Notifications</h3>
+                <p className="text-sm text-muted-foreground">Manage how you receive updates.</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-t border-border" data-testid="row-weekly-digest">
+              <div className="flex-1 mr-4">
+                <Label htmlFor="weekly-digest" className="text-sm font-medium cursor-pointer">Weekly digest email</Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Get a weekly Monday morning summary of everything that changed across your workspace.
+                </p>
+              </div>
+              <Switch
+                id="weekly-digest"
+                checked={digestData?.weeklyDigestEnabled ?? false}
+                onCheckedChange={(checked) => digestMutation.mutate(checked)}
+                disabled={digestMutation.isPending}
+                data-testid="switch-weekly-digest"
+              />
             </div>
           </CardContent>
         </Card>

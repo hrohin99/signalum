@@ -15,6 +15,68 @@ export function getAppUrl(): string {
   return process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 5000}`;
 }
 
+export async function sendWeeklyDigestEmail(
+  to: string,
+  digestContent: string
+): Promise<{ success: boolean; error?: string }> {
+  const fromAddress = process.env.EMAIL_FROM || "noreply@example.com";
+  const htmlContent = digestContent
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+
+  const { data, error } = await resend.emails.send({
+    from: fromAddress,
+    to,
+    subject: `Watchloom — Weekly Intelligence Digest`,
+    html: `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background-color:#f4f5f7;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:40px 0;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="background-color:#1e3a5f;padding:24px 40px;text-align:center;">
+              <span style="font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.3px;">Watchloom — Weekly Digest</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 40px;">
+              <div style="font-size:14px;color:#333333;line-height:1.7;">
+                ${htmlContent}
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 40px;border-top:1px solid #eee;text-align:center;">
+              <p style="margin:0;font-size:12px;color:#aaaaaa;">
+                You received this because you enabled weekly digests in Watchloom.<br>
+                Disable this in Settings to stop receiving these emails.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`,
+    text: digestContent,
+  });
+
+  if (error) {
+    console.error("Resend weekly digest email error:", error);
+    return { success: false, error: error.message };
+  }
+
+  return { success: true };
+}
+
 export async function sendVerificationEmail(
   to: string,
   token: string

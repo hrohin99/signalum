@@ -5,6 +5,7 @@ interface PerplexityFinding {
   source_url: string | null;
   approximate_date: string | null;
   signal_strength: "high" | "medium" | "low";
+  signal_type?: "hiring_signal";
 }
 
 interface PerplexityMessage {
@@ -74,6 +75,7 @@ function parseFindings(response: PerplexityResponse): PerplexityFinding[] {
         source_url?: string;
         approximate_date?: string;
         signal_strength?: string;
+        signal_type?: string;
       }>;
       if (Array.isArray(parsed) && parsed.length > 0) {
         return parsed
@@ -85,6 +87,7 @@ function parseFindings(response: PerplexityResponse): PerplexityFinding[] {
             signal_strength: (["high", "medium", "low"].includes(item.signal_strength || "")
               ? item.signal_strength
               : classifySignalStrength(item.summary!)) as "high" | "medium" | "low",
+            ...(item.signal_type === "hiring_signal" ? { signal_type: "hiring_signal" as const } : {}),
           }));
       }
     } catch {
@@ -181,8 +184,10 @@ export async function searchCompetitorNews(
   lookbackDays: number
 ): Promise<PerplexityFinding[]> {
   const systemPrompt =
-    "You are a competitive intelligence analyst. Return only factual, sourced information. Be concise and focus on commercially relevant developments. Return your findings as a JSON array with objects containing: summary (string), source_url (string or null), approximate_date (string or null), signal_strength (high/medium/low). Return ONLY the JSON array, no other text.";
-  const userPrompt = `Find news, product updates, pricing changes, funding announcements, leadership changes, and notable developments about ${competitorName} in the ${category} space from the last ${lookbackDays} days. Return each finding as a separate item with: a one sentence summary, the source URL if available, and the approximate date. Focus on information that would be relevant to a competitor tracking this company.`;
+    "You are a competitive intelligence analyst. Return only factual, sourced information. Be concise and focus on commercially relevant developments. Return your findings as a JSON array with objects containing: summary (string), source_url (string or null), approximate_date (string or null), signal_strength (high/medium/low), and optionally signal_type (string, use \"hiring_signal\" for job postings or strategic hires). Return ONLY the JSON array, no other text.";
+  const userPrompt = `Find news, product updates, pricing changes, funding announcements, leadership changes, and notable developments about ${competitorName} in the ${category} space from the last ${lookbackDays} days. Return each finding as a separate item with: a one sentence summary, the source URL if available, and the approximate date. Focus on information that would be relevant to a competitor tracking this company.
+
+Also search for recent job postings or strategic hires at ${competitorName} from the last ${lookbackDays} days. Focus on leadership hires, AI/ML roles, and new market expansion roles as these signal strategic direction. If found, return as findings with signal_type: "hiring_signal".`;
 
   const response = await callPerplexity(systemPrompt, userPrompt);
   return parseFindings(response);
@@ -269,13 +274,15 @@ export function findingsToCaptures(
       ? `${finding.summary}\n\nSource: ${finding.source_url}`
       : finding.summary;
 
+    const signalTag = finding.signal_type === "hiring_signal" ? " [signal_type:hiring_signal]" : "";
+
     return {
       userId,
       type: "web_search",
       content: rawContent,
       matchedEntity: entityId,
       matchedCategory: source,
-      matchReason: `Automatically discovered via Perplexity web search [${finding.signal_strength}]`,
+      matchReason: `Automatically discovered via Perplexity web search [${finding.signal_strength}]${signalTag}`,
     } satisfies InsertCapture;
   });
 }

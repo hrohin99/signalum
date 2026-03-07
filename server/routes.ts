@@ -2696,5 +2696,47 @@ Rules:
     }
   });
 
+  app.get("/api/settings/weekly-digest", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profile = await storage.getUserProfile(userId);
+      return res.json({ weeklyDigestEnabled: profile?.weeklyDigestEnabled === 1 });
+    } catch (error: any) {
+      console.error("Get weekly digest setting error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/settings/weekly-digest", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const schema = z.object({ enabled: z.boolean() });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.errors.map(e => e.message).join(", ") });
+      }
+      await storage.updateWeeklyDigest(userId, parsed.data.enabled);
+      return res.json({ weeklyDigestEnabled: parsed.data.enabled });
+    } catch (error: any) {
+      console.error("Update weekly digest setting error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/digest/weekly", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { generateWeeklyDigest } = await import("./weeklyDigest");
+      const brief = await generateWeeklyDigest(userId);
+      if (!brief) {
+        return res.status(400).json({ message: "No workspace or captures from the last 7 days." });
+      }
+      return res.json(brief);
+    } catch (error: any) {
+      console.error("Generate weekly digest error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }
