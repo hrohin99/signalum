@@ -432,9 +432,12 @@ export default function CapturePage() {
         return;
       }
 
+      console.log("[document-upload] File received on frontend:", { name: selectedFile.name, type: selectedFile.type, size: selectedFile.size });
+
       const formData = new FormData();
       formData.append("file", selectedFile);
 
+      console.log("[document-upload] Sending file to backend via FormData");
       const extractRes = await fetch("/api/extract-document", {
         method: "POST",
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -442,6 +445,7 @@ export default function CapturePage() {
       });
 
       const extractData = await extractRes.json();
+      console.log("[document-upload] Extraction result from backend:", { ok: extractRes.ok, characterCount: extractData.characterCount, filename: extractData.filename });
 
       if (!extractRes.ok) {
         toast({ title: "Document error", description: extractData.message, variant: "destructive" });

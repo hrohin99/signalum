@@ -5,11 +5,9 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID, createHmac } from "crypto";
 import multer from "multer";
 import jwt from "jsonwebtoken";
-import * as pdfParseModule from "pdf-parse";
+import { PDFParse } from "pdf-parse";
 import mammoth from "mammoth";
 import path from "path";
-
-const pdfParse = (pdfParseModule as any).default || pdfParseModule;
 import { storage } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
 import type { ExtractionResult, ExtractedCategory, ExtractedEntity, SiblingInferenceResult } from "@shared/schema";
@@ -563,6 +561,7 @@ User's description: ${description}`
   app.post("/api/extract-document", requireAuth, upload.single("file"), async (req: Request, res: Response) => {
     try {
       const file = req.file;
+      console.log("[extract-document] File received on backend:", file ? { originalname: file.originalname, mimetype: file.mimetype, size: file.size, bufferLength: file.buffer?.length } : "No file");
       if (!file) {
         return res.status(400).json({ message: "No file uploaded" });
       }
@@ -581,9 +580,11 @@ User's description: ${description}`
 
       if (ext === ".pdf") {
         try {
-          const pdfData = await pdfParse(file.buffer);
-          extractedText = pdfData.text;
-          console.log(`PDF text extraction complete: ${extractedText.length} characters extracted`);
+          const parser = new PDFParse();
+          await parser.load(file.buffer);
+          extractedText = await parser.getText();
+          console.log(`[extract-document] PDF extraction result: ${extractedText.length} characters extracted`);
+          parser.destroy();
         } catch (pdfError: any) {
           console.error("pdf-parse error:", pdfError);
           return res.status(400).json({ message: "Could not read this PDF. Please try copying the text and using Text Note instead." });
@@ -592,14 +593,14 @@ User's description: ${description}`
         try {
           const result = await mammoth.extractRawText({ buffer: file.buffer });
           extractedText = result.value;
-          console.log(`DOCX text extraction complete: ${extractedText.length} characters extracted`);
+          console.log(`[extract-document] DOCX extraction result: ${extractedText.length} characters extracted`);
         } catch (docxError: any) {
           console.error("mammoth error:", docxError);
           return res.status(400).json({ message: "Could not read this DOCX file. Please try copying the text and using Text Note instead." });
         }
       } else {
         extractedText = file.buffer.toString("utf-8");
-        console.log(`Text file extraction complete: ${extractedText.length} characters extracted`);
+        console.log(`[extract-document] Text file extraction result: ${extractedText.length} characters extracted`);
       }
 
       const trimmed = extractedText.trim();
