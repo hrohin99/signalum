@@ -1,0 +1,12 @@
+The white screen on new user first login is still occurring despite previous fixes. I need you to diagnose and fix the root cause.
+First, add detailed console logging to find exactly where it breaks:
+1. In MyWorkspace component, add console.log at every stage: 'WS: component mounted', 'WS: fetch started', 'WS: fetch response received', 'WS: categories count = [n]', 'WS: rendering workspace'. If any stage is missing from the console on a new user login, that is where the crash is happening.
+2. In the Express route GET /api/workspace, add console.log: 'WORKSPACE API: called by user [user_id]', 'WORKSPACE API: tenant_id = [tenant_id]', 'WORKSPACE API: categories found = [n]'. If tenant_id is null or undefined for a new user, that is the root cause.
+3. Check the onboarding completion flow. When a new user finishes onboarding and is redirected to /workspace, confirm that: the tenant record exists in the database, the user record has a tenant_id foreign key set, the session/JWT contains the tenant_id. If any of these are missing, the workspace API returns empty or errors, and the frontend crashes.
+Then fix based on what the logs reveal. Most likely causes in order of probability:
+Cause A — tenant_id not set on session after onboarding: After onboarding creates the tenant and user records, force a session refresh before redirecting to /workspace so the JWT contains the new tenant_id.
+Cause B — workspace API called before onboarding writes to database: Add a 1 second delay before the first /api/workspace fetch after onboarding redirect, or poll until tenant_id is confirmed present on the user record.
+Cause C — React component crashes on undefined data before fetch completes: Add null checks on every single variable. Replace all instances of categories.map with (categories || []).map. Replace all instances of topics.length with (topics || []).length. Replace all property accesses like user.tenant_id with user?.tenant_id.
+Cause D — onboarding does not complete writing all records before redirect: In the onboarding completion handler, await all database writes fully before sending the redirect response. Do not redirect until tenant, user, categories, and seeded entities are all confirmed written.
+Fix whichever cause the logs identify. If multiple causes are found, fix all of them.
+Do not change any other screens."
