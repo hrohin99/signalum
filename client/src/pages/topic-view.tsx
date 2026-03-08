@@ -54,9 +54,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability } from "@shared/schema";
+import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext } from "@shared/schema";
 import { ComingSoonCard } from "@/components/coming-soon-card";
-import { Eye, Crosshair } from "lucide-react";
+import { Eye, Crosshair, Compass } from "lucide-react";
 
 function detectMultipleEntities(name: string): string[] | null {
   if (!name.includes(",")) return null;
@@ -304,6 +304,12 @@ function TopicViewContent({
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
+            <StrategicDirectionCard entity={entity} categoryName={categoryName} captures={captures} />
+          )}
+          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
+            <PricingCard entity={entity} />
+          )}
           <WidgetsSection
             entity={entity}
             categoryName={categoryName}
@@ -677,6 +683,359 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function StrategicDirectionCard({ entity, categoryName, captures }: { entity: ExtractedEntity; categoryName: string; captures: Capture[] }) {
+  const entityId = entity.name;
+  const [, navigate] = useLocation();
+
+  const { data: directionData, isLoading } = useQuery<{ strategicDirection: StrategicDirection | null; insufficient?: boolean; captureCount?: number }>({
+    queryKey: ["/api/strategic-direction", entityId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/strategic-direction/${encodeURIComponent(entityId)}`);
+      return res.json();
+    },
+  });
+
+  const { data: prodCtxData } = useQuery<{ productContext: ProductContext | null }>({
+    queryKey: ["/api/product-context"],
+  });
+
+  const { toast } = useToast();
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/strategic-direction/${encodeURIComponent(entityId)}`, {
+        entityName: entity.name,
+        categoryName,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/strategic-direction", entityId], data);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to generate strategic direction", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const direction = directionData?.strategicDirection;
+  const hasProductContext = !!(prodCtxData?.productContext?.productName);
+  const lastUpdated = direction?.updatedAt ? new Date(direction.updatedAt) : null;
+  const isOlderThanWeek = lastUpdated ? (Date.now() - lastUpdated.getTime()) > 7 * 24 * 60 * 60 * 1000 : false;
+  const captureCount = captures.length;
+  const hasEnoughCaptures = captureCount >= 3;
+
+  const shouldAutoGenerate = hasEnoughCaptures && !direction && !isLoading && !generateMutation.isPending;
+  const shouldRegenerate = hasEnoughCaptures && direction && isOlderThanWeek && !generateMutation.isPending;
+
+  useEffect(() => {
+    if (shouldAutoGenerate || shouldRegenerate) {
+      generateMutation.mutate();
+    }
+  }, [shouldAutoGenerate, shouldRegenerate]);
+
+  return (
+    <Card className="border-[#1e3a5f]/15" data-testid="section-strategic-direction">
+      <CardContent className="p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Compass className="w-4 h-4 text-[#1e3a5f]" />
+          <span className="text-sm font-semibold text-[#1e3a5f]">Strategic Direction</span>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-lg bg-slate-50 p-3">
+            <p className="text-xs font-medium text-slate-600 mb-2">Where they're heading</p>
+            {isLoading || generateMutation.isPending ? (
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+              </div>
+            ) : !hasEnoughCaptures ? (
+              <p className="text-sm text-slate-400 italic" data-testid="text-strategic-insufficient">
+                Need at least 3 captures to generate strategic direction ({captureCount}/3 so far).
+              </p>
+            ) : direction?.whereHeading ? (
+              <p className="text-sm text-foreground leading-relaxed" data-testid="text-where-heading">
+                {direction.whereHeading}
+              </p>
+            ) : (
+              <p className="text-sm text-slate-400 italic">Unable to generate at this time.</p>
+            )}
+            {hasEnoughCaptures && (
+              <div className="flex items-center gap-3 mt-2">
+                {lastUpdated && (
+                  <span className="text-xs text-slate-400" data-testid="text-strategic-timestamp">
+                    Last updated {lastUpdated.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at{" "}
+                    {lastUpdated.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  </span>
+                )}
+                <button
+                  className="text-xs text-[#1e3a5f] hover:underline font-medium"
+                  onClick={() => generateMutation.mutate()}
+                  disabled={generateMutation.isPending}
+                  data-testid="button-regenerate-strategic"
+                >
+                  <RefreshCw className={`w-3 h-3 inline mr-1 ${generateMutation.isPending ? "animate-spin" : ""}`} />
+                  Regenerate
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-lg bg-blue-50/50 p-3">
+            <p className="text-xs font-medium text-slate-600 mb-2">What this means for you</p>
+            {hasProductContext ? (
+              isLoading || generateMutation.isPending ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              ) : direction?.whatMeansForYou ? (
+                <p className="text-sm text-foreground leading-relaxed" data-testid="text-what-means">
+                  {direction.whatMeansForYou}
+                </p>
+              ) : !hasEnoughCaptures ? (
+                <p className="text-sm text-slate-400 italic">
+                  Needs enough captures to generate insights.
+                </p>
+              ) : (
+                <p className="text-sm text-slate-400 italic">Unable to generate at this time.</p>
+              )
+            ) : (
+              <p className="text-sm text-slate-400 italic" data-testid="text-product-context-prompt">
+                Add your product details in{" "}
+                <button
+                  className="text-[#1e3a5f] underline hover:text-[#1e3a5f]/80"
+                  onClick={() => navigate("/settings")}
+                  data-testid="link-settings-product"
+                >
+                  Settings
+                </button>
+                {" "}to unlock personalised competitive insights.
+              </p>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PricingCard({ entity }: { entity: ExtractedEntity }) {
+  const { toast } = useToast();
+  const entityId = entity.name;
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
+  const [formPlan, setFormPlan] = useState("");
+  const [formPrice, setFormPrice] = useState("");
+  const [formInclusions, setFormInclusions] = useState("");
+  const [formSource, setFormSource] = useState("");
+
+  const { data: pricingData, isLoading } = useQuery<{ pricing: CompetitorPricing[] }>({
+    queryKey: ["/api/competitor-pricing", entityId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/competitor-pricing/${encodeURIComponent(entityId)}`);
+      return res.json();
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { capturedDate: string; planName: string; price: string; inclusions?: string; sourceUrl?: string }) => {
+      const res = await apiRequest("POST", `/api/competitor-pricing/${encodeURIComponent(entityId)}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/competitor-pricing", entityId] });
+      setShowAddModal(false);
+      resetForm();
+      toast({ title: "Pricing entry added." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (pricingId: string) => {
+      await apiRequest("DELETE", `/api/competitor-pricing/${encodeURIComponent(entityId)}/${pricingId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/competitor-pricing", entityId] });
+      toast({ title: "Pricing entry removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const resetForm = () => {
+    setFormDate(new Date().toISOString().split("T")[0]);
+    setFormPlan("");
+    setFormPrice("");
+    setFormInclusions("");
+    setFormSource("");
+  };
+
+  const handleSubmit = () => {
+    if (!formPlan.trim() || !formPrice.trim()) return;
+    createMutation.mutate({
+      capturedDate: formDate,
+      planName: formPlan.trim(),
+      price: formPrice.trim(),
+      inclusions: formInclusions.trim() || undefined,
+      sourceUrl: formSource.trim() || undefined,
+    });
+  };
+
+  const pricing = pricingData?.pricing || [];
+
+  return (
+    <>
+      <Card data-testid="section-pricing">
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Tag className="w-4 h-4 text-[#1e3a5f]" />
+              <span className="text-sm font-semibold text-[#1e3a5f]">Pricing</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAddModal(true)}
+              data-testid="button-add-pricing"
+            >
+              <Plus className="w-3 h-3 mr-1" />
+              Add pricing entry
+            </Button>
+          </div>
+
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-8 w-full" />
+              <Skeleton className="h-8 w-full" />
+            </div>
+          ) : pricing.length === 0 ? (
+            <p className="text-sm text-slate-400 italic text-center py-4" data-testid="text-pricing-empty">
+              No pricing data yet. Add what you know about their pricing — even partial info is useful.
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm" data-testid="table-pricing">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Date</th>
+                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Plan/Tier</th>
+                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Price</th>
+                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Key inclusions</th>
+                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Source</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pricing.map((entry) => (
+                    <tr key={entry.id} className="border-b border-slate-100 hover:bg-slate-50" data-testid={`row-pricing-${entry.id}`}>
+                      <td className="py-2 px-2 text-slate-600">
+                        {new Date(entry.capturedDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </td>
+                      <td className="py-2 px-2 font-medium">{entry.planName}</td>
+                      <td className="py-2 px-2">{entry.price}</td>
+                      <td className="py-2 px-2 text-slate-600 max-w-[200px] truncate">{entry.inclusions || "—"}</td>
+                      <td className="py-2 px-2">
+                        {entry.sourceUrl ? (
+                          <a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[#1e3a5f] hover:underline truncate block max-w-[120px]" data-testid={`link-pricing-source-${entry.id}`}>
+                            Link
+                          </a>
+                        ) : "—"}
+                      </td>
+                      <td className="py-2 px-2">
+                        <button
+                          className="text-slate-400 hover:text-red-500 transition-colors"
+                          onClick={() => deleteMutation.mutate(entry.id)}
+                          data-testid={`button-delete-pricing-${entry.id}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={showAddModal} onOpenChange={(open) => { setShowAddModal(open); if (!open) resetForm(); }}>
+        <DialogContent className="max-w-md" data-testid="modal-add-pricing">
+          <DialogHeader>
+            <DialogTitle>Add Pricing Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Date</label>
+              <Input
+                type="date"
+                value={formDate}
+                onChange={(e) => setFormDate(e.target.value)}
+                data-testid="input-pricing-date"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Plan / Tier</label>
+              <Input
+                placeholder="e.g. Pro, Enterprise, Free"
+                value={formPlan}
+                onChange={(e) => setFormPlan(e.target.value)}
+                data-testid="input-pricing-plan"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Price</label>
+              <Input
+                placeholder="e.g. $49/mo, $499/yr, Custom"
+                value={formPrice}
+                onChange={(e) => setFormPrice(e.target.value)}
+                data-testid="input-pricing-price"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Key inclusions</label>
+              <Input
+                placeholder="e.g. 10 seats, unlimited projects, API access"
+                value={formInclusions}
+                onChange={(e) => setFormInclusions(e.target.value)}
+                data-testid="input-pricing-inclusions"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Source URL</label>
+              <Input
+                placeholder="https://..."
+                value={formSource}
+                onChange={(e) => setFormSource(e.target.value)}
+                data-testid="input-pricing-source"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => { setShowAddModal(false); resetForm(); }} data-testid="button-cancel-pricing">
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+              disabled={!formPlan.trim() || !formPrice.trim() || createMutation.isPending}
+              onClick={handleSubmit}
+              data-testid="button-save-pricing"
+            >
+              {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

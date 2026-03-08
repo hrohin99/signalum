@@ -339,6 +339,48 @@ export const insertCompetitorCapabilitySchema = createInsertSchema(competitorCap
 export type InsertCompetitorCapability = z.infer<typeof insertCompetitorCapabilitySchema>;
 export type CompetitorCapability = typeof competitorCapabilities.$inferSelect;
 
+export const competitorPricing = pgTable("competitor_pricing", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  entityId: text("entity_id").notNull(),
+  capturedDate: date("captured_date").notNull(),
+  planName: text("plan_name").notNull(),
+  price: text("price").notNull(),
+  inclusions: text("inclusions"),
+  sourceUrl: text("source_url"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("competitor_pricing_entity_id_idx").on(table.entityId),
+  index("competitor_pricing_tenant_id_idx").on(table.tenantId),
+]);
+
+export const insertCompetitorPricingSchema = createInsertSchema(competitorPricing).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCompetitorPricing = z.infer<typeof insertCompetitorPricingSchema>;
+export type CompetitorPricing = typeof competitorPricing.$inferSelect;
+
+export const strategicDirections = pgTable("strategic_directions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  tenantId: uuid("tenant_id").notNull(),
+  entityId: text("entity_id").notNull(),
+  whereHeading: text("where_heading"),
+  whatMeansForYou: text("what_means_for_you"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  unique("strategic_directions_tenant_entity").on(table.tenantId, table.entityId),
+]);
+
+export const insertStrategicDirectionSchema = createInsertSchema(strategicDirections).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertStrategicDirection = z.infer<typeof insertStrategicDirectionSchema>;
+export type StrategicDirection = typeof strategicDirections.$inferSelect;
+
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull(),

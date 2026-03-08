@@ -2275,6 +2275,143 @@ Rules:
     }
   });
 
+  app.get("/api/strategic-direction/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId } = req.params;
+      const direction = await storage.getStrategicDirection(tenantId, entityId);
+      return res.json({ strategicDirection: direction || null });
+    } catch (error: any) {
+      console.error("Get strategic direction error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/strategic-direction/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId } = req.params;
+      const { entityName, categoryName } = req.body;
+
+      if (!entityName) {
+        return res.status(400).json({ message: "Missing entityName" });
+      }
+
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const recentCaptures = await storage.getCapturesByEntitySince(userId, entityName, thirtyDaysAgo);
+
+      if (recentCaptures.length < 3) {
+        return res.json({ strategicDirection: null, insufficient: true, captureCount: recentCaptures.length });
+      }
+
+      const contentSnippets = recentCaptures
+        .slice(0, 20)
+        .map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
+        .join("\n\n");
+
+      const client = getAnthropicClient();
+
+      const headingMessage = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 512,
+        messages: [{
+          role: "user",
+          content: `Based on these recent updates about ${entityName}, write 2-3 sentences describing their apparent strategic direction — what they are investing in, where they are expanding, and what this signals about their priorities.
+
+Recent updates:
+${contentSnippets}
+
+Return only the paragraph, no JSON, no formatting.`
+        }]
+      });
+
+      const headingText = headingMessage.content.find(b => b.type === "text");
+      const whereHeading = headingText?.type === "text" ? headingText.text.trim() : null;
+
+      let whatMeansForYou: string | null = null;
+      const prodContext = await storage.getProductContext(tenantId);
+      if (prodContext && prodContext.productName) {
+        const meansMessage = await client.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 512,
+          messages: [{
+            role: "user",
+            content: `Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"} and weaknesses in ${prodContext.weaknesses || "certain areas"}, what does ${entityName}'s strategic direction mean for us? Be specific and actionable.
+
+${entityName}'s strategic direction: ${whereHeading}
+
+Return only 1-2 sentences, no JSON, no formatting.`
+          }]
+        });
+
+        const meansText = meansMessage.content.find(b => b.type === "text");
+        whatMeansForYou = meansText?.type === "text" ? meansText.text.trim() : null;
+      }
+
+      const direction = await storage.upsertStrategicDirection(tenantId, entityId, { whereHeading, whatMeansForYou });
+      return res.json({ strategicDirection: direction });
+    } catch (error: any) {
+      console.error("Generate strategic direction error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/competitor-pricing/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId } = req.params;
+      const pricing = await storage.getCompetitorPricing(tenantId, entityId);
+      return res.json({ pricing });
+    } catch (error: any) {
+      console.error("Get competitor pricing error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/competitor-pricing/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId } = req.params;
+      const { capturedDate, planName, price, inclusions, sourceUrl } = req.body;
+
+      if (!capturedDate || !planName || !price) {
+        return res.status(400).json({ message: "Missing required fields: capturedDate, planName, price" });
+      }
+
+      const entry = await storage.createCompetitorPricing({
+        tenantId,
+        entityId,
+        capturedDate,
+        planName,
+        price,
+        inclusions: inclusions || null,
+        sourceUrl: sourceUrl || null,
+      });
+
+      return res.json({ pricing: entry });
+    } catch (error: any) {
+      console.error("Create competitor pricing error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/competitor-pricing/:entityId/:pricingId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const { entityId, pricingId } = req.params;
+      const deleted = await storage.deleteCompetitorPricing(pricingId, tenantId, entityId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Pricing entry not found" });
+      }
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete competitor pricing error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   // Topic Dates CRUD
   function computeDaysUntil(dateVal: string | Date): number {
     const dateStr = dateVal instanceof Date

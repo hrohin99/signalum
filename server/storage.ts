@@ -1,7 +1,7 @@
 import { eq, desc, and, lt, gte, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, competitorPricing, strategicDirections, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability, type InsertCompetitorPricing, type CompetitorPricing, type InsertStrategicDirection, type StrategicDirection } from "@shared/schema";
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -67,6 +67,11 @@ export interface IStorage {
   getCompetitorCapabilities(tenantId: string, entityId: string): Promise<CompetitorCapability[]>;
   getAllCompetitorCapabilities(tenantId: string): Promise<CompetitorCapability[]>;
   upsertCompetitorCapability(tenantId: string, entityId: string, capabilityId: string, status: string, evidence?: string | null): Promise<CompetitorCapability>;
+  getCompetitorPricing(tenantId: string, entityId: string): Promise<CompetitorPricing[]>;
+  createCompetitorPricing(data: InsertCompetitorPricing): Promise<CompetitorPricing>;
+  deleteCompetitorPricing(id: string, tenantId: string, entityId: string): Promise<boolean>;
+  getStrategicDirection(tenantId: string, entityId: string): Promise<StrategicDirection | undefined>;
+  upsertStrategicDirection(tenantId: string, entityId: string, data: { whereHeading?: string | null; whatMeansForYou?: string | null }): Promise<StrategicDirection>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -597,6 +602,59 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db
         .insert(competitorCapabilities)
         .values({ tenantId, entityId, capabilityId, status, evidence })
+        .returning();
+      return created;
+    }
+  }
+  async getCompetitorPricing(tenantId: string, entityId: string): Promise<CompetitorPricing[]> {
+    return db
+      .select()
+      .from(competitorPricing)
+      .where(and(eq(competitorPricing.tenantId, tenantId), eq(competitorPricing.entityId, entityId)))
+      .orderBy(desc(competitorPricing.capturedDate));
+  }
+
+  async createCompetitorPricing(data: InsertCompetitorPricing): Promise<CompetitorPricing> {
+    const [created] = await db
+      .insert(competitorPricing)
+      .values(data)
+      .returning();
+    return created;
+  }
+
+  async deleteCompetitorPricing(id: string, tenantId: string, entityId: string): Promise<boolean> {
+    const result = await db
+      .delete(competitorPricing)
+      .where(and(
+        eq(competitorPricing.id, id),
+        eq(competitorPricing.tenantId, tenantId),
+        eq(competitorPricing.entityId, entityId)
+      ))
+      .returning();
+    return result.length > 0;
+  }
+
+  async getStrategicDirection(tenantId: string, entityId: string): Promise<StrategicDirection | undefined> {
+    const [result] = await db
+      .select()
+      .from(strategicDirections)
+      .where(and(eq(strategicDirections.tenantId, tenantId), eq(strategicDirections.entityId, entityId)));
+    return result;
+  }
+
+  async upsertStrategicDirection(tenantId: string, entityId: string, data: { whereHeading?: string | null; whatMeansForYou?: string | null }): Promise<StrategicDirection> {
+    const existing = await this.getStrategicDirection(tenantId, entityId);
+    if (existing) {
+      const [updated] = await db
+        .update(strategicDirections)
+        .set({ ...data, updatedAt: new Date() })
+        .where(and(eq(strategicDirections.tenantId, tenantId), eq(strategicDirections.entityId, entityId)))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(strategicDirections)
+        .values({ tenantId, entityId, ...data })
         .returning();
       return created;
     }

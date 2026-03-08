@@ -156,6 +156,14 @@ export default function CapturePage() {
 
   const [capabilityPrompt, setCapabilityPrompt] = useState<{ capabilityName: string; capabilityId: string; entityName: string } | null>(null);
 
+  const [pricingPrompt, setPricingPrompt] = useState<{ entityName: string; content: string } | null>(null);
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [pricingFormDate, setPricingFormDate] = useState(new Date().toISOString().split("T")[0]);
+  const [pricingFormPlan, setPricingFormPlan] = useState("");
+  const [pricingFormPrice, setPricingFormPrice] = useState("");
+  const [pricingFormInclusions, setPricingFormInclusions] = useState("");
+  const [pricingFormSource, setPricingFormSource] = useState("");
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -400,6 +408,44 @@ export default function CapturePage() {
     setCapabilityPrompt(null);
   };
 
+  const PRICING_KEYWORDS = /\b(price|pricing|plan|tier|cost|per month|per year|enterprise|free trial)\b/i;
+
+  const checkPricingContent = (content: string, entityName: string) => {
+    if (PRICING_KEYWORDS.test(content)) {
+      setPricingModalEntityName(entityName);
+      setPricingFormDate(new Date().toISOString().split("T")[0]);
+      setPricingFormPlan("");
+      setPricingFormPrice("");
+      setPricingFormInclusions("");
+      setPricingFormSource("");
+      setPricingPrompt({ entityName, content });
+    }
+  };
+
+  const handlePricingPromptAccept = () => {
+    setShowPricingModal(true);
+    setPricingPrompt(null);
+  };
+
+  const handlePricingSave = async () => {
+    if (!pricingFormPlan.trim() || !pricingFormPrice.trim() || !pricingModalEntityName) return;
+    try {
+      await apiRequest("POST", `/api/competitor-pricing/${encodeURIComponent(pricingModalEntityName)}`, {
+        capturedDate: pricingFormDate,
+        planName: pricingFormPlan.trim(),
+        price: pricingFormPrice.trim(),
+        inclusions: pricingFormInclusions.trim() || undefined,
+        sourceUrl: pricingFormSource.trim() || undefined,
+      });
+      toast({ title: "Pricing entry added", description: `Pricing info saved for ${pricingModalEntityName}.` });
+      setShowPricingModal(false);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message || "Could not save pricing.", variant: "destructive" });
+    }
+  };
+
+  const [pricingModalEntityName, setPricingModalEntityName] = useState("");
+
   const isCompetitorTopic = (entityName: string) => {
     const categories = workspaceData?.workspace?.categories || [];
     for (const cat of categories) {
@@ -435,6 +481,7 @@ export default function CapturePage() {
 
       if (matchedEntity && isCompetitorTopic(matchedEntity)) {
         await checkCapabilityMention(pendingContent, matchedEntity);
+        checkPricingContent(pendingContent, matchedEntity);
       }
 
       resetState();
@@ -1793,6 +1840,109 @@ export default function CapturePage() {
           </div>
         </div>
       )}
+
+      {pricingPrompt && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-white border border-border shadow-xl rounded-xl p-4 max-w-md w-full animate-in slide-in-from-bottom-4" data-testid="pricing-detection-prompt">
+          <div className="flex items-start justify-between mb-3">
+            <p className="text-sm text-foreground">
+              This looks like pricing information. Want to add it to <span className="font-semibold">{pricingPrompt.entityName}</span>'s Pricing table?
+            </p>
+            <button
+              onClick={() => setPricingPrompt(null)}
+              className="text-slate-400 hover:text-slate-600 ml-2 shrink-0"
+              data-testid="button-dismiss-pricing-prompt"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+              onClick={handlePricingPromptAccept}
+              data-testid="button-accept-pricing-prompt"
+            >
+              Yes, add pricing
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setPricingPrompt(null)}
+              data-testid="button-skip-pricing-prompt"
+            >
+              Skip
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <Dialog open={showPricingModal} onOpenChange={(open) => { if (!open) setShowPricingModal(false); }}>
+        <DialogContent className="max-w-md" data-testid="modal-capture-pricing">
+          <DialogHeader>
+            <DialogTitle>Add Pricing Entry</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Date</label>
+              <Input
+                type="date"
+                value={pricingFormDate}
+                onChange={(e) => setPricingFormDate(e.target.value)}
+                data-testid="input-capture-pricing-date"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Plan / Tier</label>
+              <Input
+                placeholder="e.g. Pro, Enterprise, Free"
+                value={pricingFormPlan}
+                onChange={(e) => setPricingFormPlan(e.target.value)}
+                data-testid="input-capture-pricing-plan"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Price</label>
+              <Input
+                placeholder="e.g. $49/mo, $499/yr, Custom"
+                value={pricingFormPrice}
+                onChange={(e) => setPricingFormPrice(e.target.value)}
+                data-testid="input-capture-pricing-price"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Key inclusions</label>
+              <Input
+                placeholder="e.g. 10 seats, unlimited projects"
+                value={pricingFormInclusions}
+                onChange={(e) => setPricingFormInclusions(e.target.value)}
+                data-testid="input-capture-pricing-inclusions"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">Source URL</label>
+              <Input
+                placeholder="https://..."
+                value={pricingFormSource}
+                onChange={(e) => setPricingFormSource(e.target.value)}
+                data-testid="input-capture-pricing-source"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowPricingModal(false)} data-testid="button-cancel-capture-pricing">
+              Cancel
+            </Button>
+            <Button
+              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+              disabled={!pricingFormPlan.trim() || !pricingFormPrice.trim()}
+              onClick={handlePricingSave}
+              data-testid="button-save-capture-pricing"
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={showPostCreateDateModal} onOpenChange={(open) => { if (!open) closePostCreateDateModal(); }}>
         <DialogContent className="sm:max-w-md" data-testid="modal-post-create-date">
