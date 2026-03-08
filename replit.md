@@ -44,7 +44,10 @@ Watchloom features a React, Vite, and Tailwind CSS frontend with shadcn/ui compo
 - **Database Schema:** Key tables include `user_profiles`, `workspaces` (with JSONB for categories/entities), `captures`, `briefs`, `topic_type_configs`, `product_context`, `battlecards`, `topic_dates`, `monitored_urls`, `workspace_context`, `feature_interest`, `feedback`, `workspace_capabilities`, `competitor_capabilities`, `competitor_pricing`, and `strategic_directions`.
 - **Auth and User Management:** Supabase integration for robust authentication and email verification via Resend, including a 3-step signup flow.
 - **AI Integration:** Anthropic Claude is used for advanced natural language processing.
-- **Null Safety & Error Handling:** Implemented with `ErrorBoundary`, database schema safety checks, and consistent null-safe access patterns for JSONB fields. Background jobs are non-blocking and robustly handle errors.
+- **Null Safety & Error Handling:** Implemented with `ErrorBoundary` (global) and `WorkspaceErrorBoundary` (wrapping MapPage), database schema safety checks, and consistent null-safe access patterns for JSONB fields. Background jobs are non-blocking and robustly handle errors.
+- **Immediate Entity Search:** When a new entity is created via `/api/add-entity`, a background Perplexity search is triggered immediately (not waiting for the next ambient search cycle). The workspace page also auto-triggers searches for any entities with zero web_search captures, tracked by a `searchTriggeredRef` to prevent duplicates.
+- **Coach Marks Disambiguation Guard:** The `CoachMarks` component (`client/src/components/coach-marks.tsx`) checks for both generic modals (`[role="dialog"]`) and disambiguation-specific modals before starting the tour. If a disambiguation modal is open, the tour is deferred until the modal closes, then starts with a 500ms delay.
+- **Live Search Status:** The workspace page shows "Searching now…" with a pulsing dot indicator instead of a static "Searching soon..." label for entities without web search captures. The topic view also shows a "Searching now…" banner when the entity has no web_search captures yet.
 
 ## External Dependencies
 - **Supabase:** Authentication and user management.

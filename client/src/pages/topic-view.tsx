@@ -411,6 +411,16 @@ function TopicViewContent({
         />
       </div>
 
+      {captures.filter(c => c.type === "web_search").length === 0 && (
+        <div className="flex items-center gap-2 mt-3 px-4 py-2.5 rounded-lg bg-[#1e3a5f]/5 border border-[#1e3a5f]/10" data-testid="banner-searching-now">
+          <span className="relative flex h-2 w-2 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1e3a5f] opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1e3a5f]" />
+          </span>
+          <span className="text-sm text-[#1e3a5f] font-medium">Searching now…</span>
+        </div>
+      )}
+
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />

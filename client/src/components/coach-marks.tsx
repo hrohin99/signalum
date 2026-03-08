@@ -11,6 +11,20 @@ function isModalOpen(): boolean {
   return document.querySelectorAll('[role="dialog"]').length > 0;
 }
 
+function isDisambiguationModalOpen(): boolean {
+  const dialogs = document.querySelectorAll('[role="dialog"]');
+  for (const dialog of dialogs) {
+    if (dialog.textContent?.includes("disambiguation") ||
+        dialog.textContent?.includes("Which company") ||
+        dialog.textContent?.includes("What aspect") ||
+        dialog.textContent?.includes("Select focus") ||
+        dialog.querySelector('[data-testid*="disambiguation"]')) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [position, setPosition] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
@@ -59,24 +73,20 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
     if (seen) return;
 
     const tryStart = () => {
+      if (isModalOpen() || isDisambiguationModalOpen()) return;
       const firstValid = findNextValidStep(0);
       if (firstValid === -1) return;
       setCurrentIndex(firstValid);
       setVisible(true);
     };
 
-    const timer = setTimeout(() => {
-      if (!isModalOpen()) {
-        tryStart();
-        return;
-      }
-
+    const waitForModalsToClose = () => {
       if (observerRef.current) {
         observerRef.current.disconnect();
       }
 
       const observer = new MutationObserver(() => {
-        if (!isModalOpen()) {
+        if (!isModalOpen() && !isDisambiguationModalOpen()) {
           observer.disconnect();
           observerRef.current = null;
           setTimeout(tryStart, 500);
@@ -84,6 +94,14 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
       });
       observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["role", "style", "class", "hidden", "open"] });
       observerRef.current = observer;
+    };
+
+    const timer = setTimeout(() => {
+      if (!isModalOpen() && !isDisambiguationModalOpen()) {
+        tryStart();
+        return;
+      }
+      waitForModalsToClose();
     }, 800);
 
     return () => {

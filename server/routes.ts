@@ -1111,6 +1111,32 @@ Return only the summary paragraph, no JSON, no formatting.`
       category.entities.push(newEntity);
 
       const updated = await storage.updateWorkspaceCategories(userId, categories);
+
+      (async () => {
+        try {
+          const { searchCompetitorNews, searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
+          const topicType = (safeTopicType || "general").toLowerCase();
+          const searchContext = newEntity.disambiguation_context ? `${entityName} ${newEntity.disambiguation_context}` : entityName;
+          let findings;
+          if (topicType === "competitor") {
+            findings = await searchCompetitorNews(searchContext, categoryName, 30);
+          } else {
+            findings = await searchTopicUpdates(searchContext, topicType, 30);
+          }
+          if (findings.length > 0) {
+            const existingCaptures = await storage.getCapturesByUserId(userId);
+            const entityCaptures = existingCaptures.filter(c => c.matchedEntity === entityName);
+            const deduplicated = deduplicateFindings(findings, entityCaptures);
+            if (deduplicated.length > 0) {
+              const captureRecords = findingsToCaptures(deduplicated, entityName, userId, categoryName);
+              await storage.createCaptures(captureRecords);
+            }
+          }
+        } catch (searchErr: any) {
+          console.error(`[AddEntity] Background search failed for "${entityName}":`, searchErr?.message || searchErr);
+        }
+      })();
+
       return res.json({ success: true, workspace: updated, siblingInference });
     } catch (error: any) {
       console.error("Add entity error:", error);

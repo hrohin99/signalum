@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { OnboardingWelcomeModal as OnboardingWelcomeModalComponent } from "@/components/welcome-modal";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -273,7 +273,59 @@ function WorkspaceEmptyState({ onRefresh, isRefreshing }: { onRefresh: () => voi
   );
 }
 
+function WorkspaceErrorFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-white" data-testid="workspace-error-fallback">
+      <div className="text-center max-w-md px-6">
+        <div className="flex items-center justify-center gap-2 mb-6">
+          <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ backgroundColor: "#1e3a5f" }}>
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-xl font-semibold" style={{ color: "#1e3a5f" }}>Watchloom</span>
+        </div>
+        <p className="text-lg font-medium text-foreground mb-2" data-testid="text-workspace-loading">Your workspace is loading</p>
+        <p className="text-sm text-muted-foreground mb-6">Something unexpected happened. Please try refreshing.</p>
+        <Button
+          className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-6"
+          onClick={() => window.location.reload()}
+          data-testid="button-error-refresh"
+        >
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Refresh
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+class WorkspaceErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[WorkspaceErrorBoundary] Caught error:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return <WorkspaceErrorFallback />;
+    }
+    return this.props.children;
+  }
+}
+
 export default function MapPage() {
+  return (
+    <WorkspaceErrorBoundary>
+      <MapPageInner />
+    </WorkspaceErrorBoundary>
+  );
+}
+
+function MapPageInner() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
@@ -450,10 +502,11 @@ export default function MapPage() {
 
     setPollingState("polling");
     pollingStartRef.current = Date.now();
+    let retryCount = 0;
 
     const interval = setInterval(async () => {
-      const elapsed = Date.now() - (pollingStartRef.current || 0);
-      if (elapsed >= 15000) {
+      retryCount++;
+      if (retryCount >= 10) {
         clearInterval(interval);
         pollingIntervalRef.current = null;
         setPollingState("timeout");
@@ -464,7 +517,7 @@ export default function MapPage() {
         clearInterval(interval);
         pollingIntervalRef.current = null;
       }
-    }, 2000);
+    }, 3000);
 
     pollingIntervalRef.current = interval;
 
@@ -493,13 +546,59 @@ export default function MapPage() {
 
   const activeCategory = categories.find((c) => c.name === effectiveCategory);
 
+  const triggerEntitySearch = useCallback(async (entityName: string, categoryName: string, topicType?: string) => {
+    try {
+      await apiRequest("POST", "/api/search/manual", {
+        entityName,
+        categoryName,
+        topicType: topicType || "general",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+    } catch (err) {
+      console.error(`[MyWorkspace] Background search failed for "${entityName}":`, err);
+    }
+  }, [user?.id]);
+
+  const searchTriggeredRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!user || !categories.length || capLoading) return;
+
+    const entitiesToSearch: { name: string; categoryName: string; topicType: string }[] = [];
+    for (const cat of categories) {
+      for (const entity of cat.entities) {
+        const hasWebSearchCaptures = captures.some(
+          (c) => c.matchedEntity === entity.name && c.type === "web_search"
+        );
+        const searchKey = `${cat.name}::${entity.name}`;
+        if (!hasWebSearchCaptures && !searchTriggeredRef.current.has(searchKey)) {
+          entitiesToSearch.push({
+            name: entity.name,
+            categoryName: cat.name,
+            topicType: (entity.topic_type || "general").toLowerCase(),
+            searchKey,
+          });
+        }
+      }
+    }
+
+    if (entitiesToSearch.length > 0) {
+      for (const e of entitiesToSearch) {
+        searchTriggeredRef.current.add(e.searchKey);
+        triggerEntitySearch(e.name, e.categoryName, e.topicType);
+      }
+    }
+  }, [user, categories, captures, capLoading, triggerEntitySearch]);
+
   const addEntityMutation = useMutation({
     mutationFn: async (data: { categoryName: string; entityName: string; entityType: string; topicType?: string }) => {
       const res = await apiRequest("POST", "/api/add-entity", data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      searchTriggeredRef.current.add(`${variables.categoryName}::${variables.entityName}`);
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -565,13 +664,13 @@ export default function MapPage() {
   const getCaptureCountForEntity = (entityName: string) =>
     captures.filter((c) => c.matchedEntity === entityName).length;
 
-  const getLastSearchedLabel = (entityName: string): { text: string; isSearched: boolean } => {
+  const getLastSearchedLabel = (entityName: string): { text: string; isSearched: boolean; isSearching: boolean } => {
     const webSearchCaptures = captures
       .filter((c) => c.matchedEntity === entityName && c.type === "web_search")
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     if (webSearchCaptures.length === 0) {
-      return { text: "Searching soon...", isSearched: false };
+      return { text: "Searching now…", isSearched: false, isSearching: true };
     }
 
     const lastDate = new Date(webSearchCaptures[0].createdAt);
@@ -589,7 +688,7 @@ export default function MapPage() {
     else if (diffDays < 7) relative = `${diffDays} days ago`;
     else relative = lastDate.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
-    return { text: `Last searched: ${relative}`, isSearched: true };
+    return { text: `Last searched: ${relative}`, isSearched: true, isSearching: false };
   };
 
   const handleDismissWelcome = () => {
@@ -925,9 +1024,15 @@ export default function MapPage() {
                               {count > 0 ? ` · ${count} update${count !== 1 ? "s" : ""}` : ""}
                             </p>
                             <p
-                              className={`text-[11px] text-slate-400 mt-0.5 ${!searchStatus.isSearched ? "italic" : ""}`}
+                              className={`text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 ${!searchStatus.isSearched ? "italic" : ""}`}
                               data-testid={`text-last-searched-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
                             >
+                              {searchStatus.isSearching && (
+                                <span className="relative flex h-1.5 w-1.5 shrink-0">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1e3a5f] opacity-75" />
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#1e3a5f]" />
+                                </span>
+                              )}
                               {searchStatus.text}
                             </p>
                             {pill && (
