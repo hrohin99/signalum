@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, jsonb, timestamp, serial, integer, uuid, unique, date, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, serial, integer, uuid, unique, date, index, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -384,6 +384,32 @@ export const insertStrategicDirectionSchema = createInsertSchema(strategicDirect
 
 export type InsertStrategicDirection = z.infer<typeof insertStrategicDirectionSchema>;
 export type StrategicDirection = typeof strategicDirections.$inferSelect;
+
+export const entitySeoData = pgTable("entity_seo_data", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull(),
+  entityId: text("entity_id").notNull(),
+  rankedKeywords: jsonb("ranked_keywords").$type<{ keyword: string; position: number; search_volume: number }[]>().default([]),
+  localPackPosition: integer("local_pack_position"),
+  localPackResults: jsonb("local_pack_results").$type<{ title: string; position: number; rating?: number; reviews?: number }[]>().default([]),
+  businessRating: numeric("business_rating"),
+  reviewCount: integer("review_count"),
+  businessAddress: text("business_address"),
+  businessPhone: text("business_phone"),
+  businessHours: text("business_hours"),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+}, (table) => [
+  unique("entity_seo_data_user_entity").on(table.userId, table.entityId),
+  index("entity_seo_data_entity_id_idx").on(table.entityId),
+]);
+
+export const insertEntitySeoDataSchema = createInsertSchema(entitySeoData).omit({
+  id: true,
+  lastUpdated: true,
+});
+
+export type InsertEntitySeoData = z.infer<typeof insertEntitySeoDataSchema>;
+export type EntitySeoData = typeof entitySeoData.$inferSelect;
 
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),

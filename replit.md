@@ -34,6 +34,7 @@ The backend is built with Node.js/Express. Supabase handles authentication via e
 - **Pricing Intelligence:** Dynamic multi-model pricing tracking for competitor topics, with AI detection of pricing models and signals.
 - **Silent Entity Classification:** Background AI classification of entities by type (e.g., local_business, regulation) and pricing model to drive downstream behavior.
 - **Website Intelligence Extraction:** Automatic website scraping using Jina Reader to extract structured intelligence from competitor websites, generating captures and triggering AI summary regeneration.
+- **SEO Intelligence (DataForSEO):** Integrates DataForSEO API for ranked keywords, local pack rankings, and Google Business Profile data. Stored in `entity_seo_data` table. SEO Intelligence card on topic pages shows search rankings, local pack position, and business profile details. Manual refresh via button (~$0.05/refresh). Auto-triggered on first website_url save.
 
 ## External Dependencies
 - **Supabase:** Authentication and user management.
@@ -45,3 +46,4 @@ The backend is built with Node.js/Express. Supabase handles authentication via e
 - **pdfjs-dist:** Server-side PDF text extraction.
 - **mammoth:** Server-side DOCX text extraction.
 - **nodemailer:** Sending feedback notification emails.
+- **DataForSEO:** SEO intelligence API (ranked keywords, local pack, business data). Uses HTTP Basic Auth with `DATAFORSEO_LOGIN` and `DATAFORSEO_PASSWORD` secrets.

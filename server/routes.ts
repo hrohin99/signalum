@@ -3342,5 +3342,163 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/entities/:entityId/seo-intelligence", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityId = decodeURIComponent(req.params.entityId);
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+      const categories = workspace.categories as ExtractedCategory[];
+      let entityFound = false;
+      for (const cat of categories) {
+        if (cat.entities.find(e => e.name === entityId)) { entityFound = true; break; }
+      }
+      if (!entityFound) {
+        return res.status(404).json({ message: "Entity not found in workspace" });
+      }
+
+      const data = await storage.getEntitySeoData(userId, entityId);
+      if (!data) {
+        return res.json({ seoData: null });
+      }
+      return res.json({ seoData: data });
+    } catch (error: any) {
+      console.error("Get SEO intelligence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/seo-intelligence", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityId = decodeURIComponent(req.params.entityId);
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      let entity: ExtractedEntity | undefined;
+      for (const cat of categories) {
+        entity = cat.entities.find(e => e.name === entityId);
+        if (entity) break;
+      }
+      if (!entity || !entity.website_url) {
+        return res.status(400).json({ message: "Entity not found or no website URL" });
+      }
+
+      const login = process.env.DATAFORSEO_LOGIN;
+      const password = process.env.DATAFORSEO_PASSWORD;
+      if (!login || !password) {
+        return res.status(500).json({ message: "DataForSEO credentials not configured" });
+      }
+
+      const authHeader = "Basic " + Buffer.from(login + ":" + password).toString("base64");
+      const baseUrl = "https://api.dataforseo.com/v3";
+
+      let domain = entity.website_url.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+      const isCanadian = domain.endsWith(".ca") || (entity.disambiguation_context || "").toLowerCase().includes("canad");
+      const locationCode = isCanadian ? 2124 : 2840;
+
+      const seoPayload: any = {
+        rankedKeywords: [],
+        localPackPosition: null,
+        localPackResults: [],
+        businessRating: null,
+        reviewCount: null,
+        businessAddress: null,
+        businessPhone: null,
+        businessHours: null,
+      };
+
+      try {
+        const rkResponse = await fetch(`${baseUrl}/dataforseo_labs/google/ranked_keywords/live`, {
+          method: "POST",
+          headers: { "Authorization": authHeader, "Content-Type": "application/json" },
+          body: JSON.stringify([{ target: domain, language_code: "en", location_code: locationCode, limit: 10 }]),
+        });
+        const rkData = await rkResponse.json();
+        if (rkData?.tasks?.[0]?.result?.[0]?.items) {
+          seoPayload.rankedKeywords = rkData.tasks[0].result[0].items.slice(0, 10).map((item: any) => ({
+            keyword: item.keyword_data?.keyword || "",
+            position: item.ranked_serp_element?.serp_item?.rank_group || 0,
+            search_volume: item.keyword_data?.keyword_info?.search_volume || 0,
+          }));
+        }
+      } catch (err: any) {
+        console.error("[SEO] Ranked keywords call failed:", err?.message || err);
+      }
+
+      if (entity.entity_type_detected === "local_business") {
+        try {
+          const searchKeyword = entity.name;
+          const lpResponse = await fetch(`${baseUrl}/serp/google/local_pack/live/regular`, {
+            method: "POST",
+            headers: { "Authorization": authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify([{ keyword: searchKeyword, language_code: "en", location_code: locationCode, device: "desktop" }]),
+          });
+          const lpData = await lpResponse.json();
+          if (lpData?.tasks?.[0]?.result?.[0]?.items) {
+            const items = lpData.tasks[0].result[0].items.slice(0, 3);
+            seoPayload.localPackResults = items.map((item: any, idx: number) => ({
+              title: item.title || "",
+              position: idx + 1,
+              rating: item.rating?.value || null,
+              reviews: item.rating?.votes_count || null,
+            }));
+            const entityMatch = items.findIndex((item: any) =>
+              item.title?.toLowerCase().includes(entity!.name.toLowerCase()) ||
+              item.domain?.includes(domain)
+            );
+            if (entityMatch >= 0) {
+              seoPayload.localPackPosition = entityMatch + 1;
+            }
+          }
+        } catch (err: any) {
+          console.error("[SEO] Local pack call failed:", err?.message || err);
+        }
+
+        try {
+          const mbResponse = await fetch(`${baseUrl}/business_data/google/my_business_info/live`, {
+            method: "POST",
+            headers: { "Authorization": authHeader, "Content-Type": "application/json" },
+            body: JSON.stringify([{ keyword: entity.name, location_code: locationCode }]),
+          });
+          const mbData = await mbResponse.json();
+          if (mbData?.tasks?.[0]?.result?.[0]?.items?.[0]) {
+            const biz = mbData.tasks[0].result[0].items[0];
+            seoPayload.businessRating = biz.rating?.value?.toString() || null;
+            seoPayload.reviewCount = biz.rating?.votes_count || null;
+            seoPayload.businessAddress = biz.address || null;
+            seoPayload.businessPhone = biz.phone || null;
+            if (biz.work_hours?.work_hours) {
+              try {
+                const hours = biz.work_hours.work_hours;
+                const formatted = Object.entries(hours).map(([day, h]: [string, any]) =>
+                  `${day}: ${h?.open ? `${h.open.hour}:${String(h.open.minute).padStart(2, "0")} - ${h.close.hour}:${String(h.close.minute).padStart(2, "0")}` : "Closed"}`
+                ).join("; ");
+                seoPayload.businessHours = formatted;
+              } catch {
+                seoPayload.businessHours = JSON.stringify(biz.work_hours);
+              }
+            }
+          }
+        } catch (err: any) {
+          console.error("[SEO] Business data call failed:", err?.message || err);
+        }
+      }
+
+      const saved = await storage.upsertEntitySeoData(userId, entityId, seoPayload);
+      return res.json({ seoData: saved });
+    } catch (error: any) {
+      console.error("SEO intelligence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

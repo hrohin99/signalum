@@ -54,12 +54,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
-import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext } from "@shared/schema";
+import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext, EntitySeoData } from "@shared/schema";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { CoachMarks } from "@/components/coach-marks";
 import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
 import { topicTourSteps } from "@/lib/tourConfig";
-import { Eye, Crosshair, Compass } from "lucide-react";
+import { Eye, Crosshair, Compass, Star, MapPin, Phone, Clock } from "lucide-react";
 
 function detectMultipleEntities(name: string): string[] | null {
   if (!name.includes(",")) return null;
@@ -309,9 +309,16 @@ function TopicViewContent({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/entity/website-extraction-status", entity.name] });
+      queryClient.invalidateQueries({ queryKey: ["/api/entities", entity.name, "seo-intelligence"] });
       setShowWebsiteModal(false);
       setWebsiteUrlInput("");
       toast({ title: "Website URL saved. Reading their website..." });
+      (async () => {
+        try {
+          await apiRequest("POST", `/api/entities/${encodeURIComponent(entity.name)}/seo-intelligence`);
+          queryClient.invalidateQueries({ queryKey: ["/api/entities", entity.name, "seo-intelligence"] });
+        } catch {}
+      })();
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -516,6 +523,9 @@ function TopicViewContent({
           )}
           {entity.website_url && (
             <DigitalPresenceCard entity={entity} categoryName={categoryName} isExtractionRunning={isExtractionRunning} />
+          )}
+          {entity.website_url && (
+            <SeoIntelligenceCard entity={entity} categoryName={categoryName} />
           )}
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <AIVisibilityCard />
@@ -4250,6 +4260,186 @@ function DisambiguationCard({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SeoIntelligenceCard({ entity, categoryName }: { entity: ExtractedEntity; categoryName: string }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const entityId = entity.name;
+  const isLocalBusiness = entity.entity_type_detected === "local_business";
+
+  const { data: seoResponse, isLoading } = useQuery<{ seoData: EntitySeoData | null }>({
+    queryKey: ["/api/entities", entityId, "seo-intelligence"],
+    queryFn: async () => {
+      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/seo-intelligence`, {
+        headers: { Authorization: `Bearer ${user?.access_token}` },
+      });
+      return res.json();
+    },
+    enabled: !!user && !!entity.website_url,
+  });
+
+  const seoData = seoResponse?.seoData;
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/seo-intelligence`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/entities", entityId, "seo-intelligence"] });
+      toast({ title: "SEO data refreshed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const keywords = seoData?.rankedKeywords as { keyword: string; position: number; search_volume: number }[] || [];
+  const sortedKeywords = [...keywords].sort((a, b) => a.position - b.position);
+  const businessRating = seoData?.businessRating ? parseFloat(seoData.businessRating) : null;
+
+  if (isLoading) {
+    return (
+      <Card data-testid="card-seo-intelligence">
+        <CardContent className="p-4">
+          <Skeleton className="h-4 w-40 mb-3" />
+          <Skeleton className="h-20 w-full" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card data-testid="card-seo-intelligence">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Search className="w-4 h-4 text-[#1e3a5f]" />
+            <h3 className="text-sm font-semibold text-[#1e3a5f]">SEO Intelligence</h3>
+          </div>
+        </div>
+
+        {refreshMutation.isPending && (
+          <div className="flex items-center gap-2 text-xs text-emerald-600 mb-3" data-testid="status-seo-updating">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Updating…
+          </div>
+        )}
+
+        {!seoData && !refreshMutation.isPending && (
+          <div className="flex items-center gap-2 text-xs text-blue-600 mb-3" data-testid="banner-seo-fetching">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+            </span>
+            Fetching SEO data…
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div>
+            <h4 className="text-xs font-semibold text-slate-700 mb-2">Ranking for</h4>
+            {isLocalBusiness && seoData?.localPackPosition != null && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 mb-2" data-testid="pill-local-pack">
+                Appears in Google local pack — position {seoData.localPackPosition}
+              </span>
+            )}
+            {sortedKeywords.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs" data-testid="table-search-rankings">
+                  <thead>
+                    <tr className="border-b border-slate-100">
+                      <th className="text-left py-1.5 pr-2 font-medium text-slate-500">Keyword</th>
+                      <th className="text-right py-1.5 px-2 font-medium text-slate-500">Position</th>
+                      <th className="text-right py-1.5 pl-2 font-medium text-slate-500">Monthly searches</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedKeywords.map((kw, idx) => (
+                      <tr key={idx} className="border-b border-slate-50" data-testid={`row-keyword-${idx}`}>
+                        <td className="py-1.5 pr-2 text-slate-700">{kw.keyword}</td>
+                        <td className="py-1.5 px-2 text-right font-mono text-slate-600">{kw.position}</td>
+                        <td className="py-1.5 pl-2 text-right text-slate-500">{kw.search_volume.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400" data-testid="text-no-ranking-data">No ranking data yet</p>
+            )}
+          </div>
+
+          {isLocalBusiness && (
+            <div>
+              <h4 className="text-xs font-semibold text-slate-700 mb-2">Google Business</h4>
+              {businessRating != null ? (
+                <div className="space-y-2">
+                  {businessRating < 4.0 && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 mb-1" data-testid="pill-low-rating">
+                      Low rating — monitor reviews
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2" data-testid="text-business-rating">
+                    <div className="flex items-center gap-0.5">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(businessRating) ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
+                      ))}
+                    </div>
+                    <span className="text-xs font-medium text-slate-700">{businessRating.toFixed(1)}</span>
+                    {seoData?.reviewCount != null && (
+                      <span className="text-xs text-slate-400">({seoData.reviewCount.toLocaleString()} reviews)</span>
+                    )}
+                  </div>
+                  {seoData?.businessAddress && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500" data-testid="text-business-address">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      {seoData.businessAddress}
+                    </div>
+                  )}
+                  {seoData?.businessPhone && (
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500" data-testid="text-business-phone">
+                      <Phone className="w-3 h-3 text-slate-400" />
+                      {seoData.businessPhone}
+                    </div>
+                  )}
+                  {seoData?.businessHours && (
+                    <div className="flex items-start gap-1.5 text-xs text-slate-500" data-testid="text-business-hours">
+                      <Clock className="w-3 h-3 text-slate-400 mt-0.5" />
+                      <span className="break-words">{seoData.businessHours}</span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400">No business profile data</p>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            <span className="text-[10px] text-slate-400" data-testid="text-seo-last-updated">
+              {seoData?.lastUpdated ? `Updated ${new Date(seoData.lastUpdated).toLocaleDateString()} ${new Date(seoData.lastUpdated).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Not yet updated"}
+            </span>
+            <Button
+              variant="default"
+              size="sm"
+              className="h-7 px-3 text-xs bg-[#1e3a5f] hover:bg-[#2a4a6f] text-white"
+              disabled={refreshMutation.isPending}
+              onClick={() => refreshMutation.mutate()}
+              data-testid="button-refresh-seo"
+            >
+              <RefreshCw className={`w-3 h-3 mr-1 ${refreshMutation.isPending ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

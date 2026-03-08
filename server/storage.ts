@@ -1,7 +1,7 @@
 import { eq, desc, and, lt, gte, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, competitorPricing, strategicDirections, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability, type InsertCompetitorPricing, type CompetitorPricing, type InsertStrategicDirection, type StrategicDirection } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, competitorPricing, strategicDirections, entitySeoData, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability, type InsertCompetitorPricing, type CompetitorPricing, type InsertStrategicDirection, type StrategicDirection, type InsertEntitySeoData, type EntitySeoData } from "@shared/schema";
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -72,6 +72,8 @@ export interface IStorage {
   deleteCompetitorPricing(id: string, tenantId: string, entityId: string): Promise<boolean>;
   getStrategicDirection(tenantId: string, entityId: string): Promise<StrategicDirection | undefined>;
   upsertStrategicDirection(tenantId: string, entityId: string, data: { whereHeading?: string | null; whatMeansForYou?: string | null }): Promise<StrategicDirection>;
+  getEntitySeoData(userId: string, entityId: string): Promise<EntitySeoData | undefined>;
+  upsertEntitySeoData(userId: string, entityId: string, data: Partial<InsertEntitySeoData>): Promise<EntitySeoData>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -655,6 +657,31 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db
         .insert(strategicDirections)
         .values({ tenantId, entityId, ...data })
+        .returning();
+      return created;
+    }
+  }
+  async getEntitySeoData(userId: string, entityId: string): Promise<EntitySeoData | undefined> {
+    const [result] = await db
+      .select()
+      .from(entitySeoData)
+      .where(and(eq(entitySeoData.userId, userId), eq(entitySeoData.entityId, entityId)));
+    return result;
+  }
+
+  async upsertEntitySeoData(userId: string, entityId: string, data: Partial<InsertEntitySeoData>): Promise<EntitySeoData> {
+    const existing = await this.getEntitySeoData(userId, entityId);
+    if (existing) {
+      const [updated] = await db
+        .update(entitySeoData)
+        .set({ ...data, lastUpdated: new Date() })
+        .where(and(eq(entitySeoData.userId, userId), eq(entitySeoData.entityId, entityId)))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(entitySeoData)
+        .values({ userId, entityId, ...data })
         .returning();
       return created;
     }
