@@ -718,7 +718,7 @@ function WidgetsSection({
       })}
 
       {hasUpdatesFeed && (
-        <UpdatesFeedWidget entity={entity} captures={captures} />
+        <UpdatesFeedWidget entity={entity} captures={captures} categoryName={categoryName} />
       )}
     </div>
   );
@@ -1447,22 +1447,79 @@ function CaptureSourceIndicator({ capture }: { capture: Capture }) {
   return <div className="mt-2">{pillContent}</div>;
 }
 
+function getSignalStrength(cap: Capture): "high" | "medium" | "low" | null {
+  if (!cap.matchReason) return null;
+  const match = cap.matchReason.match(/\[(high|medium|low)\]/);
+  return match ? (match[1] as "high" | "medium" | "low") : null;
+}
+
+type SignalFilter = "all" | "notable" | "high";
+
 function UpdatesFeedWidget({
   entity,
   captures,
+  categoryName,
 }: {
   entity: ExtractedEntity;
   captures: Capture[];
+  categoryName: string;
 }) {
+  const storageKey = `signal-filter-${categoryName}-${entity.name}`;
+  const [filter, setFilter] = useState<SignalFilter>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved === "all" || saved === "notable" || saved === "high") return saved;
+    } catch {}
+    return "all";
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(storageKey, filter); } catch {}
+  }, [filter, storageKey]);
+
+  const filteredCaptures = captures.filter((cap) => {
+    if (filter === "all") return true;
+    const strength = getSignalStrength(cap);
+    if (filter === "notable") return strength === "high" || strength === "medium";
+    if (filter === "high") return strength === "high";
+    return true;
+  });
+
+  const filterOptions: { value: SignalFilter; label: string }[] = [
+    { value: "all", label: "All" },
+    { value: "notable", label: "Notable" },
+    { value: "high", label: "High Signal" },
+  ];
+
   return (
     <div data-testid="widget-updates-feed">
-      <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3 px-1">
-        Updates ({captures.length})
-      </p>
-      {captures.length > 0 ? (
+      <div className="flex items-center justify-between mb-3 px-1">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Updates ({filteredCaptures.length})
+        </p>
+        <div className="flex gap-1" role="tablist" aria-label="Signal strength filter" data-testid="signal-filter-tabs">
+          {filterOptions.map((opt) => (
+            <button
+              key={opt.value}
+              role="tab"
+              aria-selected={filter === opt.value}
+              onClick={() => setFilter(opt.value)}
+              data-testid={`filter-${opt.value}`}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                filter === opt.value
+                  ? "bg-[#1e3a5f] text-white"
+                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {filteredCaptures.length > 0 ? (
         <ScrollArea className="max-h-[500px]">
           <div className="space-y-3 pr-2">
-            {captures.map((cap) => {
+            {filteredCaptures.map((cap) => {
               const isHiring = cap.matchReason?.includes("[signal_type:hiring_signal]");
               const Icon = isHiring ? Briefcase : (captureTypeIcons[cap.type] || FileText);
               return (
@@ -1503,9 +1560,13 @@ function UpdatesFeedWidget({
         <Card className="border-dashed border-border">
           <CardContent className="p-8 text-center">
             <FileText className="w-7 h-7 text-muted-foreground/40 mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground mb-1">No updates captured yet.</p>
+            <p className="text-sm text-muted-foreground mb-1">
+              {filter === "all" ? "No updates captured yet." : "No updates match this filter."}
+            </p>
             <p className="text-xs text-muted-foreground">
-              Use Capture or the inline form to add updates about {entity.name}.
+              {filter === "all"
+                ? `Use Capture or the inline form to add updates about ${entity.name}.`
+                : "Try switching to \"All\" to see all updates."}
             </p>
           </CardContent>
         </Card>
