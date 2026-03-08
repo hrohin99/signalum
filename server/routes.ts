@@ -1681,14 +1681,17 @@ Rules:
   app.post("/api/workspace", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      console.log("WORKSPACE API: POST /api/workspace called by user", userId);
       const { categories } = req.body;
 
       if (!categories) {
+        console.log("WORKSPACE API: POST missing categories for user", userId);
         return res.status(400).json({ message: "Missing categories" });
       }
 
       const existing = await storage.getWorkspaceByUserId(userId);
       if (existing) {
+        console.log("WORKSPACE API: POST workspace already exists for user", userId);
         return res.json({ success: true, workspace: existing });
       }
 
@@ -1708,7 +1711,17 @@ Rules:
         categories: categoriesWithDefaults,
       });
 
+      console.log("WORKSPACE API: POST workspace created for user", userId, "with", categoriesWithDefaults.length, "categories");
+
       await storage.setWorkspaceReady(userId);
+      console.log("WORKSPACE API: POST workspace_ready flag set for user", userId);
+
+      const verifyWorkspace = await storage.getWorkspaceByUserId(userId);
+      if (!verifyWorkspace) {
+        console.error("WORKSPACE API: POST verification failed - workspace not found after creation for user", userId);
+      } else {
+        console.log("WORKSPACE API: POST verification passed for user", userId);
+      }
 
       return res.json({ success: true, workspace });
     } catch (error: any) {
@@ -2289,7 +2302,10 @@ Rules:
 
   app.get("/api/workspace/current", requireAuth, async (req: Request, res: Response) => {
     const userId = (req as any).userId;
+    console.log("WORKSPACE API: called by user", userId, "(current)");
     const workspace = await storage.getWorkspaceByUserId(userId);
+    const catCount = workspace && Array.isArray((workspace as any).categories) ? (workspace as any).categories.length : 0;
+    console.log("WORKSPACE API: categories found =", catCount);
 
     if (workspace) {
       return res.json({ exists: true, workspace });
@@ -2301,17 +2317,22 @@ Rules:
   app.get("/api/workspace/:userId", requireAuth, async (req: Request, res: Response) => {
     const authenticatedUserId = (req as any).userId;
     const { userId } = req.params;
+    console.log("WORKSPACE API: called by user", userId);
 
     if (authenticatedUserId !== userId) {
+      console.log("WORKSPACE API: forbidden - auth user", authenticatedUserId, "!= param user", userId);
       return res.status(403).json({ message: "Forbidden" });
     }
 
     const workspace = await storage.getWorkspaceByUserId(userId);
+    const catCount = workspace && Array.isArray((workspace as any).categories) ? (workspace as any).categories.length : 0;
+    console.log("WORKSPACE API: categories found =", catCount);
 
     if (workspace) {
       return res.json({ exists: true, workspace });
     }
 
+    console.log("WORKSPACE API: no workspace found for user", userId);
     return res.json({ exists: false });
   });
 

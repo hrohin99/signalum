@@ -358,12 +358,22 @@ function MapPageInner() {
   const [topAddTopicType, setTopAddTopicType] = useState("general");
   const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
 
+  console.log("WS: component mounted");
+
   const { data: wsData, isLoading: wsLoading, error: wsError, refetch: refetchWorkspace } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
     enabled: !!user,
     retry: false,
   });
   refetchRef.current = refetchWorkspace;
+
+  console.log("WS: fetch started", { userId: user?.id, wsLoading, wsError: wsError?.message, wsDataExists: !!wsData });
+
+  if (wsData) {
+    const catCount = Array.isArray(wsData?.workspace?.categories) ? wsData.workspace.categories.length : 0;
+    console.log("WS: fetch response received", { exists: wsData?.exists, catCount });
+    console.log("WS: categories count =", catCount);
+  }
 
   const { data: capturesRaw, isLoading: capLoading } = useQuery<Capture[]>({
     queryKey: ["/api/captures"],
@@ -711,14 +721,17 @@ function MapPageInner() {
   };
 
   if (wsPhase === "loading") {
+    console.log("WS: rendering loading state");
     return <WorkspaceInitialLoading />;
   }
 
   if (wsPhase === "error") {
+    console.log("WS: rendering error fallback");
     return <WorkspaceErrorFallback />;
   }
 
   if (wsPhase === "polling") {
+    console.log("WS: rendering polling state");
     return (
       <div className="p-8 max-w-4xl mx-auto">
         <WorkspaceLoadingState />
@@ -727,12 +740,15 @@ function MapPageInner() {
   }
 
   if (wsPhase === "timeout") {
+    console.log("WS: rendering timeout state");
     return (
       <div className="p-8 max-w-4xl mx-auto">
         <WorkspaceTimeoutState />
       </div>
     );
   }
+
+  console.log("WS: rendering workspace", { categoriesCount: categories.length, capturesCount: captures.length });
 
   return (
     <div className="p-8 max-w-6xl mx-auto">

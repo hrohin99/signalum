@@ -152,6 +152,10 @@ function AppContent() {
               await apiRequest("POST", "/api/historical-seeding");
             } catch {}
 
+            console.log("ONBOARDING: auto-onboarding complete, invalidating workspace cache for user", user.id);
+            queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
+            queryClient.invalidateQueries({ queryKey: ["/api/workspace"] });
+            queryClient.removeQueries({ queryKey: ["/api/workspace", user.id] });
             localStorage.removeItem("pendingOnboarding");
             checkedUserId.current = user.id;
             setAutoOnboarding(false);
@@ -219,6 +223,10 @@ function AppContent() {
     return (
       <OnboardingPage
         onComplete={() => {
+          console.log("ONBOARDING: complete, invalidating workspace cache for user", user.id);
+          queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
+          queryClient.invalidateQueries({ queryKey: ["/api/workspace"] });
+          queryClient.removeQueries({ queryKey: ["/api/workspace", user.id] });
           checkedUserId.current = user.id;
           initialLoadComplete.current = true;
           setHasCompletedOnboarding(true);

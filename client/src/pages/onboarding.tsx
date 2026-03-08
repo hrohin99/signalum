@@ -52,15 +52,22 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
 
   const handleConfirm = async () => {
     if (!extraction) return;
+    if (!user?.id) {
+      toast({ title: "Error", description: "Not signed in. Please reload and try again.", variant: "destructive" });
+      return;
+    }
     setIsCreating(true);
 
     try {
+      console.log("ONBOARDING: creating workspace for user", user.id, "with", extraction.categories?.length ?? 0, "categories");
       await apiRequest("POST", "/api/workspace", {
-        userId: user?.id,
+        userId: user.id,
         categories: extraction.categories,
       });
+      console.log("ONBOARDING: workspace created successfully for user", user.id);
       try {
         await apiRequest("POST", "/api/historical-seeding");
+        console.log("ONBOARDING: historical seeding started for user", user.id);
       } catch {}
       onComplete();
     } catch (err: any) {
