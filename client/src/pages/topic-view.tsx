@@ -3870,11 +3870,11 @@ function AspectSelectionModal({
             </div>
           </div>
           <div className="pt-2">
-            <label className="text-xs text-muted-foreground mb-1 block">Their website (optional — improves accuracy)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">Their website</label>
             <Input
               value={aspectWebsiteUrl}
               onChange={(e) => setAspectWebsiteUrl(e.target.value)}
-              placeholder="https://"
+              placeholder="https://example.com — improves accuracy significantly"
               className="h-9 text-sm"
               data-testid="input-aspect-website"
             />
@@ -4145,6 +4145,16 @@ function DisambiguationCard({
                   <p className="text-xs text-muted-foreground mt-0.5">{company.description}</p>
                 </button>
               ))}
+              <div className="pt-2">
+                <label className="text-xs text-muted-foreground mb-1 block">Their website</label>
+                <Input
+                  value={disambigWebsiteUrl}
+                  onChange={(e) => setDisambigWebsiteUrl(e.target.value)}
+                  placeholder="https://example.com — improves accuracy significantly"
+                  className="h-9 text-sm"
+                  data-testid="input-company-website"
+                />
+              </div>
             </div>
           </>
         )}
@@ -4226,11 +4236,11 @@ function DisambiguationCard({
                 </div>
               </div>
               <div className="pt-2">
-                <label className="text-xs text-muted-foreground mb-1 block">Their website (optional — improves accuracy)</label>
+                <label className="text-xs text-muted-foreground mb-1 block">Their website</label>
                 <Input
                   value={disambigWebsiteUrl}
                   onChange={(e) => setDisambigWebsiteUrl(e.target.value)}
-                  placeholder="https://"
+                  placeholder="https://example.com — improves accuracy significantly"
                   className="h-9 text-sm"
                   data-testid="input-disambiguation-website"
                 />

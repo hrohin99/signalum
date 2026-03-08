@@ -1591,7 +1591,7 @@ Rules:
         const { searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
         const topicType = (entity.topic_type || "general").toLowerCase();
         const searchQuery = `${entityName} ${disambiguation_context}`;
-        const findings = await searchTopicUpdates(searchQuery, topicType, 30);
+        const findings = await searchTopicUpdates(searchQuery, topicType, 30, { websiteUrl: newWebsiteUrl || entity.website_url || undefined });
 
         if (findings.length > 0) {
           const thirtyDaysAgo = new Date();
