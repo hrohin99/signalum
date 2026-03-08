@@ -7,39 +7,13 @@ interface CoachMarksProps {
   onComplete?: () => void;
 }
 
-function isElementVisible(el: HTMLElement): boolean {
-  if (el.getClientRects().length === 0) return false;
-  const style = window.getComputedStyle(el);
-  return style.display !== "none" && style.visibility !== "hidden" && parseFloat(style.opacity) > 0;
-}
-
-function isAnyModalVisible(): boolean {
-  const roleDialogs = document.querySelectorAll('div[role="dialog"]');
-  for (const el of roleDialogs) {
-    if (el instanceof HTMLElement && isElementVisible(el)) return true;
-  }
-
-  const modalEls = document.querySelectorAll('[class*="modal"]');
-  for (const el of modalEls) {
-    if (el instanceof HTMLElement && isElementVisible(el)) return true;
-  }
-
-  const disambigEls = document.querySelectorAll('[class*="disambiguation"]');
-  for (const el of disambigEls) {
-    if (el instanceof HTMLElement && isElementVisible(el)) return true;
-  }
-
-  const overlayEls = document.querySelectorAll('[class*="overlay"]');
-  for (const el of overlayEls) {
-    if (el instanceof HTMLElement && isElementVisible(el)) return true;
-  }
-
-  return false;
-}
-
 function createModalObserver(onAllClosed: () => void): MutationObserver {
   const observer = new MutationObserver(() => {
-    if (!isAnyModalVisible()) {
+    const anyModalOpen = Array.from(document.querySelectorAll('[role="dialog"]')).some(el => {
+      const s = window.getComputedStyle(el);
+      return s.display !== 'none' && s.visibility !== 'hidden' && s.opacity !== '0';
+    });
+    if (!anyModalOpen) {
       observer.disconnect();
       setTimeout(onAllClosed, 600);
     }
@@ -104,7 +78,11 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
     if (seen) return;
 
     const tryStart = () => {
-      if (isAnyModalVisible()) {
+      const anyModalOpen = Array.from(document.querySelectorAll('[role="dialog"]')).some(el => {
+        const s = window.getComputedStyle(el);
+        return s.display !== 'none' && s.visibility !== 'hidden' && s.opacity !== '0';
+      });
+      if (anyModalOpen) {
         waitForModalsToClose();
         return;
       }
@@ -127,7 +105,11 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
     };
 
     const timer = setTimeout(() => {
-      if (!isAnyModalVisible()) {
+      const anyModalOpen = Array.from(document.querySelectorAll('[role="dialog"]')).some(el => {
+        const s = window.getComputedStyle(el);
+        return s.display !== 'none' && s.visibility !== 'hidden' && s.opacity !== '0';
+      });
+      if (!anyModalOpen) {
         tryStart();
       } else {
         waitForModalsToClose();
@@ -147,7 +129,11 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
     if (seen || !visible) return;
 
     const checkInterval = setInterval(() => {
-      if (isAnyModalVisible()) {
+      const anyModalOpen = Array.from(document.querySelectorAll('[role="dialog"]')).some(el => {
+        const s = window.getComputedStyle(el);
+        return s.display !== 'none' && s.visibility !== 'hidden' && s.opacity !== '0';
+      });
+      if (anyModalOpen) {
         if (!pausedByModal) {
           setPausedByModal(true);
 
