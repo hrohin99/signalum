@@ -3,7 +3,6 @@ import { OnboardingWelcomeModal as OnboardingWelcomeModalComponent } from "@/com
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -234,6 +233,17 @@ function SeedingBanner() {
   );
 }
 
+function WorkspaceInitialLoading() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-white" data-testid="workspace-initial-loading">
+      <div className="flex flex-col items-center text-center">
+        <Loader2 className="w-8 h-8 text-[#1e3a5f] animate-spin mb-4" />
+        <p className="text-sm text-muted-foreground" data-testid="text-initial-loading">Loading your workspace…</p>
+      </div>
+    </div>
+  );
+}
+
 function WorkspaceLoadingState() {
   return (
     <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-loading-state">
@@ -245,29 +255,29 @@ function WorkspaceLoadingState() {
         <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "300ms" }} />
         <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "600ms" }} />
       </div>
-      <h3 className="font-medium text-foreground mb-1" data-testid="text-loading-headline">Setting up your workspace...</h3>
+      <h3 className="font-medium text-foreground mb-1" data-testid="text-loading-headline">Setting up your workspace…</h3>
       <p className="text-sm text-muted-foreground">This only takes a moment.</p>
     </div>
   );
 }
 
-function WorkspaceEmptyState({ onRefresh, isRefreshing }: { onRefresh: () => void; isRefreshing: boolean }) {
+function WorkspaceTimeoutState() {
   return (
-    <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-empty-state">
+    <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-timeout-state">
       <div className="w-12 h-12 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-4">
         <Shield className="w-6 h-6 text-white" />
       </div>
-      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-empty-headline">Your workspace is almost ready</h3>
-      <p className="text-sm text-muted-foreground max-w-sm mb-6">
-        This usually takes less than a minute.
+      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-timeout-headline">Your workspace is almost ready</h3>
+      <p className="text-sm text-muted-foreground max-w-sm mb-4" data-testid="text-timeout-body">
+        This is taking longer than usual. Your data is safe.
       </p>
       <Button
         className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-6"
-        onClick={onRefresh}
-        disabled={isRefreshing}
-        data-testid="button-refresh-workspace"
+        onClick={() => window.location.reload()}
+        data-testid="button-timeout-refresh"
       >
-        {isRefreshing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking...</> : "Refresh"}
+        <RefreshCw className="w-4 h-4 mr-2" />
+        Refresh
       </Button>
     </div>
   );
@@ -283,31 +293,34 @@ function WorkspaceErrorFallback() {
           </div>
           <span className="text-xl font-semibold" style={{ color: "#1e3a5f" }}>Watchloom</span>
         </div>
-        <p className="text-lg font-medium text-foreground mb-2" data-testid="text-workspace-loading">Your workspace is loading</p>
-        <p className="text-sm text-muted-foreground mb-6">Something unexpected happened. Please try refreshing.</p>
+        <p className="text-lg font-medium text-foreground mb-2" data-testid="text-error-message">Something went wrong loading your workspace</p>
         <Button
           className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-6"
           onClick={() => window.location.reload()}
-          data-testid="button-error-refresh"
+          data-testid="button-error-reload"
         >
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
+          Reload
         </Button>
       </div>
     </div>
   );
 }
 
-class WorkspaceErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
+class WorkspaceErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
-  static getDerivedStateFromError(): { hasError: boolean } {
+  static getDerivedStateFromError(_error: unknown): { hasError: boolean } {
     return { hasError: true };
   }
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("[WorkspaceErrorBoundary] Caught error:", error, errorInfo);
+  componentDidCatch(error: unknown, errorInfo: React.ErrorInfo) {
+    try {
+      console.error("[WorkspaceErrorBoundary] Caught error:", error, errorInfo);
+    } catch (_) {}
   }
   render() {
     if (this.state.hasError) {
@@ -329,13 +342,14 @@ function MapPageInner() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const [wsPhase, setWsPhase] = useState<"loading" | "polling" | "timeout" | "ready" | "error">("loading");
+  const pollCountRef = useRef(0);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const refetchRef = useRef<(() => Promise<any>) | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [seedingActive, setSeedingActive] = useState(false);
   const [seedingChecked, setSeedingChecked] = useState(false);
-  const [pollingState, setPollingState] = useState<"idle" | "polling" | "timeout">("idle");
-  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [showTopAddTopic, setShowTopAddTopic] = useState(false);
@@ -343,55 +357,123 @@ function MapPageInner() {
   const [topAddTopicName, setTopAddTopicName] = useState("");
   const [topAddTopicType, setTopAddTopicType] = useState("general");
   const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
-  const pollingStartRef = useRef<number | null>(null);
-  const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { data: wsData, isLoading: wsLoading, error: wsError } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
+  const { data: wsData, isLoading: wsLoading, error: wsError, refetch: refetchWorkspace } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
     enabled: !!user,
+    retry: false,
   });
+  refetchRef.current = refetchWorkspace;
 
-  const { data: captures = [], isLoading: capLoading, error: capError } = useQuery<Capture[]>({
+  const { data: capturesRaw, isLoading: capLoading } = useQuery<Capture[]>({
     queryKey: ["/api/captures"],
-    enabled: !!user,
+    enabled: !!user && wsPhase === "ready",
   });
+  const captures: Capture[] = Array.isArray(capturesRaw) ? capturesRaw : [];
 
   const { data: topicDatesData } = useQuery<{ dates: TopicDateWithDaysUntil[] }>({
     queryKey: ["/api/topic-dates/all"],
-    enabled: !!user,
+    enabled: !!user && wsPhase === "ready",
   });
 
-  const allTopicDates = topicDatesData?.dates ?? [];
-  const categories = (wsData?.workspace?.categories ?? []).map(cat => ({
+  const allTopicDates = Array.isArray(topicDatesData?.dates) ? topicDatesData.dates : [];
+  const rawCategories = wsData?.workspace?.categories;
+  const categories = (Array.isArray(rawCategories) ? rawCategories : []).map(cat => ({
     ...cat,
-    entities: (cat.entities ?? []).map(e => ({
+    entities: Array.isArray(cat?.entities) ? cat.entities.map(e => ({
       ...e,
-      disambiguation_confirmed: e.disambiguation_confirmed ?? false,
-      disambiguation_context: e.disambiguation_context ?? undefined,
-      company_industry: e.company_industry ?? undefined,
-      domain_keywords: e.domain_keywords ?? [],
-      needs_aspect_review: e.needs_aspect_review ?? false,
-      auto_search_enabled: e.auto_search_enabled ?? true,
-      alert_on_high_signal: e.alert_on_high_signal ?? false,
-    })),
+      disambiguation_confirmed: e?.disambiguation_confirmed ?? false,
+      disambiguation_context: e?.disambiguation_context ?? undefined,
+      company_industry: e?.company_industry ?? undefined,
+      domain_keywords: Array.isArray(e?.domain_keywords) ? e.domain_keywords : [],
+      needs_aspect_review: e?.needs_aspect_review ?? false,
+      auto_search_enabled: e?.auto_search_enabled ?? true,
+      alert_on_high_signal: e?.alert_on_high_signal ?? false,
+    })) : [],
   }));
-  const loading = wsLoading || capLoading;
+
+  useEffect(() => {
+    try {
+      if (wsPhase === "ready" || wsPhase === "error") return;
+
+      const cats = wsData?.workspace?.categories;
+      if (Array.isArray(cats) && cats.length > 0) {
+        setWsPhase("ready");
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+        return;
+      }
+
+      if (wsPhase !== "loading") return;
+      if (wsLoading) return;
+      if (wsError) {
+        setWsPhase("error");
+        return;
+      }
+      setWsPhase("polling");
+    } catch (err) {
+      console.error("[MyWorkspace] Phase transition error:", err);
+      setWsPhase("error");
+    }
+  }, [wsPhase, wsLoading, wsError, wsData]);
+
+  useEffect(() => {
+    if (wsPhase !== "polling") return;
+    pollCountRef.current = 0;
+    const interval = setInterval(async () => {
+      pollCountRef.current += 1;
+      try {
+        if (!refetchRef.current) return;
+        const result = await refetchRef.current();
+        const cats = result?.data?.workspace?.categories;
+        if (Array.isArray(cats) && cats.length > 0) {
+          setWsPhase("ready");
+          clearInterval(interval);
+          pollIntervalRef.current = null;
+          return;
+        }
+      } catch (err) {
+        console.error("[MyWorkspace] Poll failed:", err);
+      }
+      if (pollCountRef.current >= 12) {
+        clearInterval(interval);
+        pollIntervalRef.current = null;
+        setWsPhase("timeout");
+      }
+    }, 4000);
+    pollIntervalRef.current = interval;
+    return () => {
+      clearInterval(interval);
+      pollIntervalRef.current = null;
+    };
+  }, [wsPhase]);
+
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     try {
       const tenantId = user?.id ?? "unknown";
       const wsContextFound = !!(wsData?.workspace);
-      const entityCount = (wsData?.workspace?.categories ?? []).reduce((a, c) => a + (c.entities?.length ?? 0), 0);
+      const rawCats = wsData?.workspace?.categories;
+      const entityCount = (Array.isArray(rawCats) ? rawCats : []).reduce((a, c) => a + (Array.isArray(c?.entities) ? c.entities.length : 0), 0);
       const errors: string[] = [];
-      if (wsError) errors.push(`workspace: ${wsError.message}`);
-      if (capError) errors.push(`captures: ${capError.message}`);
-      if (loadError) errors.push(`load: ${loadError}`);
+      if (wsError) errors.push(`workspace: ${(wsError as Error)?.message ?? "unknown"}`);
+      if (wsPhase === "error") errors.push("phase: error");
 
-      console.log(`[MyWorkspace] Mount diagnostics — tenant_id: ${tenantId}, workspace_context_found: ${wsContextFound}, entities_loaded: ${entityCount}, errors: ${errors.length > 0 ? errors.join("; ") : "none"}`);
+      console.log(`[MyWorkspace] Mount diagnostics — tenant_id: ${tenantId}, phase: ${wsPhase}, workspace_context_found: ${wsContextFound}, entities_loaded: ${entityCount}, errors: ${errors.length > 0 ? errors.join("; ") : "none"}`);
     } catch (e) {
       console.error("[MyWorkspace] Diagnostic logging failed:", e);
     }
-  }, [user?.id, wsData, wsError, capError, loadError]);
+  }, [user?.id, wsData, wsError, wsPhase]);
 
   const getEntityDeadline = (entityName: string): TopicDateWithDaysUntil | null => {
     const dates = allTopicDates.filter(d => d.entityId === entityName && d.days_until <= 30);
@@ -455,7 +537,6 @@ function MapPageInner() {
     } catch (err) {
       console.error("[MyWorkspace] Seeding status check failed:", err);
       setSeedingChecked(true);
-      setLoadError("Seeding status check failed");
     }
   }, [user, seedingActive, toast]);
 
@@ -469,72 +550,6 @@ function MapPageInner() {
     const interval = setInterval(checkSeedingStatus, 3000);
     return () => clearInterval(interval);
   }, [seedingActive, checkSeedingStatus]);
-
-  const pollWorkspaceReady = useCallback(async () => {
-    if (!user) return false;
-    try {
-      const res = await apiRequest("GET", "/api/workspace-ready");
-      const data = await res.json();
-      if (data.ready) {
-        queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
-        return true;
-      }
-    } catch (err) {
-      console.error("[MyWorkspace] Poll workspace ready failed:", err);
-    }
-    return false;
-  }, [user]);
-
-  useEffect(() => {
-    if (wsLoading || !wsData) return;
-    if (categories.length > 0) {
-      if (pollingState !== "idle") {
-        setPollingState("idle");
-        if (pollingIntervalRef.current) {
-          clearInterval(pollingIntervalRef.current);
-          pollingIntervalRef.current = null;
-        }
-      }
-      return;
-    }
-
-    if (pollingState !== "idle") return;
-
-    setPollingState("polling");
-    pollingStartRef.current = Date.now();
-    let retryCount = 0;
-
-    const interval = setInterval(async () => {
-      retryCount++;
-      if (retryCount >= 10) {
-        clearInterval(interval);
-        pollingIntervalRef.current = null;
-        setPollingState("timeout");
-        return;
-      }
-      const ready = await pollWorkspaceReady();
-      if (ready) {
-        clearInterval(interval);
-        pollingIntervalRef.current = null;
-      }
-    }, 3000);
-
-    pollingIntervalRef.current = interval;
-
-    return () => {
-      clearInterval(interval);
-      pollingIntervalRef.current = null;
-    };
-  }, [wsLoading, wsData, categories.length, pollingState, pollWorkspaceReady]);
-
-  const handleManualRefresh = async () => {
-    setIsManualRefreshing(true);
-    const ready = await pollWorkspaceReady();
-    if (!ready) {
-      await queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
-    }
-    setIsManualRefreshing(false);
-  };
 
   const effectiveCategory = selectedCategory ?? (categories.length > 0 ? categories[0].name : null);
 
@@ -695,45 +710,26 @@ function MapPageInner() {
     dismissWelcomeMutation.mutate();
   };
 
-  if (loading) {
+  if (wsPhase === "loading") {
+    return <WorkspaceInitialLoading />;
+  }
+
+  if (wsPhase === "error") {
+    return <WorkspaceErrorFallback />;
+  }
+
+  if (wsPhase === "polling") {
     return (
-      <div className="p-8 max-w-6xl mx-auto">
-        <div className="mb-8">
-          <Skeleton className="h-8 w-48 mb-2" />
-          <Skeleton className="h-5 w-80" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="space-y-3">
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-          <div className="md:col-span-2 space-y-3">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        </div>
+      <div className="p-8 max-w-4xl mx-auto">
+        <WorkspaceLoadingState />
       </div>
     );
   }
 
-  const handleEmptyStateCreateCategory = () => {
-    setShowNewCategoryInput(true);
-    setTimeout(() => newCategoryInputRef.current?.focus(), 100);
-  };
-
-  if (categories.length === 0 && !wsLoading) {
-    if (pollingState === "timeout") {
-      return (
-        <div className="p-8 max-w-4xl mx-auto">
-          <WorkspaceEmptyState onRefresh={handleManualRefresh} isRefreshing={isManualRefreshing} />
-        </div>
-      );
-    }
-
+  if (wsPhase === "timeout") {
     return (
       <div className="p-8 max-w-4xl mx-auto">
-        <WorkspaceLoadingState />
+        <WorkspaceTimeoutState />
       </div>
     );
   }
@@ -1010,9 +1006,9 @@ function MapPageInner() {
                       return (
                         <button
                           key={entity.name}
-                          onClick={() => navigate(`/topic/${encodeURIComponent(effectiveCategory!)}/${encodeURIComponent(entity.name)}`)}
+                          onClick={() => navigate(`/topic/${encodeURIComponent(effectiveCategory ?? "")}/${encodeURIComponent(entity?.name ?? "")}`)}
                           className="w-full text-left rounded-lg bg-card border border-border/50 p-4 flex items-center gap-3 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm transition-all group"
-                          data-testid={`button-entity-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
+                          data-testid={`button-entity-${(entity?.name ?? "").toLowerCase().replace(/\s+/g, "-")}`}
                         >
                           <div className="w-9 h-9 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
                             <Tag className="w-4 h-4 text-[#1e3a5f]" />
