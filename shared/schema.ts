@@ -82,6 +82,9 @@ export interface ExtractedEntity {
   company_industry?: string;
   domain_keywords?: string[];
   needs_aspect_review?: boolean;
+  entity_type_detected?: string;
+  pricing_model_detected?: string;
+  website_url?: string;
 }
 
 export interface ExtractionResult {
@@ -348,6 +351,7 @@ export const competitorPricing = pgTable("competitor_pricing", {
   price: text("price").notNull(),
   inclusions: text("inclusions"),
   sourceUrl: text("source_url"),
+  pricingModel: text("pricing_model"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("competitor_pricing_entity_id_idx").on(table.entityId),

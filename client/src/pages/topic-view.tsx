@@ -218,6 +218,11 @@ function TopicViewContent({
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const [showAspectModal, setShowAspectModal] = useState(false);
   const [showCoachMarks, setShowCoachMarks] = useState(false);
+  const [showWebsiteModal, setShowWebsiteModal] = useState(false);
+  const [websiteUrlInput, setWebsiteUrlInput] = useState("");
+  const [websiteBannerDismissed, setWebsiteBannerDismissed] = useState(() => {
+    return localStorage.getItem(`website_banner_dismissed_${entity.name}`) === "true";
+  });
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -259,6 +264,28 @@ function TopicViewContent({
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const websiteUrlMutation = useMutation({
+    mutationFn: async (url: string) => {
+      const res = await apiRequest("POST", "/api/entity/update-website-url", {
+        entityName: entity.name,
+        categoryName,
+        website_url: url,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      setShowWebsiteModal(false);
+      setWebsiteUrlInput("");
+      toast({ title: "Website URL saved." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const showWebsiteBanner = entity.entity_type_detected === "local_business" && !entity.website_url && !websiteBannerDismissed;
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
@@ -311,6 +338,63 @@ function TopicViewContent({
           categoryName={categoryName}
         />
       )}
+
+      {showWebsiteBanner && (
+        <div className="flex items-center gap-3 mt-3 p-3 rounded-lg bg-blue-50 border border-blue-200" data-testid="banner-add-website">
+          <Globe className="w-4 h-4 text-blue-600 shrink-0" />
+          <p className="text-sm text-blue-800 flex-1">
+            Add {entity.name}'s website URL to improve search accuracy
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-xs border-blue-300 text-blue-700 hover:bg-blue-100"
+            onClick={() => setShowWebsiteModal(true)}
+            data-testid="button-add-website"
+          >
+            Add Website
+          </Button>
+          <button
+            className="text-blue-400 hover:text-blue-600 transition-colors"
+            onClick={() => {
+              setWebsiteBannerDismissed(true);
+              localStorage.setItem(`website_banner_dismissed_${entity.name}`, "true");
+            }}
+            data-testid="button-dismiss-website-banner"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      <Dialog open={showWebsiteModal} onOpenChange={setShowWebsiteModal}>
+        <DialogContent className="max-w-sm" data-testid="modal-add-website">
+          <DialogHeader>
+            <DialogTitle>Add Website URL</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <label className="text-xs font-medium text-slate-600 mb-1 block">Website URL</label>
+            <Input
+              placeholder="https://..."
+              value={websiteUrlInput}
+              onChange={(e) => setWebsiteUrlInput(e.target.value)}
+              data-testid="input-website-url"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowWebsiteModal(false)}>Cancel</Button>
+            <Button
+              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+              disabled={!websiteUrlInput.trim() || websiteUrlMutation.isPending}
+              onClick={() => websiteUrlMutation.mutate(websiteUrlInput.trim())}
+              data-testid="button-save-website"
+            >
+              {websiteUrlMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="mt-4">
         <ContextualTopicBanner
@@ -857,10 +941,50 @@ function StrategicDirectionCard({ entity, categoryName, captures }: { entity: Ex
   );
 }
 
+const PRICING_MODEL_LABELS: Record<string, string> = {
+  per_service: "Per Service",
+  subscription_monthly: "Monthly Sub",
+  subscription_annual: "Annual Sub",
+  per_transaction: "Per Transaction",
+  per_unit: "Per Unit",
+  per_seat: "Per Seat",
+  usage_tiered: "Usage Tiered",
+  freemium: "Freemium",
+  commission: "Commission",
+  custom: "Custom",
+};
+
+const PRICING_MODEL_COLUMNS: Record<string, { col1: string; col2: string; col3?: string; col4?: string }> = {
+  per_service: { col1: "Service or Treatment", col2: "Price", col3: "Notes" },
+  subscription_monthly: { col1: "Plan", col2: "Price/month", col3: "Inclusions" },
+  subscription_annual: { col1: "Plan", col2: "Price/year", col3: "Min term", col4: "Inclusions" },
+  per_transaction: { col1: "Transaction type", col2: "Unit price", col3: "Volume discount" },
+  per_unit: { col1: "Product or SKU", col2: "Unit price", col3: "Min order" },
+  per_seat: { col1: "Plan", col2: "Price/seat/month", col3: "Min seats" },
+  usage_tiered: { col1: "Tier", col2: "Usage range", col3: "Price per unit" },
+  freemium: { col1: "Tier", col2: "Price", col3: "Key limits" },
+  commission: { col1: "Transaction type", col2: "Rate %", col3: "Notes" },
+  custom: { col1: "Package", col2: "Indicative range", col3: "Notes" },
+};
+
+const PRICING_MODEL_FIELDS: Record<string, { planLabel: string; planPlaceholder: string; priceLabel: string; pricePlaceholder: string; inclusionsLabel?: string; inclusionsPlaceholder?: string }> = {
+  per_service: { planLabel: "Service or Treatment", planPlaceholder: "e.g. Initial consultation, Deep clean", priceLabel: "Price", pricePlaceholder: "e.g. $150, $80-120" },
+  subscription_monthly: { planLabel: "Plan", planPlaceholder: "e.g. Pro, Enterprise", priceLabel: "Price/month", pricePlaceholder: "e.g. $49/mo", inclusionsLabel: "Inclusions", inclusionsPlaceholder: "e.g. 10 seats, API access" },
+  subscription_annual: { planLabel: "Plan", planPlaceholder: "e.g. Enterprise Annual", priceLabel: "Price/year", pricePlaceholder: "e.g. $499/yr", inclusionsLabel: "Min term & Inclusions", inclusionsPlaceholder: "e.g. 12 months, unlimited users" },
+  per_transaction: { planLabel: "Transaction type", planPlaceholder: "e.g. ID verification, API call", priceLabel: "Unit price", pricePlaceholder: "e.g. $0.50/call", inclusionsLabel: "Volume discount", inclusionsPlaceholder: "e.g. 20% off at 10k+" },
+  per_unit: { planLabel: "Product or SKU", planPlaceholder: "e.g. Widget Pro, Pack of 12", priceLabel: "Unit price", pricePlaceholder: "e.g. $24.99", inclusionsLabel: "Min order", inclusionsPlaceholder: "e.g. MOQ 100 units" },
+  per_seat: { planLabel: "Plan", planPlaceholder: "e.g. Team, Business", priceLabel: "Price/seat/month", pricePlaceholder: "e.g. $12/seat/mo", inclusionsLabel: "Min seats", inclusionsPlaceholder: "e.g. 5 seats minimum" },
+  usage_tiered: { planLabel: "Tier", planPlaceholder: "e.g. Standard, High volume", priceLabel: "Usage range", pricePlaceholder: "e.g. 0-1000 requests", inclusionsLabel: "Price per unit", inclusionsPlaceholder: "e.g. $0.01/request" },
+  freemium: { planLabel: "Tier", planPlaceholder: "e.g. Free, Pro, Enterprise", priceLabel: "Price", pricePlaceholder: "e.g. $0, $29/mo", inclusionsLabel: "Key limits", inclusionsPlaceholder: "e.g. 3 projects, 1GB storage" },
+  commission: { planLabel: "Transaction type", planPlaceholder: "e.g. Sale, Referral", priceLabel: "Rate %", pricePlaceholder: "e.g. 15%, 2.9% + $0.30", inclusionsLabel: "Notes", inclusionsPlaceholder: "e.g. Capped at $50/transaction" },
+  custom: { planLabel: "Package", planPlaceholder: "e.g. Enterprise, Government", priceLabel: "Indicative range", pricePlaceholder: "e.g. $10k-50k/yr", inclusionsLabel: "Notes", inclusionsPlaceholder: "e.g. Custom SLA, dedicated support" },
+};
+
 function PricingCard({ entity }: { entity: ExtractedEntity }) {
   const { toast } = useToast();
   const entityId = entity.name;
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>(entity.pricing_model_detected || "per_service");
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
   const [formPlan, setFormPlan] = useState("");
   const [formPrice, setFormPrice] = useState("");
@@ -876,7 +1000,7 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { capturedDate: string; planName: string; price: string; inclusions?: string; sourceUrl?: string }) => {
+    mutationFn: async (data: { capturedDate: string; planName: string; price: string; inclusions?: string; sourceUrl?: string; pricingModel?: string }) => {
       const res = await apiRequest("POST", `/api/competitor-pricing/${encodeURIComponent(entityId)}`, data);
       return res.json();
     },
@@ -910,6 +1034,7 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
     setFormPrice("");
     setFormInclusions("");
     setFormSource("");
+    setSelectedModel(entity.pricing_model_detected || "per_service");
   };
 
   const handleSubmit = () => {
@@ -920,10 +1045,72 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
       price: formPrice.trim(),
       inclusions: formInclusions.trim() || undefined,
       sourceUrl: formSource.trim() || undefined,
+      pricingModel: selectedModel,
     });
   };
 
   const pricing = pricingData?.pricing || [];
+
+  const groupedPricing: Record<string, CompetitorPricing[]> = {};
+  for (const entry of pricing) {
+    const model = (entry as any).pricingModel || "per_service";
+    if (!groupedPricing[model]) groupedPricing[model] = [];
+    groupedPricing[model].push(entry);
+  }
+  const modelKeys = Object.keys(groupedPricing);
+  const hasMultipleModels = modelKeys.length > 1;
+
+  const renderPricingTable = (entries: CompetitorPricing[], model: string) => {
+    const cols = PRICING_MODEL_COLUMNS[model] || PRICING_MODEL_COLUMNS.custom;
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm" data-testid={`table-pricing-${model}`}>
+          <thead>
+            <tr className="border-b border-slate-200">
+              <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Date</th>
+              <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">{cols.col1}</th>
+              <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">{cols.col2}</th>
+              {cols.col3 && <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">{cols.col3}</th>}
+              {cols.col4 && <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">{cols.col4}</th>}
+              <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Source</th>
+              <th className="w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {entries.map((entry) => (
+              <tr key={entry.id} className="border-b border-slate-100 hover:bg-slate-50" data-testid={`row-pricing-${entry.id}`}>
+                <td className="py-2 px-2 text-slate-600">
+                  {new Date(entry.capturedDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                </td>
+                <td className="py-2 px-2 font-medium">{entry.planName}</td>
+                <td className="py-2 px-2">{entry.price}</td>
+                {cols.col3 && <td className="py-2 px-2 text-slate-600 max-w-[200px] truncate">{entry.inclusions || "—"}</td>}
+                {cols.col4 && <td className="py-2 px-2 text-slate-600 max-w-[150px] truncate">—</td>}
+                <td className="py-2 px-2">
+                  {entry.sourceUrl ? (
+                    <a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[#1e3a5f] hover:underline truncate block max-w-[120px]" data-testid={`link-pricing-source-${entry.id}`}>
+                      Link
+                    </a>
+                  ) : "—"}
+                </td>
+                <td className="py-2 px-2">
+                  <button
+                    className="text-slate-400 hover:text-red-500 transition-colors"
+                    onClick={() => deleteMutation.mutate(entry.id)}
+                    data-testid={`button-delete-pricing-${entry.id}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const fields = PRICING_MODEL_FIELDS[selectedModel] || PRICING_MODEL_FIELDS.custom;
 
   return (
     <>
@@ -954,59 +1141,48 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
             <p className="text-sm text-slate-400 italic text-center py-4" data-testid="text-pricing-empty">
               No pricing data yet. Add what you know about their pricing — even partial info is useful.
             </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm" data-testid="table-pricing">
-                <thead>
-                  <tr className="border-b border-slate-200">
-                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Date</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Plan/Tier</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Price</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Key inclusions</th>
-                    <th className="text-left py-2 px-2 text-xs font-medium text-slate-500">Source</th>
-                    <th className="w-8"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pricing.map((entry) => (
-                    <tr key={entry.id} className="border-b border-slate-100 hover:bg-slate-50" data-testid={`row-pricing-${entry.id}`}>
-                      <td className="py-2 px-2 text-slate-600">
-                        {new Date(entry.capturedDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </td>
-                      <td className="py-2 px-2 font-medium">{entry.planName}</td>
-                      <td className="py-2 px-2">{entry.price}</td>
-                      <td className="py-2 px-2 text-slate-600 max-w-[200px] truncate">{entry.inclusions || "—"}</td>
-                      <td className="py-2 px-2">
-                        {entry.sourceUrl ? (
-                          <a href={entry.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[#1e3a5f] hover:underline truncate block max-w-[120px]" data-testid={`link-pricing-source-${entry.id}`}>
-                            Link
-                          </a>
-                        ) : "—"}
-                      </td>
-                      <td className="py-2 px-2">
-                        <button
-                          className="text-slate-400 hover:text-red-500 transition-colors"
-                          onClick={() => deleteMutation.mutate(entry.id)}
-                          data-testid={`button-delete-pricing-${entry.id}`}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          ) : hasMultipleModels ? (
+            <div className="space-y-4">
+              {modelKeys.map((model) => (
+                <div key={model}>
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" data-testid={`heading-pricing-model-${model}`}>
+                    {PRICING_MODEL_LABELS[model] || model}
+                  </h4>
+                  {renderPricingTable(groupedPricing[model], model)}
+                </div>
+              ))}
             </div>
+          ) : (
+            renderPricingTable(pricing, modelKeys[0] || "per_service")
           )}
         </CardContent>
       </Card>
 
       <Dialog open={showAddModal} onOpenChange={(open) => { setShowAddModal(open); if (!open) resetForm(); }}>
-        <DialogContent className="max-w-md" data-testid="modal-add-pricing">
+        <DialogContent className="max-w-lg" data-testid="modal-add-pricing">
           <DialogHeader>
             <DialogTitle>Add Pricing Entry</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-2">
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-medium text-slate-600 mb-2 block">Pricing model</label>
+              <div className="flex flex-wrap gap-1.5" data-testid="pricing-model-selector">
+                {Object.entries(PRICING_MODEL_LABELS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      selectedModel === key
+                        ? "bg-[#1e3a5f] text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                    onClick={() => setSelectedModel(key)}
+                    data-testid={`pill-pricing-model-${key}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Date</label>
               <Input
@@ -1017,32 +1193,34 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Plan / Tier</label>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">{fields.planLabel}</label>
               <Input
-                placeholder="e.g. Pro, Enterprise, Free"
+                placeholder={fields.planPlaceholder}
                 value={formPlan}
                 onChange={(e) => setFormPlan(e.target.value)}
                 data-testid="input-pricing-plan"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Price</label>
+              <label className="text-xs font-medium text-slate-600 mb-1 block">{fields.priceLabel}</label>
               <Input
-                placeholder="e.g. $49/mo, $499/yr, Custom"
+                placeholder={fields.pricePlaceholder}
                 value={formPrice}
                 onChange={(e) => setFormPrice(e.target.value)}
                 data-testid="input-pricing-price"
               />
             </div>
-            <div>
-              <label className="text-xs font-medium text-slate-600 mb-1 block">Key inclusions</label>
-              <Input
-                placeholder="e.g. 10 seats, unlimited projects, API access"
-                value={formInclusions}
-                onChange={(e) => setFormInclusions(e.target.value)}
-                data-testid="input-pricing-inclusions"
-              />
-            </div>
+            {fields.inclusionsLabel && (
+              <div>
+                <label className="text-xs font-medium text-slate-600 mb-1 block">{fields.inclusionsLabel}</label>
+                <Input
+                  placeholder={fields.inclusionsPlaceholder}
+                  value={formInclusions}
+                  onChange={(e) => setFormInclusions(e.target.value)}
+                  data-testid="input-pricing-inclusions"
+                />
+              </div>
+            )}
             <div>
               <label className="text-xs font-medium text-slate-600 mb-1 block">Source URL</label>
               <Input
@@ -2075,6 +2253,112 @@ function UpdatesFeedWidget({
           </CardContent>
         </Card>
       )}
+
+      <PricingSignalDetection entity={entity} captures={captures} categoryName={categoryName} />
+    </div>
+  );
+}
+
+function inferPricingModelFromText(text: string): string | null {
+  const lower = text.toLowerCase();
+  if (/per\s+(session|treatment|consultation|service|appointment)/i.test(lower)) return "per_service";
+  if (/per\s+(month|mo\b)|subscribe|monthly\s+plan|\/month/i.test(lower)) return "subscription_monthly";
+  if (/per\s+(year|yr\b|annum)|annual\s+(plan|subscription|contract)|\/year/i.test(lower)) return "subscription_annual";
+  if (/per\s+(verification|call|transaction|api\s+call)|per\s+use\b/i.test(lower)) return "per_transaction";
+  if (/per\s+(unit|item|piece|product)|unit\s+price/i.test(lower)) return "per_unit";
+  if (/per\s+(user|seat|licence|license)/i.test(lower)) return "per_seat";
+  if (/usage[\s-]*(based|tiered)|tiered\s+pricing|pay[\s-]*as[\s-]*you[\s-]*go/i.test(lower)) return "usage_tiered";
+  if (/freemium|free\s+tier|free\s+plan.*paid/i.test(lower)) return "freemium";
+  if (/commission|revenue\s+share|broker\s+fee|marketplace\s+fee/i.test(lower)) return "commission";
+  if (/custom\s+(pricing|quote|contract)|contact\s+(sales|us)/i.test(lower)) return "custom";
+  return null;
+}
+
+function PricingSignalDetection({ entity, captures, categoryName }: { entity: ExtractedEntity; captures: Capture[]; categoryName: string }) {
+  const { toast } = useToast();
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+
+  const pricingCaptures = captures.filter((cap) => {
+    if (dismissed.has(cap.id)) return false;
+    if (cap.type !== "web_search") return false;
+    const pricingKeywords = /\b(price|pricing|plan|tier|cost|per month|per year|per seat|per user|per call|per transaction|subscription|free trial|freemium)\b/i;
+    return pricingKeywords.test(cap.content);
+  }).slice(0, 3);
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { capturedDate: string; planName: string; price: string; pricingModel: string; sourceUrl?: string }) => {
+      const res = await apiRequest("POST", `/api/competitor-pricing/${encodeURIComponent(entity.name)}`, data);
+      return res.json();
+    },
+    onSuccess: (_data, _vars, context) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/competitor-pricing", entity.name] });
+      toast({ title: "Pricing entry saved." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  if (pricingCaptures.length === 0) return null;
+
+  return (
+    <div className="mt-4 space-y-2" data-testid="pricing-signal-detection">
+      {pricingCaptures.map((cap) => {
+        const inferredModel = inferPricingModelFromText(cap.content) || entity.pricing_model_detected || "per_service";
+        const sourceMatch = cap.content.match(/Source:\s*(https?:\/\/[^\s]+)/);
+        const sourceUrl = sourceMatch ? sourceMatch[1] : undefined;
+        const summary = cap.content.replace(/\n\nSource:.*$/, "").trim();
+        const priceMatch = summary.match(/\$[\d,.]+(?:\/\w+)?/);
+        const price = priceMatch ? priceMatch[0] : "";
+
+        return (
+          <Card key={cap.id} className="border-[#1e3a5f]/20 bg-[#1e3a5f]/[0.02]" data-testid={`pricing-signal-${cap.id}`}>
+            <CardContent className="p-4">
+              <div className="flex items-start gap-2">
+                <Tag className="w-4 h-4 text-[#1e3a5f] mt-0.5 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-[#1e3a5f] mb-1">Pricing detected</p>
+                  <p className="text-sm text-foreground line-clamp-2 mb-2">{summary.slice(0, 150)}</p>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <Badge variant="outline" className="text-[10px]">{PRICING_MODEL_LABELS[inferredModel] || inferredModel}</Badge>
+                    {price && <Badge variant="outline" className="text-[10px]">{price}</Badge>}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-7 px-3 text-xs"
+                      disabled={createMutation.isPending}
+                      onClick={() => {
+                        createMutation.mutate({
+                          capturedDate: new Date().toISOString().split("T")[0],
+                          planName: summary.slice(0, 80),
+                          price: price || "See source",
+                          pricingModel: inferredModel,
+                          sourceUrl,
+                        });
+                        setDismissed(prev => new Set(prev).add(cap.id));
+                      }}
+                      data-testid={`button-confirm-pricing-signal-${cap.id}`}
+                    >
+                      {createMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                      Save to Pricing
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 px-3 text-xs text-muted-foreground"
+                      onClick={() => setDismissed(prev => new Set(prev).add(cap.id))}
+                      data-testid={`button-dismiss-pricing-signal-${cap.id}`}
+                    >
+                      Dismiss
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -3394,11 +3678,13 @@ function AspectSelectionModal({
   const [loading, setLoading] = useState(false);
   const [customText, setCustomText] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [aspectWebsiteUrl, setAspectWebsiteUrl] = useState("");
 
   useEffect(() => {
     if (!open) return;
     setAspects([]);
     setCustomText("");
+    setAspectWebsiteUrl("");
     setLoading(true);
 
     const fetchAspects = async () => {
@@ -3421,11 +3707,15 @@ function AspectSelectionModal({
   const handleSelect = async (aspect: string) => {
     setConfirming(true);
     try {
-      await apiRequest("POST", "/api/entity/confirm-disambiguation", {
+      const payload: any = {
         entityName,
         categoryName,
         disambiguation_context: aspect,
-      });
+      };
+      if (aspectWebsiteUrl.trim()) {
+        payload.website_url = aspectWebsiteUrl.trim();
+      }
+      await apiRequest("POST", "/api/entity/confirm-disambiguation", payload);
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
       toast({
@@ -3506,6 +3796,16 @@ function AspectSelectionModal({
                 {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
               </Button>
             </div>
+          </div>
+          <div className="pt-2">
+            <label className="text-xs text-muted-foreground mb-1 block">Their website (optional — improves accuracy)</label>
+            <Input
+              value={aspectWebsiteUrl}
+              onChange={(e) => setAspectWebsiteUrl(e.target.value)}
+              placeholder="https://"
+              className="h-9 text-sm"
+              data-testid="input-aspect-website"
+            />
           </div>
         </div>
       </DialogContent>
@@ -3648,6 +3948,7 @@ function DisambiguationCard({
   const [customText, setCustomText] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [disambigWebsiteUrl, setDisambigWebsiteUrl] = useState("");
 
   useEffect(() => {
     if ((entity.disambiguation_confirmed ?? false) || entity.disambiguation_context) return;
@@ -3709,11 +4010,15 @@ function DisambiguationCard({
     setConfirming(true);
     try {
       const contextStr = selectedCompany ? `${selectedCompany} — ${aspect}` : aspect;
-      await apiRequest("POST", "/api/entity/confirm-disambiguation", {
+      const payload: any = {
         entityName: entity.name,
         categoryName,
         disambiguation_context: contextStr,
-      });
+      };
+      if (disambigWebsiteUrl.trim()) {
+        payload.website_url = disambigWebsiteUrl.trim();
+      }
+      await apiRequest("POST", "/api/entity/confirm-disambiguation", payload);
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
       toast({
@@ -3847,6 +4152,16 @@ function DisambiguationCard({
                     {confirming ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                   </Button>
                 </div>
+              </div>
+              <div className="pt-2">
+                <label className="text-xs text-muted-foreground mb-1 block">Their website (optional — improves accuracy)</label>
+                <Input
+                  value={disambigWebsiteUrl}
+                  onChange={(e) => setDisambigWebsiteUrl(e.target.value)}
+                  placeholder="https://"
+                  className="h-9 text-sm"
+                  data-testid="input-disambiguation-website"
+                />
               </div>
             </div>
           </>

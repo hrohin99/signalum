@@ -87,12 +87,27 @@ export async function runAmbientSearchForUser(
 
         const topicType = (entity.topic_type || "general").toLowerCase();
         const lookbackDays = 7;
+        const entityType = entity.entity_type_detected;
+        const pricingModel = entity.pricing_model_detected;
+        const websiteUrl = entity.website_url;
+
+        const isLocalBusiness = entityType === "local_business" || pricingModel === "per_service";
+        const isCommodity = entityType === "commodity";
+        const isRegulation = entityType === "regulation";
 
         let findings;
-        if (topicType === "competitor") {
-          findings = await searchCompetitorNews(entity.name, category.name, lookbackDays);
+        if (isCommodity) {
+          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "commodity" });
+        } else if (isRegulation) {
+          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "regulation" });
+        } else if (topicType === "competitor") {
+          findings = await searchCompetitorNews(entity.name, category.name, lookbackDays, {
+            websiteUrl,
+            skipHiring: isLocalBusiness,
+            skipFinancial: isLocalBusiness,
+          });
         } else {
-          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays);
+          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl });
         }
 
         result.entitiesSearched++;

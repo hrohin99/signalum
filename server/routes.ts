@@ -1521,7 +1521,33 @@ Rules:
       entity.disambiguation_confirmed = true;
       entity.needs_aspect_review = false;
 
+      if (req.body.website_url && typeof req.body.website_url === "string" && req.body.website_url.trim()) {
+        entity.website_url = req.body.website_url.trim();
+      }
+
       await storage.updateWorkspaceCategories(userId, categories);
+
+      (async () => {
+        try {
+          const { classifyEntity } = await import("./classificationService");
+          const classification = await classifyEntity(entityName, disambiguation_context);
+          const freshWorkspace = await storage.getWorkspaceByUserId(userId);
+          if (freshWorkspace) {
+            const freshCategories = freshWorkspace.categories as ExtractedCategory[];
+            for (const cat of freshCategories) {
+              const ent = cat.entities.find(e => e.name === entityName);
+              if (ent) {
+                ent.entity_type_detected = classification.entity_type;
+                ent.pricing_model_detected = classification.pricing_model;
+                break;
+              }
+            }
+            await storage.updateWorkspaceCategories(userId, freshCategories);
+          }
+        } catch (classErr: any) {
+          console.error(`[ConfirmDisambiguation] Classification failed for "${entityName}":`, classErr?.message || classErr);
+        }
+      })();
 
       try {
         const { searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
@@ -1553,6 +1579,41 @@ Rules:
       return res.json({ success: true, disambiguation_context: disambiguation_context.trim() });
     } catch (error: any) {
       console.error("Confirm disambiguation error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entity/update-website-url", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { entityName, categoryName, website_url } = req.body;
+
+      if (!entityName || !categoryName) {
+        return res.status(400).json({ message: "entityName and categoryName are required" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const entity = category.entities.find(e => e.name === entityName);
+      if (!entity) {
+        return res.status(404).json({ message: "Entity not found" });
+      }
+
+      entity.website_url = website_url?.trim() || undefined;
+      await storage.updateWorkspaceCategories(userId, categories);
+
+      return res.json({ success: true, website_url: entity.website_url });
+    } catch (error: any) {
+      console.error("Update website URL error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
@@ -2374,7 +2435,7 @@ Return only 1-2 sentences, no JSON, no formatting.`
     try {
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const { entityId } = req.params;
-      const { capturedDate, planName, price, inclusions, sourceUrl } = req.body;
+      const { capturedDate, planName, price, inclusions, sourceUrl, pricingModel } = req.body;
 
       if (!capturedDate || !planName || !price) {
         return res.status(400).json({ message: "Missing required fields: capturedDate, planName, price" });
@@ -2388,6 +2449,7 @@ Return only 1-2 sentences, no JSON, no formatting.`
         price,
         inclusions: inclusions || null,
         sourceUrl: sourceUrl || null,
+        pricingModel: pricingModel || null,
       });
 
       return res.json({ pricing: entry });
