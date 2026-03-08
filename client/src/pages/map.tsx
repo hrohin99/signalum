@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { OnboardingWelcomeModal as OnboardingWelcomeModalComponent } from "@/components/welcome-modal";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -93,73 +94,7 @@ const entityTypeLabels: Record<string, string> = {
 };
 
 function WelcomeModal({ onDismiss }: { onDismiss: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" data-testid="welcome-modal-overlay">
-      <div className="absolute inset-0 bg-black/40" onClick={onDismiss} />
-      <div
-        className="relative bg-white rounded-xl shadow-lg w-full max-w-[560px] mx-4"
-        style={{ padding: "40px" }}
-        data-testid="welcome-modal"
-      >
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-10 h-10 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-2">
-            <Shield className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">Watchloom</span>
-        </div>
-
-        <h2 className="text-xl font-semibold text-[#1e3a5f] text-center mb-6" data-testid="text-welcome-headline">
-          Your workspace is ready. Here is what to do next.
-        </h2>
-
-        <div className="space-y-5 mb-8">
-          <div className="flex gap-4">
-            <div className="w-8 h-8 rounded-full bg-[#1e3a5f] flex items-center justify-center shrink-0 text-white text-sm font-semibold">
-              1
-            </div>
-            <div>
-              <p className="font-semibold text-[#1e3a5f] mb-1">Add what you want to track</p>
-              <p className="text-sm text-slate-500 leading-relaxed">
-                You can see your categories on the left. Click any category with 0 topics and add the specific companies, topics, or names you want Watchloom to follow.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="w-8 h-8 rounded-full bg-[#1e3a5f] flex items-center justify-center shrink-0 text-white text-sm font-semibold">
-              2
-            </div>
-            <div>
-              <p className="font-semibold text-[#1e3a5f] mb-1">Drop in your first piece of intelligence</p>
-              <p className="text-sm text-slate-500 leading-relaxed">
-                Click Capture in the sidebar and paste an article, type a note, or drop in a URL about anything relevant to your work. Our AI will file it in the right place automatically.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="w-8 h-8 rounded-full bg-[#1e3a5f] flex items-center justify-center shrink-0 text-white text-sm font-semibold">
-              3
-            </div>
-            <div>
-              <p className="font-semibold text-[#1e3a5f] mb-1">Check back tomorrow morning</p>
-              <p className="text-sm text-slate-500 leading-relaxed">
-                Watchloom's AI agents are now working in the background. Your first briefing will be waiting for you tomorrow under Daily Brief.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <Button
-          className="w-full bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white h-11"
-          onClick={onDismiss}
-          data-testid="button-dismiss-welcome"
-        >
-          Got it, take me to my workspace
-        </Button>
-      </div>
-    </div>
-  );
+  return <OnboardingWelcomeModalComponent onDismiss={onDismiss} />;
 }
 
 function EmptyCategoryNudge({
@@ -438,7 +373,8 @@ export default function MapPage() {
   });
 
   useEffect(() => {
-    if (welcomeStatus && !welcomeStatus.dismissed && categories.length > 0) {
+    const localSeen = localStorage.getItem("onboarding_welcome_seen") === "true";
+    if (welcomeStatus && !welcomeStatus.dismissed && !localSeen && categories.length > 0) {
       setShowWelcome(true);
     }
   }, [welcomeStatus, categories.length]);

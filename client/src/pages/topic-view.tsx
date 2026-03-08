@@ -56,6 +56,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext } from "@shared/schema";
 import { ComingSoonCard } from "@/components/coming-soon-card";
+import { CoachMarks } from "@/components/coach-marks";
+import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
+import { topicTourSteps } from "@/lib/tourConfig";
 import { Eye, Crosshair, Compass } from "lucide-react";
 
 function detectMultipleEntities(name: string): string[] | null {
@@ -214,8 +217,16 @@ function TopicViewContent({
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const [showAspectModal, setShowAspectModal] = useState(false);
+  const [showCoachMarks, setShowCoachMarks] = useState(false);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const tourSeen = localStorage.getItem("onboarding_topic_tour_seen") === "true";
+    if (!tourSeen) {
+      setShowCoachMarks(true);
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -301,6 +312,21 @@ function TopicViewContent({
         />
       )}
 
+      <div className="mt-4">
+        <ContextualTopicBanner
+          entityId={entity.name}
+          entityName={entity.name}
+          topicType={currentTopicType}
+          categoryName={categoryName}
+          onOpenDateModal={() => {
+            const datesCard = document.querySelector('[data-tour="dates-deadlines"]');
+            if (datesCard) {
+              datesCard.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+          }}
+        />
+      </div>
+
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
@@ -342,6 +368,14 @@ function TopicViewContent({
           <AIInsightsCard entity={entity} categoryName={categoryName} captures={captures} />
         </div>
       </div>
+
+      {showCoachMarks && (
+        <CoachMarks
+          steps={topicTourSteps}
+          storageKey="onboarding_topic_tour_seen"
+          onComplete={() => setShowCoachMarks(false)}
+        />
+      )}
     </div>
   );
 }
@@ -558,7 +592,7 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
   const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   return (
-    <Card className="border-[#1e3a5f]/15 bg-[#1e3a5f]/[0.02]" data-testid="section-ai-summary">
+    <Card className="border-[#1e3a5f]/15 bg-[#1e3a5f]/[0.02]" data-testid="section-ai-summary" data-tour="ai-summary">
       <CardContent className="p-5">
         <div className="flex items-center gap-2 mb-3">
           <Sparkles className="w-4 h-4 text-[#1e3a5f]" />
@@ -2051,7 +2085,7 @@ function RecentSignalsCard({ captures }: { captures: Capture[] }) {
     .slice(0, 3);
 
   return (
-    <Card data-testid="recent-signals-card">
+    <Card data-testid="recent-signals-card" data-tour="key-signals">
       <CardContent className="p-4">
         <div className="flex items-center gap-2 mb-3">
           <Zap className="w-4 h-4 text-[#c9a84c]" />
@@ -2644,7 +2678,7 @@ function DatesAndDeadlinesCard({
   const cardBorder = isProminent ? "border-l-4 border-l-amber-400" : "";
 
   return (
-    <Card className={cardBorder} data-testid="card-dates-deadlines">
+    <Card className={cardBorder} data-testid="card-dates-deadlines" data-tour="dates-deadlines">
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -3190,7 +3224,7 @@ function InlineCaptureCard({
   };
 
   return (
-    <Card data-testid="card-inline-capture">
+    <Card data-testid="card-inline-capture" data-tour="quick-capture">
       <CardContent className="p-5">
         <h3 className="text-sm font-semibold text-[#1e3a5f] mb-3">Quick Capture</h3>
         <textarea
