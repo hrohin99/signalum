@@ -1,0 +1,16 @@
+"Improve the updates feed on the full screen topic view to visually distinguish signal from noise. Four changes.
+CHANGE 1 — VISUAL HIERARCHY: Apply styles to update cards based on signal_strength field:
+High signal: gold left border (3px solid #c9a84c), subtle box-shadow, small gold 'High Signal' pill top-right.
+Medium signal: existing default style, unchanged.
+Low signal: opacity 0.65, lighter body text colour. Still visible but visually recessed.
+Null signal_strength: treat as medium.
+CHANGE 2 — PINNED KEY SIGNALS SECTION: Render a collapsible card above the feed only when there is at least 1 high signal capture for this topic.
+Header: lightning bolt icon + 'Key signals' in navy bold + count badge + chevron to collapse. Expanded by default.
+Shows up to 3 most recent high signal captures as compact rows: icon, first 120 characters of content, date, gold signal pill. Clicking a row scrolls to that full card in the feed below and briefly highlights it with a gold flash animation (0.4s).
+CHANGE 3 — SIGNAL FILTER BAR: Three pill tabs above the feed: All / Notable / High Signal. All shows everything. Notable shows medium and high. High Signal shows only high. Default: All. Persist selected filter per topic in localStorage.
+CHANGE 4 — RECENT SIGNALS CARD IN RIGHT COLUMN: Add a new card to the right column of the topic view, positioned between Topic Details and Dates and Deadlines.
+Card header: lightning bolt icon + 'Recent signals' label.
+Shows the 3 most recent high signal captures as compact rows: first 100 characters of content, date, gold High Signal pill. If fewer than 3 high signal captures exist, show however many there are. If none exist, show placeholder in slate grey italic: 'No high signal updates yet. High signal events will appear here as they are captured.'
+Each row is clickable and scrolls to the full capture in the feed with a brief gold highlight flash.
+This card gives users an immediate at-a-glance summary of what matters most without having to scroll the feed at all.
+Do not change any other screens, routing, or backend."
