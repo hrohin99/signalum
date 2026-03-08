@@ -360,6 +360,16 @@ function MapPageInner() {
 
   console.log("WS: component mounted");
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("fresh") === "1" && user?.id) {
+      queryClient.removeQueries({ queryKey: ["/api/workspace", user.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, "", cleanUrl);
+    }
+  }, [user?.id]);
+
   const { data: wsData, isLoading: wsLoading, error: wsError, refetch: refetchWorkspace } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
     enabled: !!user,

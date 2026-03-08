@@ -260,6 +260,7 @@ function AppContent() {
           onboardingInProgress.current = false;
           initialLoadComplete.current = true;
           setHasCompletedOnboarding(true);
+          setLocation("/?fresh=1");
         }}
       />
     );
