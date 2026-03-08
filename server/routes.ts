@@ -1547,11 +1547,23 @@ Rules:
       entity.disambiguation_confirmed = true;
       entity.needs_aspect_review = false;
 
-      if (req.body.website_url && typeof req.body.website_url === "string" && req.body.website_url.trim()) {
-        entity.website_url = req.body.website_url.trim();
+      const newWebsiteUrl = (req.body.website_url && typeof req.body.website_url === "string" && req.body.website_url.trim()) ? req.body.website_url.trim() : null;
+      if (newWebsiteUrl) {
+        entity.website_url = newWebsiteUrl;
       }
 
       await storage.updateWorkspaceCategories(userId, categories);
+
+      if (newWebsiteUrl) {
+        (async () => {
+          try {
+            const { runWebsiteIntelligenceExtraction } = await import("./websiteIntelligenceService");
+            await runWebsiteIntelligenceExtraction(userId, entityName, categoryName, newWebsiteUrl);
+          } catch (err: any) {
+            console.error(`[ConfirmDisambiguation] Website extraction failed for "${entityName}":`, err?.message || err);
+          }
+        })();
+      }
 
       (async () => {
         try {
@@ -1634,8 +1646,20 @@ Rules:
         return res.status(404).json({ message: "Entity not found" });
       }
 
+      const previousWebsiteUrl = entity.website_url;
       entity.website_url = website_url?.trim() || undefined;
       await storage.updateWorkspaceCategories(userId, categories);
+
+      if (entity.website_url && entity.website_url !== previousWebsiteUrl) {
+        (async () => {
+          try {
+            const { runWebsiteIntelligenceExtraction } = await import("./websiteIntelligenceService");
+            await runWebsiteIntelligenceExtraction(userId, entityName, categoryName, entity.website_url!);
+          } catch (err: any) {
+            console.error(`[UpdateWebsiteUrl] Website extraction failed for "${entityName}":`, err?.message || err);
+          }
+        })();
+      }
 
       return res.json({ success: true, website_url: entity.website_url });
     } catch (error: any) {
@@ -3229,6 +3253,67 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     } catch (error: any) {
       console.error("Detect capabilities error:", error);
       return res.json({ matches: [] });
+    }
+  });
+
+  app.get("/api/entity/website-extraction-status", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.query.entityName as string;
+      if (!entityName) {
+        return res.status(400).json({ message: "entityName is required" });
+      }
+      const { getWebsiteExtractionStatus } = await import("./websiteIntelligenceService");
+      const status = getWebsiteExtractionStatus(userId, entityName);
+      return res.json({ extraction: status });
+    } catch (error: any) {
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entity/refresh-website", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { entityName, categoryName } = req.body;
+
+      if (!entityName || !categoryName) {
+        return res.status(400).json({ message: "entityName and categoryName are required" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === categoryName);
+      if (!category) {
+        return res.status(404).json({ message: "Category not found" });
+      }
+
+      const entity = category.entities.find(e => e.name === entityName);
+      if (!entity || !entity.website_url) {
+        return res.status(400).json({ message: "Entity has no website URL" });
+      }
+
+      const { getWebsiteExtractionStatus, runWebsiteIntelligenceExtraction } = await import("./websiteIntelligenceService");
+      const currentStatus = getWebsiteExtractionStatus(userId, entityName);
+      if (currentStatus?.status === "running") {
+        return res.json({ success: true, message: "Extraction already running" });
+      }
+
+      (async () => {
+        try {
+          await runWebsiteIntelligenceExtraction(userId, entityName, categoryName, entity.website_url!);
+        } catch (err: any) {
+          console.error(`[RefreshWebsite] Extraction failed for "${entityName}":`, err?.message || err);
+        }
+      })();
+
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Refresh website error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 

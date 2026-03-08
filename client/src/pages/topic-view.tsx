@@ -223,8 +223,40 @@ function TopicViewContent({
   const [websiteBannerDismissed, setWebsiteBannerDismissed] = useState(() => {
     return localStorage.getItem(`website_banner_dismissed_${entity.name}`) === "true";
   });
+  const [extractionNoData, setExtractionNoData] = useState(false);
+  const [extractionNoDataDismissed, setExtractionNoDataDismissed] = useState(false);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
+
+  const { data: extractionStatus } = useQuery<{ extraction: { status: string; noDataFound?: boolean } | null }>({
+    queryKey: ["/api/entity/website-extraction-status", entity.name],
+    queryFn: async () => {
+      const res = await fetch(`/api/entity/website-extraction-status?entityName=${encodeURIComponent(entity.name)}`, {
+        headers: { Authorization: `Bearer ${user?.access_token}` },
+      });
+      return res.json();
+    },
+    enabled: !!user && !!entity.website_url,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (data?.extraction?.status === "running") return 2000;
+      return false;
+    },
+  });
+
+  const isExtractionRunning = extractionStatus?.extraction?.status === "running";
+
+  useEffect(() => {
+    if (extractionStatus?.extraction?.status === "completed" && extractionStatus?.extraction?.noDataFound) {
+      setExtractionNoData(true);
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+    } else if (extractionStatus?.extraction?.status === "completed" && extractionStatus?.extraction?.noDataFound === false) {
+      setExtractionNoData(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+    }
+  }, [extractionStatus?.extraction?.status, extractionStatus?.extraction?.noDataFound]);
 
   useEffect(() => {
     const tourSeen = localStorage.getItem("onboarding_topic_tour_seen") === "true";
@@ -276,9 +308,10 @@ function TopicViewContent({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/entity/website-extraction-status", entity.name] });
       setShowWebsiteModal(false);
       setWebsiteUrlInput("");
-      toast({ title: "Website URL saved." });
+      toast({ title: "Website URL saved. Reading their website..." });
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -361,6 +394,32 @@ function TopicViewContent({
               localStorage.setItem(`website_banner_dismissed_${entity.name}`, "true");
             }}
             data-testid="button-dismiss-website-banner"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {isExtractionRunning && (
+        <div className="flex items-center gap-3 mt-3 p-3 rounded-lg bg-emerald-50 border border-emerald-200" data-testid="banner-website-extraction">
+          <span className="relative flex h-3 w-3 shrink-0">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+          </span>
+          <p className="text-sm text-emerald-800">Reading their website…</p>
+        </div>
+      )}
+
+      {extractionNoData && !extractionNoDataDismissed && !isExtractionRunning && (
+        <div className="flex items-center gap-3 mt-3 p-3 rounded-lg bg-amber-50 border border-amber-200" data-testid="banner-extraction-no-data">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+          <p className="text-sm text-amber-800 flex-1">
+            Limited information found on their website. Try adding more pages in Monitored URLs.
+          </p>
+          <button
+            className="text-amber-400 hover:text-amber-600 transition-colors"
+            onClick={() => setExtractionNoDataDismissed(true)}
+            data-testid="button-dismiss-extraction-notice"
           >
             <X className="w-4 h-4" />
           </button>
@@ -454,6 +513,9 @@ function TopicViewContent({
           <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <MonitoredUrlsCard entity={entity} />
+          )}
+          {entity.website_url && (
+            <DigitalPresenceCard entity={entity} categoryName={categoryName} isExtractionRunning={isExtractionRunning} />
           )}
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <AIVisibilityCard />
@@ -4178,6 +4240,75 @@ function DisambiguationCard({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+function DigitalPresenceCard({ entity, categoryName, isExtractionRunning }: { entity: ExtractedEntity; categoryName: string; isExtractionRunning: boolean }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/entity/refresh-website", {
+        entityName: entity.name,
+        categoryName,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/entity/website-extraction-status", entity.name] });
+      toast({ title: "Website refresh started." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const websiteExtractionCaptures = (useQuery<Capture[]>({
+    queryKey: ["/api/captures"],
+    enabled: !!user,
+  }).data || []).filter(c => c.matchedEntity === entity.name && c.matchReason?.includes("source_type:website_extraction"));
+
+  return (
+    <Card data-testid="card-digital-presence">
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Globe className="w-4 h-4 text-[#1e3a5f]" />
+            <h3 className="text-sm font-semibold text-[#1e3a5f]">Digital Presence</h3>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 px-2 text-xs text-slate-500 hover:text-[#1e3a5f]"
+            disabled={isExtractionRunning || refreshMutation.isPending}
+            onClick={() => refreshMutation.mutate()}
+            data-testid="button-refresh-website"
+          >
+            <RefreshCw className={`w-3 h-3 mr-1 ${isExtractionRunning || refreshMutation.isPending ? "animate-spin" : ""}`} />
+            Refresh website
+          </Button>
+        </div>
+        <div className="text-xs text-slate-500 mb-2">
+          <a href={entity.website_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline" data-testid="link-entity-website">
+            {entity.website_url}
+          </a>
+        </div>
+        {isExtractionRunning ? (
+          <div className="flex items-center gap-2 text-xs text-emerald-600">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            Reading website…
+          </div>
+        ) : websiteExtractionCaptures.length > 0 ? (
+          <p className="text-xs text-slate-500">{websiteExtractionCaptures.length} insight{websiteExtractionCaptures.length !== 1 ? "s" : ""} extracted from website</p>
+        ) : (
+          <p className="text-xs text-slate-400">No website data extracted yet</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
