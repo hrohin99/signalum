@@ -260,7 +260,9 @@ function AppContent() {
           onboardingInProgress.current = false;
           initialLoadComplete.current = true;
           setHasCompletedOnboarding(true);
-          setLocation("/?fresh=1");
+          const redirectPath = "/";
+          console.log("ONBOARDING REDIRECT TO:", redirectPath);
+          window.location.href = redirectPath;
         }}
       />
     );

@@ -18,6 +18,7 @@ import TopicViewPage from "./topic-view";
 import AdminPage from "./admin";
 
 export default function Dashboard() {
+  console.log("WORKSPACE RENDERED");
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
