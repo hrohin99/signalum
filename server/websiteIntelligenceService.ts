@@ -68,8 +68,12 @@ async function discoverPages(websiteUrl: string): Promise<string[]> {
   const jinaUrl = `https://r.jina.ai/${sitemapUrl}`;
 
   try {
+    const jinaHeaders: Record<string, string> = { "Accept": "text/plain" };
+    if (process.env.JINA_API_KEY) {
+      jinaHeaders["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+    }
     const response = await fetch(jinaUrl, {
-      headers: { "Accept": "text/plain" },
+      headers: jinaHeaders,
       signal: AbortSignal.timeout(15000),
     });
 
@@ -98,8 +102,12 @@ async function discoverPages(websiteUrl: string): Promise<string[]> {
 
   try {
     const homepageJinaUrl = `https://r.jina.ai/${websiteUrl}`;
+    const homepageHeaders: Record<string, string> = { "Accept": "text/plain" };
+    if (process.env.JINA_API_KEY) {
+      homepageHeaders["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+    }
     const response = await fetch(homepageJinaUrl, {
-      headers: { "Accept": "text/plain" },
+      headers: homepageHeaders,
       signal: AbortSignal.timeout(15000),
     });
 
@@ -199,8 +207,12 @@ async function fetchPages(urls: string[]): Promise<{ url: string; content: strin
   for (const url of urls) {
     try {
       const jinaUrl = `https://r.jina.ai/${url}`;
+      const scrapeHeaders: Record<string, string> = { "Accept": "text/plain" };
+      if (process.env.JINA_API_KEY) {
+        scrapeHeaders["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+      }
       const response = await fetch(jinaUrl, {
-        headers: { "Accept": "text/plain" },
+        headers: scrapeHeaders,
         signal: AbortSignal.timeout(15000),
       });
 
