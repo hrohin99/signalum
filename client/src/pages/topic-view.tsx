@@ -43,6 +43,8 @@ import {
   Globe,
   ThumbsDown,
   Briefcase,
+  Zap,
+  ChevronUp,
 } from "lucide-react";
 import {
   Popover,
@@ -322,6 +324,7 @@ function TopicViewContent({
             allTopics={allTopics}
             categories={categories}
           />
+          <RecentSignalsCard captures={captures} />
           <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <MonitoredUrlsCard entity={entity} />
@@ -1455,6 +1458,99 @@ function getSignalStrength(cap: Capture): "high" | "medium" | "low" | null {
 
 type SignalFilter = "all" | "notable" | "high";
 
+function getSignalCardStyles(strength: "high" | "medium" | "low" | null): {
+  wrapperClass: string;
+  cardClass: string;
+  bodyTextClass: string;
+} {
+  if (strength === "high") {
+    return {
+      wrapperClass: "border-l-[3px] border-l-[#c9a84c] rounded-lg overflow-hidden shadow-sm",
+      cardClass: "border-border/60 rounded-l-none",
+      bodyTextClass: "text-[15px] text-foreground",
+    };
+  }
+  if (strength === "low") {
+    return {
+      wrapperClass: "",
+      cardClass: "border-border/60 opacity-[0.65]",
+      bodyTextClass: "text-[15px] text-muted-foreground",
+    };
+  }
+  return {
+    wrapperClass: "",
+    cardClass: "border-border/60",
+    bodyTextClass: "text-[15px] text-foreground",
+  };
+}
+
+function scrollToCapture(captureId: number) {
+  const el = document.querySelector(`[data-testid="card-update-${captureId}"]`);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("gold-flash-highlight");
+    setTimeout(() => el.classList.remove("gold-flash-highlight"), 400);
+  }
+}
+
+function KeySignalsSection({ highSignalCaptures }: { highSignalCaptures: Capture[] }) {
+  const [expanded, setExpanded] = useState(true);
+  const recent = highSignalCaptures.slice(0, 3);
+
+  if (recent.length === 0) return null;
+
+  return (
+    <Card className="border-[#c9a84c]/30 bg-[#c9a84c]/[0.04] mb-4" data-testid="key-signals-section">
+      <CardContent className="p-0">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between px-4 py-3 text-left"
+          data-testid="key-signals-toggle"
+        >
+          <div className="flex items-center gap-2">
+            <Zap className="w-4 h-4 text-[#c9a84c]" />
+            <span className="text-sm font-bold text-[#1e3a5f] dark:text-foreground">Key signals</span>
+            <Badge className="bg-[#c9a84c]/15 text-[#c9a84c] border-[#c9a84c]/30 text-[10px] px-1.5 py-0">{highSignalCaptures.length}</Badge>
+          </div>
+          {expanded ? (
+            <ChevronUp className="w-4 h-4 text-muted-foreground" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-muted-foreground" />
+          )}
+        </button>
+        {expanded && (
+          <div className="px-4 pb-3 space-y-1.5">
+            {recent.map((cap) => {
+              const isHiring = cap.matchReason?.includes("[signal_type:hiring_signal]");
+              const Icon = isHiring ? Briefcase : (captureTypeIcons[cap.type] || FileText);
+              return (
+                <button
+                  key={cap.id}
+                  onClick={() => scrollToCapture(cap.id)}
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-[#c9a84c]/10 dark:hover:bg-[#c9a84c]/20 transition-colors text-left"
+                  data-testid={`key-signal-row-${cap.id}`}
+                >
+                  <Icon className="w-3.5 h-3.5 text-[#1e3a5f] dark:text-[#c9a84c] shrink-0" />
+                  <span className="text-xs text-foreground truncate flex-1 min-w-0">
+                    {(cap.content || "").slice(0, 120)}
+                    {(cap.content || "").length > 120 ? "…" : ""}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                    {new Date(cap.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </span>
+                  <span className="px-1.5 py-0.5 rounded-full bg-[#c9a84c]/15 text-[#c9a84c] border border-[#c9a84c]/30 text-[9px] font-medium whitespace-nowrap shrink-0">
+                    High Signal
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function UpdatesFeedWidget({
   entity,
   captures,
@@ -1477,10 +1573,12 @@ function UpdatesFeedWidget({
     try { localStorage.setItem(storageKey, filter); } catch {}
   }, [filter, storageKey]);
 
+  const highSignalCaptures = captures.filter((cap) => getSignalStrength(cap) === "high");
+
   const filteredCaptures = captures.filter((cap) => {
     if (filter === "all") return true;
     const strength = getSignalStrength(cap);
-    if (filter === "notable") return strength === "high" || strength === "medium";
+    if (filter === "notable") return strength === "high" || strength === "medium" || strength === null;
     if (filter === "high") return strength === "high";
     return true;
   });
@@ -1493,6 +1591,8 @@ function UpdatesFeedWidget({
 
   return (
     <div data-testid="widget-updates-feed">
+      <KeySignalsSection highSignalCaptures={highSignalCaptures} />
+
       <div className="flex items-center justify-between mb-3 px-1">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Updates ({filteredCaptures.length})
@@ -1522,15 +1622,23 @@ function UpdatesFeedWidget({
             {filteredCaptures.map((cap) => {
               const isHiring = cap.matchReason?.includes("[signal_type:hiring_signal]");
               const Icon = isHiring ? Briefcase : (captureTypeIcons[cap.type] || FileText);
-              return (
-                <Card key={cap.id} className="border-border/60" data-testid={`card-update-${cap.id}`}>
+              const strength = getSignalStrength(cap);
+              const effectiveStrength = strength ?? "medium";
+              const styles = getSignalCardStyles(effectiveStrength);
+              const cardEl = (
+                <Card className={`relative ${styles.cardClass}`} data-testid={`card-update-${cap.id}`}>
+                  {effectiveStrength === "high" && (
+                    <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-[#c9a84c]/15 text-[#c9a84c] border border-[#c9a84c]/30 text-[9px] font-medium" data-testid={`signal-pill-${cap.id}`}>
+                      High Signal
+                    </span>
+                  )}
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
                       <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 mt-1 ${isHiring ? "bg-amber-100" : "bg-[#1e3a5f]/10"}`}>
                         <Icon className={`w-4 h-4 ${isHiring ? "text-amber-600" : "text-[#1e3a5f]"}`} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[15px] text-foreground whitespace-pre-wrap break-words leading-relaxed">
+                        <p className={`${styles.bodyTextClass} whitespace-pre-wrap break-words leading-relaxed`}>
                           {cap.content}
                         </p>
                         <CaptureSourceIndicator capture={cap} />
@@ -1553,6 +1661,9 @@ function UpdatesFeedWidget({
                   </CardContent>
                 </Card>
               );
+              return styles.wrapperClass ? (
+                <div key={cap.id} className={styles.wrapperClass}>{cardEl}</div>
+              ) : cardEl;
             })}
           </div>
         </ScrollArea>
@@ -1572,6 +1683,52 @@ function UpdatesFeedWidget({
         </Card>
       )}
     </div>
+  );
+}
+
+function RecentSignalsCard({ captures }: { captures: Capture[] }) {
+  const highSignalCaptures = captures
+    .filter((cap) => getSignalStrength(cap) === "high")
+    .slice(0, 3);
+
+  return (
+    <Card data-testid="recent-signals-card">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Zap className="w-4 h-4 text-[#c9a84c]" />
+          <span className="text-sm font-semibold text-[#1e3a5f] dark:text-foreground">Recent signals</span>
+        </div>
+        {highSignalCaptures.length > 0 ? (
+          <div className="space-y-1.5">
+            {highSignalCaptures.map((cap) => (
+              <button
+                key={cap.id}
+                onClick={() => scrollToCapture(cap.id)}
+                className="w-full flex items-start gap-2 px-2 py-1.5 rounded-md hover:bg-muted/80 transition-colors text-left"
+                data-testid={`recent-signal-row-${cap.id}`}
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground leading-snug">
+                    {(cap.content || "").slice(0, 100)}
+                    {(cap.content || "").length > 100 ? "…" : ""}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    {new Date(cap.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  </p>
+                </div>
+                <span className="px-1.5 py-0.5 rounded-full bg-[#c9a84c]/15 text-[#c9a84c] border border-[#c9a84c]/30 text-[9px] font-medium whitespace-nowrap shrink-0 mt-0.5">
+                  High Signal
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground italic" data-testid="recent-signals-empty">
+            No high signal updates yet. High signal events will appear here as they are captured.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
