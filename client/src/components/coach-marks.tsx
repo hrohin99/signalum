@@ -7,12 +7,17 @@ interface CoachMarksProps {
   onComplete?: () => void;
 }
 
+function isModalOpen(): boolean {
+  return document.querySelectorAll('[role="dialog"]').length > 0;
+}
+
 export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [position, setPosition] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [visible, setVisible] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [tooltipPlacement, setTooltipPlacement] = useState<"bottom" | "top">("bottom");
+  const observerRef = useRef<MutationObserver | null>(null);
 
   const seen = localStorage.getItem(storageKey) === "true";
 
@@ -52,13 +57,42 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
 
   useEffect(() => {
     if (seen) return;
-    const timer = setTimeout(() => {
+
+    const tryStart = () => {
       const firstValid = findNextValidStep(0);
       if (firstValid === -1) return;
       setCurrentIndex(firstValid);
       setVisible(true);
+    };
+
+    const timer = setTimeout(() => {
+      if (!isModalOpen()) {
+        tryStart();
+        return;
+      }
+
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+      }
+
+      const observer = new MutationObserver(() => {
+        if (!isModalOpen()) {
+          observer.disconnect();
+          observerRef.current = null;
+          setTimeout(tryStart, 500);
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["role", "style", "class", "hidden", "open"] });
+      observerRef.current = observer;
     }, 800);
-    return () => clearTimeout(timer);
+
+    return () => {
+      clearTimeout(timer);
+      if (observerRef.current) {
+        observerRef.current.disconnect();
+        observerRef.current = null;
+      }
+    };
   }, [seen, findNextValidStep]);
 
   useEffect(() => {

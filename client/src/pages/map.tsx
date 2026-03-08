@@ -251,22 +251,23 @@ function WorkspaceLoadingState() {
   );
 }
 
-function WorkspaceEmptyState({ onRefresh, isRefreshing, onCreateCategory }: { onRefresh: () => void; isRefreshing: boolean; onCreateCategory: () => void }) {
+function WorkspaceEmptyState({ onRefresh, isRefreshing }: { onRefresh: () => void; isRefreshing: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-empty-state">
       <div className="w-12 h-12 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-4">
         <Shield className="w-6 h-6 text-white" />
       </div>
-      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-empty-headline">Your workspace is empty</h3>
+      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-empty-headline">Your workspace is almost ready</h3>
       <p className="text-sm text-muted-foreground max-w-sm mb-6">
-        Start by creating a category to organise your topics.
+        This usually takes less than a minute.
       </p>
       <Button
         className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-6"
-        onClick={onCreateCategory}
-        data-testid="button-create-first-category"
+        onClick={onRefresh}
+        disabled={isRefreshing}
+        data-testid="button-refresh-workspace"
       >
-        Create your first category
+        {isRefreshing ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Checking...</> : "Refresh"}
       </Button>
     </div>
   );
@@ -452,7 +453,7 @@ export default function MapPage() {
 
     const interval = setInterval(async () => {
       const elapsed = Date.now() - (pollingStartRef.current || 0);
-      if (elapsed >= 10000) {
+      if (elapsed >= 15000) {
         clearInterval(interval);
         pollingIntervalRef.current = null;
         setPollingState("timeout");
@@ -625,54 +626,8 @@ export default function MapPage() {
   if (categories.length === 0 && !wsLoading) {
     if (pollingState === "timeout") {
       return (
-        <div className="p-8 max-w-6xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
-            <p className="text-muted-foreground mt-1">0 categories, 0 topics</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3 px-1">Categories</p>
-              {showNewCategoryInput ? (
-                <div className="flex items-center gap-1.5 px-1">
-                  <Input
-                    ref={newCategoryInputRef}
-                    placeholder="Category name"
-                    value={newCategoryName}
-                    onChange={(e) => setNewCategoryName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleCreateCategory();
-                      if (e.key === "Escape") { setShowNewCategoryInput(false); setNewCategoryName(""); }
-                    }}
-                    className="h-8 text-sm flex-1"
-                    data-testid="input-new-category"
-                    autoFocus
-                  />
-                  <button
-                    onClick={handleCreateCategory}
-                    disabled={!newCategoryName.trim() || addCategoryMutation.isPending}
-                    className="text-[#1e3a5f] hover:text-[#1e3a5f]/80 disabled:opacity-40 p-1"
-                    data-testid="button-confirm-new-category"
-                  >
-                    {addCategoryMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleEmptyStateCreateCategory}
-                  className="flex items-center gap-1.5 text-slate-500 hover:text-[#1e3a5f] text-[13px] px-1 py-1 transition-colors"
-                  style={{ fontFamily: "'DM Sans', sans-serif" }}
-                  data-testid="button-new-category"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  New category
-                </button>
-              )}
-            </div>
-            <div className="md:col-span-2">
-              <WorkspaceEmptyState onRefresh={handleManualRefresh} isRefreshing={isManualRefreshing} onCreateCategory={handleEmptyStateCreateCategory} />
-            </div>
-          </div>
+        <div className="p-8 max-w-4xl mx-auto">
+          <WorkspaceEmptyState onRefresh={handleManualRefresh} isRefreshing={isManualRefreshing} />
         </div>
       );
     }
