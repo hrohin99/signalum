@@ -1705,23 +1705,27 @@ Rules:
         })),
       }));
 
-      const workspace = await storage.createWorkspace({
-        id: randomUUID(),
-        userId,
-        categories: categoriesWithDefaults,
-      });
-
-      console.log("WORKSPACE API: POST workspace created for user", userId, "with", categoriesWithDefaults.length, "categories");
+      let workspace;
+      try {
+        workspace = await storage.createWorkspace({
+          id: randomUUID(),
+          userId,
+          categories: categoriesWithDefaults,
+        });
+        console.log("WORKSPACE API: POST workspace created for user", userId, "with", categoriesWithDefaults.length, "categories");
+      } catch (createErr: any) {
+        if (createErr?.message?.includes("duplicate key") || createErr?.code === "23505") {
+          console.log("WORKSPACE API: POST duplicate key - workspace already exists for user", userId, ", returning existing");
+          const existingAfterRace = await storage.getWorkspaceByUserId(userId);
+          if (existingAfterRace) {
+            return res.json({ success: true, workspace: existingAfterRace });
+          }
+        }
+        throw createErr;
+      }
 
       await storage.setWorkspaceReady(userId);
       console.log("WORKSPACE API: POST workspace_ready flag set for user", userId);
-
-      const verifyWorkspace = await storage.getWorkspaceByUserId(userId);
-      if (!verifyWorkspace) {
-        console.error("WORKSPACE API: POST verification failed - workspace not found after creation for user", userId);
-      } else {
-        console.log("WORKSPACE API: POST verification passed for user", userId);
-      }
 
       return res.json({ success: true, workspace });
     } catch (error: any) {

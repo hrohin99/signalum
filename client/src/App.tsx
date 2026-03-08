@@ -22,6 +22,7 @@ function AppContent() {
   const [location, setLocation] = useLocation();
   const initialLoadComplete = useRef(false);
   const checkedUserId = useRef<string | null>(null);
+  const onboardingInProgress = useRef(false);
 
   useEffect(() => {
     if (user && session) {
@@ -47,6 +48,7 @@ function AppContent() {
   useEffect(() => {
     if (!user || !session) {
       checkedUserId.current = null;
+      onboardingInProgress.current = false;
       initialLoadComplete.current = false;
       setHasCompletedOnboarding(null);
       return;
@@ -55,6 +57,11 @@ function AppContent() {
     if (checkedUserId.current === user.id) {
       return;
     }
+
+    if (onboardingInProgress.current) {
+      return;
+    }
+    onboardingInProgress.current = true;
 
     setCheckingOnboarding(true);
     fetch(`/api/workspace/${user.id}`, {
@@ -70,6 +77,7 @@ function AppContent() {
       .then(async (data) => {
         if (data && data.exists) {
           checkedUserId.current = user.id;
+          onboardingInProgress.current = false;
           setHasCompletedOnboarding(true);
           localStorage.removeItem("pendingOnboarding");
           setCheckingOnboarding(false);
@@ -143,10 +151,27 @@ function AppContent() {
               throw new Error("No categories extracted");
             }
 
-            await apiRequest("POST", "/api/workspace", {
-              userId: user.id,
-              categories: extraction.categories,
-            });
+            try {
+              await apiRequest("POST", "/api/workspace", {
+                userId: user.id,
+                categories: extraction.categories,
+              });
+            } catch {
+              const retryCheck = await fetch(`/api/workspace/${user.id}`, {
+                credentials: "include",
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              });
+              if (retryCheck.ok) {
+                const retryData = await retryCheck.json();
+                if (retryData && retryData.exists) {
+                  console.log("ONBOARDING: workspace already exists (created by concurrent request), continuing");
+                } else {
+                  throw new Error("Workspace creation failed and no workspace found");
+                }
+              } else {
+                throw new Error("Workspace creation failed");
+              }
+            }
 
             try {
               await apiRequest("POST", "/api/historical-seeding");
@@ -158,11 +183,13 @@ function AppContent() {
             queryClient.removeQueries({ queryKey: ["/api/workspace", user.id] });
             localStorage.removeItem("pendingOnboarding");
             checkedUserId.current = user.id;
+            onboardingInProgress.current = false;
             setAutoOnboarding(false);
             setHasCompletedOnboarding(true);
             initialLoadComplete.current = true;
             return;
           } catch {
+            onboardingInProgress.current = false;
             setAutoOnboarding(false);
             setHasCompletedOnboarding(false);
             initialLoadComplete.current = true;
@@ -170,11 +197,13 @@ function AppContent() {
           return;
         }
 
+        onboardingInProgress.current = false;
         setHasCompletedOnboarding(false);
         setCheckingOnboarding(false);
         initialLoadComplete.current = true;
       })
       .catch(() => {
+        onboardingInProgress.current = false;
         setHasCompletedOnboarding(false);
         setCheckingOnboarding(false);
         initialLoadComplete.current = true;
@@ -228,6 +257,7 @@ function AppContent() {
           queryClient.invalidateQueries({ queryKey: ["/api/workspace"] });
           queryClient.removeQueries({ queryKey: ["/api/workspace", user.id] });
           checkedUserId.current = user.id;
+          onboardingInProgress.current = false;
           initialLoadComplete.current = true;
           setHasCompletedOnboarding(true);
         }}
