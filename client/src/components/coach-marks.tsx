@@ -7,31 +7,62 @@ interface CoachMarksProps {
   onComplete?: () => void;
 }
 
-function isModalOpen(): boolean {
-  return document.querySelectorAll('[role="dialog"]').length > 0;
+function isElementVisible(el: HTMLElement): boolean {
+  if (el.getClientRects().length === 0) return false;
+  const style = window.getComputedStyle(el);
+  return style.display !== "none" && style.visibility !== "hidden" && parseFloat(style.opacity) > 0;
 }
 
-function isDisambiguationModalOpen(): boolean {
-  const dialogs = document.querySelectorAll('[role="dialog"]');
-  for (const dialog of dialogs) {
-    if (dialog.textContent?.includes("disambiguation") ||
-        dialog.textContent?.includes("Which company") ||
-        dialog.textContent?.includes("What aspect") ||
-        dialog.textContent?.includes("Select focus") ||
-        dialog.querySelector('[data-testid*="disambiguation"]')) {
-      return true;
-    }
+function isAnyModalVisible(): boolean {
+  const roleDialogs = document.querySelectorAll('div[role="dialog"]');
+  for (const el of roleDialogs) {
+    if (el instanceof HTMLElement && isElementVisible(el)) return true;
   }
+
+  const modalEls = document.querySelectorAll('[class*="modal"]');
+  for (const el of modalEls) {
+    if (el instanceof HTMLElement && isElementVisible(el)) return true;
+  }
+
+  const disambigEls = document.querySelectorAll('[class*="disambiguation"]');
+  for (const el of disambigEls) {
+    if (el instanceof HTMLElement && isElementVisible(el)) return true;
+  }
+
+  const overlayEls = document.querySelectorAll('[class*="overlay"]');
+  for (const el of overlayEls) {
+    if (el instanceof HTMLElement && isElementVisible(el)) return true;
+  }
+
   return false;
+}
+
+function createModalObserver(onAllClosed: () => void): MutationObserver {
+  const observer = new MutationObserver(() => {
+    if (!isAnyModalVisible()) {
+      observer.disconnect();
+      setTimeout(onAllClosed, 600);
+    }
+  });
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["role", "style", "class", "hidden", "open"],
+  });
+  return observer;
 }
 
 export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [position, setPosition] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [visible, setVisible] = useState(false);
+  const [pausedByModal, setPausedByModal] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [tooltipPlacement, setTooltipPlacement] = useState<"bottom" | "top">("bottom");
-  const observerRef = useRef<MutationObserver | null>(null);
+  const startObserverRef = useRef<MutationObserver | null>(null);
+  const midTourObserverRef = useRef<MutationObserver | null>(null);
+  const midTourCheckRef = useRef<number | null>(null);
 
   const seen = localStorage.getItem(storageKey) === "true";
 
@@ -73,53 +104,82 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
     if (seen) return;
 
     const tryStart = () => {
-      if (isModalOpen() || isDisambiguationModalOpen()) return;
+      if (isAnyModalVisible()) {
+        waitForModalsToClose();
+        return;
+      }
       const firstValid = findNextValidStep(0);
       if (firstValid === -1) return;
       setCurrentIndex(firstValid);
       setVisible(true);
+
+      if (startObserverRef.current) {
+        startObserverRef.current.disconnect();
+        startObserverRef.current = null;
+      }
     };
 
     const waitForModalsToClose = () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
+      if (startObserverRef.current) {
+        startObserverRef.current.disconnect();
       }
-
-      const observer = new MutationObserver(() => {
-        if (!isModalOpen() && !isDisambiguationModalOpen()) {
-          observer.disconnect();
-          observerRef.current = null;
-          setTimeout(tryStart, 500);
-        }
-      });
-      observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["role", "style", "class", "hidden", "open"] });
-      observerRef.current = observer;
+      startObserverRef.current = createModalObserver(tryStart);
     };
 
     const timer = setTimeout(() => {
-      if (!isModalOpen() && !isDisambiguationModalOpen()) {
+      if (!isAnyModalVisible()) {
         tryStart();
-        return;
+      } else {
+        waitForModalsToClose();
       }
-      waitForModalsToClose();
     }, 800);
 
     return () => {
       clearTimeout(timer);
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-        observerRef.current = null;
+      if (startObserverRef.current) {
+        startObserverRef.current.disconnect();
+        startObserverRef.current = null;
       }
     };
   }, [seen, findNextValidStep]);
 
   useEffect(() => {
-    if (!visible) return;
-    updatePosition(currentIndex);
-  }, [currentIndex, visible, updatePosition]);
+    if (seen || !visible) return;
+
+    const checkInterval = setInterval(() => {
+      if (isAnyModalVisible()) {
+        if (!pausedByModal) {
+          setPausedByModal(true);
+
+          if (midTourObserverRef.current) {
+            midTourObserverRef.current.disconnect();
+          }
+          midTourObserverRef.current = createModalObserver(() => {
+            setPausedByModal(false);
+            midTourObserverRef.current = null;
+          });
+        }
+      }
+    }, 300);
+    midTourCheckRef.current = checkInterval as unknown as number;
+
+    return () => {
+      clearInterval(checkInterval);
+      midTourCheckRef.current = null;
+      if (midTourObserverRef.current) {
+        midTourObserverRef.current.disconnect();
+        midTourObserverRef.current = null;
+      }
+    };
+  }, [seen, visible, pausedByModal]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible || pausedByModal) return;
+    updatePosition(currentIndex);
+  }, [currentIndex, visible, pausedByModal, updatePosition]);
+
+  useEffect(() => {
+    if (!visible || pausedByModal) return;
     const handleResize = () => updatePosition(currentIndex);
     window.addEventListener("resize", handleResize);
     window.addEventListener("scroll", handleResize, true);
@@ -127,11 +187,20 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("scroll", handleResize, true);
     };
-  }, [visible, currentIndex, updatePosition]);
+  }, [visible, pausedByModal, currentIndex, updatePosition]);
 
   const finish = useCallback(() => {
     localStorage.setItem(storageKey, "true");
     setVisible(false);
+    setPausedByModal(false);
+    if (midTourObserverRef.current) {
+      midTourObserverRef.current.disconnect();
+      midTourObserverRef.current = null;
+    }
+    if (midTourCheckRef.current !== null) {
+      clearInterval(midTourCheckRef.current);
+      midTourCheckRef.current = null;
+    }
     onComplete?.();
   }, [storageKey, onComplete]);
 
@@ -144,7 +213,7 @@ export function CoachMarks({ steps, storageKey, onComplete }: CoachMarksProps) {
     }
   };
 
-  if (seen || !visible || !position) return null;
+  if (seen || !visible || pausedByModal || !position) return null;
 
   const step = steps[currentIndex];
   const validStepCount = steps.filter(s => document.querySelector(`[data-tour="${s.target}"]`)).length;
