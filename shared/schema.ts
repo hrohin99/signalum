@@ -11,6 +11,7 @@ export const userProfiles = pgTable("user_profiles", {
   historicalSeedingCompleted: integer("historical_seeding_completed").default(0).notNull(),
   workspaceReady: integer("workspace_ready").default(0).notNull(),
   weeklyDigestEnabled: integer("weekly_digest_enabled").default(0).notNull(),
+  cityCountry: text("city_country"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -26,6 +27,7 @@ export const workspaces = pgTable("workspaces", {
   id: varchar("id", { length: 255 }).primaryKey(),
   userId: varchar("user_id", { length: 255 }).notNull().unique(),
   categories: jsonb("categories").notNull().$type<ExtractedCategory[]>(),
+  websiteUrl: text("website_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

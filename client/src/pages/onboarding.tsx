@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Input } from "@/components/ui/input";
 import { Shield, Sparkles, ArrowRight, Check, ChevronLeft, Loader2, Tag, FolderOpen } from "lucide-react";
 import type { ExtractionResult } from "@shared/schema";
 
@@ -16,6 +17,8 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
   const { toast } = useToast();
   const [step, setStep] = useState<OnboardingStep>("input");
   const [description, setDescription] = useState("");
+  const [cityCountry, setCityCountry] = useState("");
+  const [websiteUrl, setWebsiteUrl] = useState("");
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -63,6 +66,8 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
       await apiRequest("POST", "/api/workspace", {
         userId: user.id,
         categories: extraction.categories,
+        cityCountry: cityCountry.trim() || undefined,
+        websiteUrl: websiteUrl.trim() || undefined,
       });
       console.log("ONBOARDING: workspace created successfully for user", user.id);
       try {
@@ -140,7 +145,28 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
               data-testid="input-onboarding-description"
             />
 
-            <div className="flex justify-end">
+            <div className="space-y-3">
+              <div>
+                <label className="text-sm text-muted-foreground mb-1.5 block">Your city or country (optional)</label>
+                <Input
+                  placeholder="e.g. Ottawa, Canada"
+                  value={cityCountry}
+                  onChange={(e) => setCityCountry(e.target.value)}
+                  data-testid="input-city-country"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-muted-foreground mb-1.5 block">Your company website (optional)</label>
+                <Input
+                  placeholder="https://yourcompany.com"
+                  value={websiteUrl}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  data-testid="input-website-url"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between">
               <Button
                 onClick={handleAnalyze}
                 disabled={description.trim().length < 10}

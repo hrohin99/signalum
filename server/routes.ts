@@ -8,9 +8,11 @@ import jwt from "jsonwebtoken";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import mammoth from "mammoth";
 import path from "path";
-import { storage, pool } from "./storage";
+import { storage, pool, db } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
 import type { ExtractionResult, ExtractedCategory, ExtractedEntity, SiblingInferenceResult } from "@shared/schema";
+import { userProfiles } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -65,7 +67,8 @@ async function performSiblingInference(
   entityName: string,
   tenantId: string,
   workspace: { categories: ExtractedCategory[] },
-  categoryName?: string
+  categoryName?: string,
+  userId?: string
 ): Promise<SiblingInferenceResult | null> {
   try {
     let wsContext: any = null;
@@ -139,6 +142,18 @@ async function performSiblingInference(
       return null;
     }
 
+    let locationHint = "";
+    if (userId) {
+      try {
+        const profile = await storage.getUserProfile(userId);
+        if (profile?.cityCountry) {
+          locationHint = ` The user is based in ${profile.cityCountry}. Prefer entities located near this region when generating disambiguation options.`;
+        }
+      } catch (e) {
+        console.error("[SiblingInference] Failed to fetch user profile for location hint:", e);
+      }
+    }
+
     const client = getAnthropicClient();
 
     const inferencePromise = client.messages.create({
@@ -147,7 +162,7 @@ async function performSiblingInference(
       messages: [
         {
           role: "user",
-          content: `A user is adding "${entityName}" to their workspace. Their existing workspace focuses on: ${inferenceContext}. Given this context, which aspect of "${entityName}" is most relevant to this workspace? Return ONLY valid JSON with this structure:
+          content: `A user is adding "${entityName}" to their workspace. Their existing workspace focuses on: ${inferenceContext}.${locationHint} Given this context, which aspect of "${entityName}" is most relevant to this workspace? Return ONLY valid JSON with this structure:
 {
   "inferred_domain": "the specific business unit or product area most relevant",
   "confidence": "high" | "medium" | "low",
@@ -1090,7 +1105,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       const newEntity: ExtractedEntity = { name: entityName, type: safeEntityType, topic_type: safeTopicType, related_topic_ids: [], priority: 'medium' };
 
       const tenantId = "00000000-0000-0000-0000-000000000000";
-      const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName);
+      const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName, userId);
 
       let siblingInference: SiblingInferenceResult | null = null;
 
@@ -1177,7 +1192,7 @@ Return only the summary paragraph, no JSON, no formatting.`
           newEntityObj.disambiguation_confirmed = true;
         } else {
           const tenantId = "00000000-0000-0000-0000-000000000000";
-          const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName);
+          const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName, userId);
 
           if (inferenceResult) {
             siblingInference = inferenceResult;
@@ -1453,10 +1468,21 @@ Rules:
 
   app.post("/api/entity/disambiguate-companies", requireAuth, async (req: Request, res: Response) => {
     try {
+      const userId = (req as any).userId;
       const { entityName } = req.body;
 
       if (!entityName || typeof entityName !== "string") {
         return res.status(400).json({ message: "entityName is required" });
+      }
+
+      let locationHint = "";
+      try {
+        const profile = await storage.getUserProfile(userId);
+        if (profile?.cityCountry) {
+          locationHint = `\nThe user is based in ${profile.cityCountry}. Prefer entities located near this region when generating disambiguation options.`;
+        }
+      } catch (e) {
+        console.error("Failed to fetch user profile for disambiguation location hint:", e);
       }
 
       const client = getAnthropicClient();
@@ -1485,7 +1511,7 @@ If this name could refer to multiple different companies or organizations (e.g.,
 
 Rules:
 - List 3-5 of the most well-known companies/organizations with this name
-- Only include genuinely distinct companies, not divisions of the same company
+- Only include genuinely distinct companies, not divisions of the same company${locationHint}
 - Return ONLY valid JSON, no other text.`
           }
         ]
@@ -1682,11 +1708,19 @@ Rules:
     try {
       const userId = (req as any).userId;
       console.log("WORKSPACE API: POST /api/workspace called by user", userId);
-      const { categories } = req.body;
+      const { categories, cityCountry, websiteUrl } = req.body;
 
       if (!categories) {
         console.log("WORKSPACE API: POST missing categories for user", userId);
         return res.status(400).json({ message: "Missing categories" });
+      }
+
+      if (cityCountry && typeof cityCountry === "string" && cityCountry.trim()) {
+        try {
+          await db.update(userProfiles).set({ cityCountry: cityCountry.trim() }).where(eq(userProfiles.userId, userId));
+        } catch (e) {
+          console.error("WORKSPACE API: failed to save city_country for user", userId, e);
+        }
       }
 
       const existing = await storage.getWorkspaceByUserId(userId);
@@ -1711,6 +1745,7 @@ Rules:
           id: randomUUID(),
           userId,
           categories: categoriesWithDefaults,
+          websiteUrl: (websiteUrl && typeof websiteUrl === "string" && websiteUrl.trim()) ? websiteUrl.trim() : null,
         });
         console.log("WORKSPACE API: POST workspace created for user", userId, "with", categoriesWithDefaults.length, "categories");
       } catch (createErr: any) {

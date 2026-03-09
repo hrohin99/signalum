@@ -16,14 +16,14 @@ The backend is built with Node.js/Express. Supabase handles authentication via e
 
 **Key Features:**
 - **Intelligent Capture System:** Supports diverse input types (text, voice, URL, document) with AI classification, multi-topic routing, and intent inference.
-- **Onboarding Flow:** Guides new users through initial setup, AI-driven category/entity extraction, and historical data seeding.
+- **Onboarding Flow:** Guides new users through initial setup, AI-driven category/entity extraction, and historical data seeding. Collects optional `city_country` (stored on `user_profiles`) and `website_url` (stored on `workspaces`) during onboarding input step.
 - **Dynamic Dashboard & Workspace Management:** Provides navigation, organizes intelligence into categories and topics, and indicates deadlines.
 - **Daily Briefs:** AI-generated summaries with an "On Your Radar" section.
 - **Topic View:** Detailed full-screen topic view with AI summaries, widgets (e.g., battlecards), and an updates feed with signal-based visual hierarchy.
 - **Product Context & Battlecards:** Allows users to define product context for personalized AI insights and provides AI-enhanced competitive analysis.
 - **Key Dates Management:** Tracks deadlines and automatically extracts dates from content for actionable alerts.
 - **Ambient Search System:** Schedules daily web searches using Perplexity AI, deduplicates findings, and creates captures and notifications, including competitor hiring signals.
-- **Sibling Topic Inference & Disambiguation:** AI-powered disambiguation for new topics based on existing context and UI for confirming or refining AI inferences.
+- **Sibling Topic Inference & Disambiguation:** AI-powered disambiguation for new topics based on existing context and UI for confirming or refining AI inferences. User's `city_country` is appended to disambiguation and sibling inference prompts to prefer geographically relevant entities.
 - **Monitored URLs:** Allows tracking of specific URLs for competitor topics with configurable check frequencies.
 - **Admin Dashboard:** A private route for administrators to view feedback, feature interest, and user activity.
 - **Feedback Widget:** A persistent widget for users to submit feedback.
