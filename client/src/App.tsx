@@ -91,8 +91,6 @@ function AppContent() {
         let onboardingRole: string | null = null;
         let onboardingText: string | null = null;
         let onboardingWebsiteUrl: string | undefined;
-        let onboardingPendingSeedUrls: string[] | undefined;
-        let onboardingCompetitorWebsiteUrls: { name: string; url: string }[] | undefined
 
         if (pendingRaw) {
           try {
@@ -101,9 +99,6 @@ function AppContent() {
               onboardingRole = pending.role;
               onboardingText = pending.trackingText;
               onboardingWebsiteUrl = pending.websiteUrl;
-              onboardingPendingSeedUrls = pending.pendingSeedUrls;
-              onboardingCompetitorWebsiteUrls = pending.competitorWebsiteUrls as { name: string; url: string }[] | undefined;
-
               try {
                 await apiRequest("POST", "/api/onboarding-context", {
                   role: pending.role,
@@ -159,30 +154,13 @@ function AppContent() {
               throw new Error("No categories extracted");
             }
 
-            // Apply competitor website URLs to matching entities
-            const categoriesWithWebsites = extraction.categories.map((cat: any) => ({
-              ...cat,
-              entities: cat.entities.map((entity: any) => {
-                const match = onboardingCompetitorWebsiteUrls?.find(
-                  (c) => c.name.toLowerCase() === entity.name.toLowerCase()
-                );
-                if (match) {
-                  return {
-                    ...entity,
-                    website_url: match.url,
-                    disambiguation_confirmed: true,
-                  };
-                }
-                return entity;
-              }),
-            }));
+            const categoriesWithWebsites = extraction.categories;
 
             try {
               await apiRequest("POST", "/api/workspace", {
                 userId: user.id,
                 categories: categoriesWithWebsites,
                 websiteUrl: onboardingWebsiteUrl,
-                pendingSeedUrls: onboardingPendingSeedUrls,
               });
             } catch {
               const retryCheck = await fetch(`/api/workspace/${user.id}`, {
