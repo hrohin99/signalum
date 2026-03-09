@@ -88,6 +88,8 @@ function AppContent() {
         const pendingRaw = localStorage.getItem("pendingOnboarding");
         let onboardingRole: string | null = null;
         let onboardingText: string | null = null;
+        let onboardingWebsiteUrl: string | undefined;
+        let onboardingPendingSeedUrls: string[] | undefined;
 
         if (pendingRaw) {
           try {
@@ -95,6 +97,8 @@ function AppContent() {
             if (pending.trackingText && pending.role) {
               onboardingRole = pending.role;
               onboardingText = pending.trackingText;
+              onboardingWebsiteUrl = pending.websiteUrl;
+              onboardingPendingSeedUrls = pending.pendingSeedUrls;
 
               try {
                 await apiRequest("POST", "/api/onboarding-context", {
@@ -155,6 +159,8 @@ function AppContent() {
               await apiRequest("POST", "/api/workspace", {
                 userId: user.id,
                 categories: extraction.categories,
+                websiteUrl: onboardingWebsiteUrl,
+                pendingSeedUrls: onboardingPendingSeedUrls,
               });
             } catch {
               const retryCheck = await fetch(`/api/workspace/${user.id}`, {

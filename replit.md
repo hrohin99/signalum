@@ -16,7 +16,7 @@ The backend is built with Node.js/Express. Supabase handles authentication via e
 
 **Key Features:**
 - **Intelligent Capture System:** Supports diverse input types (text, voice, URL, document) with AI classification, multi-topic routing, and intent inference.
-- **Onboarding Flow:** Guides new users through initial setup, AI-driven category/entity extraction, and historical data seeding. Collects optional `city_country` (stored on `user_profiles`) and `website_url` (stored on `workspaces`) during onboarding input step.
+- **Onboarding Flow:** 4-step signup flow: (1) Role, (2) Tracking intent, (3) Add starting sources (company website + up to 5 seed URLs), (4) Create account. Seed URLs are stored as `pending_seed_urls` (jsonb) on the `workspaces` table and processed after historical seeding completes — each URL is fetched via Jina Reader, an entity is created with AI classification, and a full website crawl is triggered. Disambiguation includes website domain hints for accuracy. Collects optional `city_country` (stored on `user_profiles`) and `website_url` (stored on `workspaces`).
 - **Dynamic Dashboard & Workspace Management:** Provides navigation, organizes intelligence into categories and topics, and indicates deadlines.
 - **Daily Briefs:** AI-generated summaries with an "On Your Radar" section.
 - **Topic View:** Detailed full-screen topic view with AI summaries, widgets (e.g., battlecards), and an updates feed with signal-based visual hierarchy.

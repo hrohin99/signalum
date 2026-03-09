@@ -11,7 +11,7 @@ import path from "path";
 import { storage, pool, db } from "./storage";
 import { sendVerificationEmail, getAppUrl } from "./email";
 import type { ExtractionResult, ExtractedCategory, ExtractedEntity, SiblingInferenceResult } from "@shared/schema";
-import { userProfiles } from "@shared/schema";
+import { userProfiles, workspaces } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -68,7 +68,8 @@ async function performSiblingInference(
   tenantId: string,
   workspace: { categories: ExtractedCategory[] },
   categoryName?: string,
-  userId?: string
+  userId?: string,
+  websiteDomain?: string
 ): Promise<SiblingInferenceResult | null> {
   try {
     let wsContext: any = null;
@@ -156,13 +157,18 @@ async function performSiblingInference(
 
     const client = getAnthropicClient();
 
+    let websiteHint = "";
+    if (websiteDomain) {
+      websiteHint = ` Their website is ${websiteDomain} — use this to identify the correct entity with certainty.`;
+    }
+
     const inferencePromise = client.messages.create({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
       messages: [
         {
           role: "user",
-          content: `A user is adding "${entityName}" to their workspace. Their existing workspace focuses on: ${inferenceContext}.${locationHint} Given this context, which aspect of "${entityName}" is most relevant to this workspace? Return ONLY valid JSON with this structure:
+          content: `A user is adding "${entityName}" to their workspace. Their existing workspace focuses on: ${inferenceContext}.${locationHint}${websiteHint} Given this context, which aspect of "${entityName}" is most relevant to this workspace? Return ONLY valid JSON with this structure:
 {
   "inferred_domain": "the specific business unit or product area most relevant",
   "confidence": "high" | "medium" | "low",
@@ -291,6 +297,151 @@ function verificationResultPage(message: string, success: boolean): string {
   </table>
 </body>
 </html>`;
+}
+
+async function processPendingSeedUrls(userId: string): Promise<void> {
+  const workspace = await storage.getWorkspaceByUserId(userId);
+  if (!workspace) return;
+
+  const seedUrls = workspace.pendingSeedUrls as string[] | null;
+  if (!seedUrls || seedUrls.length === 0) return;
+
+  console.log(`[SeedURLs] Processing ${seedUrls.length} seed URLs for user ${userId}`);
+
+  const categories = workspace.categories as ExtractedCategory[];
+  const failedUrls: string[] = [];
+
+  for (const url of seedUrls) {
+    try {
+      const normalizedUrl = url.replace(/\/+$/, "");
+      if (!/^https?:\/\/.+\..+/.test(normalizedUrl)) {
+        console.error(`[SeedURLs] Invalid URL skipped: ${url}`);
+        continue;
+      }
+      const jinaUrl = `https://r.jina.ai/${normalizedUrl}`;
+      const jinaHeaders: Record<string, string> = {
+        "Accept": "text/plain",
+      };
+      if (process.env.JINA_API_KEY) {
+        jinaHeaders["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+      }
+
+      const response = await fetch(jinaUrl, { headers: jinaHeaders, signal: AbortSignal.timeout(30000) });
+      if (!response.ok) {
+        console.error(`[SeedURLs] Failed to fetch ${url}: ${response.status}`);
+        continue;
+      }
+
+      const content = await response.text();
+      if (!content || content.length < 50) {
+        console.error(`[SeedURLs] Empty or too short content from ${url}`);
+        continue;
+      }
+
+      let entityName = "";
+      const titleMatch = content.match(/^Title:\s*(.+)$/m);
+      if (titleMatch) {
+        entityName = titleMatch[1].trim();
+      }
+      if (!entityName) {
+        const h1Match = content.match(/^#\s+(.+)$/m);
+        if (h1Match) {
+          entityName = h1Match[1].trim();
+        }
+      }
+      const domain = normalizedUrl.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+
+      if (!entityName) {
+        entityName = domain.split(".")[0].charAt(0).toUpperCase() + domain.split(".")[0].slice(1);
+      }
+
+      entityName = entityName
+        .replace(/\s*[-|–—].*$/, "")
+        .replace(/\s*\|.*$/, "")
+        .trim();
+      if (entityName.length > 100) entityName = entityName.substring(0, 100);
+
+      const existingEntity = categories.some(cat =>
+        cat.entities.some(e => e.name.toLowerCase() === entityName.toLowerCase())
+      );
+      if (existingEntity) {
+        console.log(`[SeedURLs] Entity "${entityName}" already exists, skipping`);
+        continue;
+      }
+
+      const { classifyEntity } = await import("./classificationService");
+      const classification = await classifyEntity(entityName, `Website: ${domain}. ${content.substring(0, 500)}`);
+
+      let topicType = "general";
+      if (classification.entity_type === "regulation") {
+        topicType = "regulation";
+      } else if (["local_business", "regional_brand", "enterprise"].includes(classification.entity_type)) {
+        topicType = "competitor";
+      } else if (classification.entity_type === "person") {
+        topicType = "person";
+      } else if (classification.entity_type === "project") {
+        topicType = "project";
+      }
+
+      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, undefined, userId, domain);
+
+      const newEntity: ExtractedEntity = {
+        name: entityName,
+        type: "company",
+        topic_type: topicType,
+        related_topic_ids: [],
+        priority: "medium",
+        website_url: normalizedUrl,
+        entity_type_detected: classification.entity_type,
+        pricing_model_detected: classification.pricing_model,
+        disambiguation_confirmed: true,
+        disambiguation_context: inferenceResult?.inferred_domain || `${entityName} (${domain})`,
+      };
+
+      let targetCategory = categories.find(cat =>
+        cat.entities.some(e => e.topic_type === topicType)
+      );
+      if (!targetCategory) {
+        targetCategory = categories[0];
+      }
+      if (!targetCategory) {
+        targetCategory = { name: "Sources", description: "Entities from seed URLs", entities: [] };
+        categories.push(targetCategory);
+      }
+
+      targetCategory.entities.push(newEntity);
+      console.log(`[SeedURLs] Created entity "${entityName}" (type: ${classification.entity_type}, topic: ${topicType}) from ${url}`);
+
+      await storage.updateWorkspaceCategories(userId, categories);
+
+      (async () => {
+        try {
+          const { runWebsiteIntelligenceExtraction } = await import("./websiteIntelligenceService");
+          await runWebsiteIntelligenceExtraction(userId, entityName, targetCategory!.name, normalizedUrl);
+        } catch (err: any) {
+          console.error(`[SeedURLs] Website extraction failed for "${entityName}":`, err?.message || err);
+        }
+      })();
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } catch (err: any) {
+      console.error(`[SeedURLs] Error processing seed URL ${url}:`, err?.message || err);
+      failedUrls.push(url);
+    }
+  }
+
+  try {
+    const remaining = failedUrls.length > 0 ? failedUrls : null;
+    await db.update(workspaces).set({ pendingSeedUrls: remaining }).where(eq(workspaces.userId, userId));
+    if (failedUrls.length > 0) {
+      console.log(`[SeedURLs] ${failedUrls.length} URLs failed and retained for user ${userId}`);
+    } else {
+      console.log(`[SeedURLs] All seed URLs processed successfully for user ${userId}`);
+    }
+  } catch (e) {
+    console.error(`[SeedURLs] Failed to update pending_seed_urls:`, e);
+  }
 }
 
 export async function registerRoutes(
@@ -1708,7 +1859,7 @@ Rules:
     try {
       const userId = (req as any).userId;
       console.log("WORKSPACE API: POST /api/workspace called by user", userId);
-      const { categories, cityCountry, websiteUrl } = req.body;
+      const { categories, cityCountry, websiteUrl, pendingSeedUrls } = req.body;
 
       if (!categories) {
         console.log("WORKSPACE API: POST missing categories for user", userId);
@@ -1739,6 +1890,10 @@ Rules:
         })),
       }));
 
+      const validSeedUrls = Array.isArray(pendingSeedUrls)
+        ? pendingSeedUrls.filter((u: any) => typeof u === "string" && u.trim()).map((u: string) => u.trim()).slice(0, 5)
+        : null;
+
       let workspace;
       try {
         workspace = await storage.createWorkspace({
@@ -1746,6 +1901,7 @@ Rules:
           userId,
           categories: categoriesWithDefaults,
           websiteUrl: (websiteUrl && typeof websiteUrl === "string" && websiteUrl.trim()) ? websiteUrl.trim() : null,
+          pendingSeedUrls: validSeedUrls && validSeedUrls.length > 0 ? validSeedUrls : null,
         });
         console.log("WORKSPACE API: POST workspace created for user", userId, "with", categoriesWithDefaults.length, "categories");
       } catch (createErr: any) {
@@ -1838,6 +1994,14 @@ Rules:
           seedingStatus.set(userId, { running: false, totalFindings, topicsProcessed });
 
           setTimeout(() => seedingStatus.delete(userId), 60000);
+
+          (async () => {
+            try {
+              await processPendingSeedUrls(userId);
+            } catch (seedErr) {
+              console.error(`[SeedURLs] Error processing seed URLs for user ${userId}:`, seedErr);
+            }
+          })();
         } catch (error) {
           console.error("Historical seeding error:", error);
           seedingStatus.set(userId, { running: false, totalFindings: 0, topicsProcessed: 0 });

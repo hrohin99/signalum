@@ -28,6 +28,7 @@ export const workspaces = pgTable("workspaces", {
   userId: varchar("user_id", { length: 255 }).notNull().unique(),
   categories: jsonb("categories").notNull().$type<ExtractedCategory[]>(),
   websiteUrl: text("website_url"),
+  pendingSeedUrls: jsonb("pending_seed_urls").$type<string[]>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

@@ -6,10 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { SiGoogle } from "react-icons/si";
-import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal, Mail } from "lucide-react";
+import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal, Mail, X, Plus } from "lucide-react";
 import { Link, useSearch } from "wouter";
 
-type SignupStep = 1 | 2 | 3;
+type SignupStep = 1 | 2 | 3 | 4;
 
 const ROLES = [
   { id: "product_manager", label: "Product Manager", icon: Briefcase },
@@ -28,12 +28,12 @@ export default function SignupPage() {
   const { toast } = useToast();
   const fromHero = searchString.includes("from=hero");
   const heroIntent = typeof window !== "undefined" ? localStorage.getItem("watchloom_tracking_intent") : null;
-  const skipToStep3 = fromHero && !!heroIntent;
+  const skipToStep4 = fromHero && !!heroIntent;
 
-  const [step, setStep] = useState<SignupStep>(skipToStep3 ? 3 : 1);
-  const [selectedRole, setSelectedRole] = useState<string>(skipToStep3 ? "other" : "");
-  const [otherRoleText, setOtherRoleText] = useState(skipToStep3 ? "General" : "");
-  const [trackingText, setTrackingText] = useState(skipToStep3 ? heroIntent! : "");
+  const [step, setStep] = useState<SignupStep>(skipToStep4 ? 4 : 1);
+  const [selectedRole, setSelectedRole] = useState<string>(skipToStep4 ? "other" : "");
+  const [otherRoleText, setOtherRoleText] = useState(skipToStep4 ? "General" : "");
+  const [trackingText, setTrackingText] = useState(skipToStep4 ? heroIntent! : "");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,6 +41,8 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [seedUrls, setSeedUrls] = useState<string[]>([""]);
 
   useEffect(() => {
     if (user && session) {
@@ -59,10 +61,18 @@ export default function SignupPage() {
     e.preventDefault();
     setIsLoading(true);
 
+    const filteredSeedUrls = seedUrls.filter(u => u.trim() !== "");
+
     try {
       localStorage.setItem(
         "pendingOnboarding",
-        JSON.stringify({ role: effectiveRole, trackingText, fullName })
+        JSON.stringify({
+          role: effectiveRole,
+          trackingText,
+          fullName,
+          websiteUrl: companyWebsite.trim() || undefined,
+          pendingSeedUrls: filteredSeedUrls.length > 0 ? filteredSeedUrls : undefined,
+        })
       );
       localStorage.removeItem("watchloom_tracking_intent");
 
@@ -131,9 +141,16 @@ export default function SignupPage() {
   };
 
   const handleGoogleSignIn = async () => {
+    const filteredSeedUrls = seedUrls.filter(u => u.trim() !== "");
     localStorage.setItem(
       "pendingOnboarding",
-      JSON.stringify({ role: effectiveRole, trackingText, fullName })
+      JSON.stringify({
+        role: effectiveRole,
+        trackingText,
+        fullName,
+        websiteUrl: companyWebsite.trim() || undefined,
+        pendingSeedUrls: filteredSeedUrls.length > 0 ? filteredSeedUrls : undefined,
+      })
     );
     localStorage.removeItem("watchloom_tracking_intent");
     const { error } = await signInWithGoogle();
@@ -175,7 +192,7 @@ export default function SignupPage() {
 
         {!accountCreated && (
           <>
-            {skipToStep3 ? (
+            {skipToStep4 ? (
               <div
                 className="text-xs rounded-lg px-3 py-2 mb-8"
                 style={{ backgroundColor: "rgba(30,58,95,0.06)", color: "#1e3a5f" }}
@@ -186,10 +203,10 @@ export default function SignupPage() {
             ) : (
               <>
                 <p className="text-sm mb-8" style={{ color: "#94a3b8" }} data-testid="text-step-indicator">
-                  Step {step} of 3
+                  Step {step} of 4
                 </p>
                 <div className="flex gap-1 mb-8">
-                  {[1, 2, 3].map((s) => (
+                  {[1, 2, 3, 4].map((s) => (
                     <div
                       key={s}
                       className="h-1 flex-1 rounded-full transition-colors"
@@ -314,12 +331,131 @@ export default function SignupPage() {
           </div>
         )}
 
-        {step === 3 && !accountCreated && (
+        {step === 3 && (
           <div>
             <h2
               className="text-2xl font-bold mb-2"
               style={{ color: "#1e3a5f" }}
               data-testid="text-step3-headline"
+            >
+              Add your starting sources
+            </h2>
+            <p className="text-sm mb-6" style={{ color: "#64748b" }}>
+              Paste in any websites you want Watchloom to read immediately — competitors, regulators, industry bodies, news sources, anything. You can add more later.
+            </p>
+
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="companyWebsite" className="text-sm font-medium">
+                  Your company website
+                </Label>
+                <Input
+                  id="companyWebsite"
+                  type="url"
+                  placeholder="https://yourcompany.com"
+                  value={companyWebsite}
+                  onChange={(e) => setCompanyWebsite(e.target.value)}
+                  className="h-11"
+                  data-testid="input-company-website"
+                />
+                <p className="text-xs" style={{ color: "#94a3b8" }}>
+                  Used to personalise your daily brief and battlecards.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">
+                  Websites to track
+                </Label>
+                <div className="space-y-2">
+                  {seedUrls.map((url, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        type="url"
+                        placeholder="https://example.com"
+                        value={url}
+                        onChange={(e) => {
+                          const updated = [...seedUrls];
+                          updated[index] = e.target.value;
+                          setSeedUrls(updated);
+                        }}
+                        className="h-11 flex-1"
+                        data-testid={`input-seed-url-${index}`}
+                      />
+                      {seedUrls.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSeedUrls(seedUrls.filter((_, i) => i !== index));
+                          }}
+                          className="p-2 rounded-md hover:bg-gray-100 transition-colors"
+                          style={{ color: "#94a3b8" }}
+                          data-testid={`button-remove-seed-url-${index}`}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {seedUrls.length < 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setSeedUrls([...seedUrls, ""])}
+                    className="flex items-center gap-1 text-sm font-medium mt-1"
+                    style={{ color: "#1e3a5f" }}
+                    data-testid="button-add-seed-url"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add another
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-8">
+              <Button
+                variant="outline"
+                onClick={() => setStep(2)}
+                className="h-11"
+                data-testid="button-back-step3"
+              >
+                Back
+              </Button>
+              <Button
+                onClick={() => setStep(4)}
+                className="flex-1 h-11 text-white font-semibold"
+                style={{ backgroundColor: "#1e3a5f" }}
+                data-testid="button-continue-step3"
+              >
+                Continue
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
+            <div className="text-center mt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setCompanyWebsite("");
+                  setSeedUrls([""]);
+                  setStep(4);
+                }}
+                className="text-sm hover:underline underline-offset-4"
+                style={{ color: "#64748b" }}
+                data-testid="link-skip-step3"
+              >
+                Skip this step →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && !accountCreated && (
+          <div>
+            <h2
+              className="text-2xl font-bold mb-2"
+              style={{ color: "#1e3a5f" }}
+              data-testid="text-step4-headline"
             >
               Create your account
             </h2>
@@ -446,7 +582,7 @@ export default function SignupPage() {
           </div>
         )}
 
-        {step === 3 && accountCreated && (
+        {step === 4 && accountCreated && (
           <div className="text-center py-4" data-testid="confirmation-screen">
             <div className="flex items-center justify-center gap-2 mb-8">
               <div
