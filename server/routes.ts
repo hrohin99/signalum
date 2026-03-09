@@ -3288,8 +3288,8 @@ Return only 1-2 sentences, no JSON, no formatting.`
 
   app.get("/api/capabilities", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = "00000000-0000-0000-0000-000000000000";
-      const capabilities = await storage.getWorkspaceCapabilities(tenantId);
+      const userId = (req as any).userId;
+      const capabilities = await storage.getWorkspaceCapabilities(userId);
       return res.json({ capabilities });
     } catch (error: any) {
       console.error("Get capabilities error:", error);
@@ -3299,17 +3299,17 @@ Return only 1-2 sentences, no JSON, no formatting.`
 
   app.post("/api/capabilities", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const userId = (req as any).userId;
       const { name } = req.body;
       if (!name || typeof name !== "string" || name.trim().length === 0) {
         return res.status(400).json({ message: "Capability name is required" });
       }
-      const existing = await storage.getWorkspaceCapabilities(tenantId);
+      const existing = await storage.getWorkspaceCapabilities(userId);
       if (existing.length >= 12) {
         return res.status(400).json({ message: "Maximum of 12 capabilities allowed" });
       }
       const capability = await storage.createWorkspaceCapability({
-        tenantId,
+        tenantId: userId,
         name: name.trim(),
         displayOrder: existing.length,
       });
@@ -3322,12 +3322,12 @@ Return only 1-2 sentences, no JSON, no formatting.`
 
   app.put("/api/capabilities/reorder", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const userId = (req as any).userId;
       const { orderedIds } = req.body;
       if (!Array.isArray(orderedIds)) {
         return res.status(400).json({ message: "orderedIds array is required" });
       }
-      await storage.reorderWorkspaceCapabilities(tenantId, orderedIds);
+      await storage.reorderWorkspaceCapabilities(userId, orderedIds);
       return res.json({ success: true });
     } catch (error: any) {
       console.error("Reorder capabilities error:", error);
@@ -3337,12 +3337,12 @@ Return only 1-2 sentences, no JSON, no formatting.`
 
   app.put("/api/capabilities/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const userId = (req as any).userId;
       const { name } = req.body;
       if (!name || typeof name !== "string" || name.trim().length === 0) {
         return res.status(400).json({ message: "Capability name is required" });
       }
-      const updated = await storage.updateWorkspaceCapability(req.params.id, tenantId, { name: name.trim() });
+      const updated = await storage.updateWorkspaceCapability(req.params.id, userId, { name: name.trim() });
       if (!updated) {
         return res.status(404).json({ message: "Capability not found" });
       }
@@ -3355,8 +3355,8 @@ Return only 1-2 sentences, no JSON, no formatting.`
 
   app.delete("/api/capabilities/:id", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = "00000000-0000-0000-0000-000000000000";
-      const deleted = await storage.deleteWorkspaceCapability(req.params.id, tenantId);
+      const userId = (req as any).userId;
+      const deleted = await storage.deleteWorkspaceCapability(req.params.id, userId);
       if (!deleted) {
         return res.status(404).json({ message: "Capability not found" });
       }
