@@ -3699,7 +3699,9 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         }
       }
 
+      console.log("[SEO] seoPayload to save:", JSON.stringify(seoPayload));
       const saved = await storage.upsertEntitySeoData(userId, entityId, seoPayload);
+      console.log("[SEO] saved result:", JSON.stringify(saved));
       return res.json({ seoData: saved });
     } catch (error: any) {
       console.error("SEO intelligence error:", error);
