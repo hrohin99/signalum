@@ -265,8 +265,7 @@ async function extractIntelligence(
   pages: { url: string; content: string }[]
 ): Promise<WebsiteIntelligence | null> {
   const anthropic = new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
   const pagesText = pages.map((p, i) => `--- Page ${i + 1}: ${p.url} ---\n${p.content}`).join("\n\n");
@@ -435,8 +434,7 @@ async function regenerateSummary(userId: string, entityName: string, categoryNam
     .join("\n\n");
 
   const anthropic = new Anthropic({
-    apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
-    baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+    apiKey: process.env.ANTHROPIC_API_KEY,
   });
 
   const message = await anthropic.messages.create({
