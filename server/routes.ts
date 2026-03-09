@@ -163,7 +163,7 @@ async function performSiblingInference(
     }
 
     const inferencePromise = client.messages.create({
-      model: "claude-sonnet-4-6",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
       messages: [
         {
@@ -637,7 +637,7 @@ export async function registerRoutes(
       const client = getAnthropicClient();
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 8192,
         messages: [
           {
@@ -838,7 +838,7 @@ User's description: ${description}`
       const categoryList = categories.map(c => `- "${c.name}": ${c.description}`).join("\n");
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 8192,
         messages: [
           {
@@ -1020,7 +1020,7 @@ Always return valid JSON only, no other text.`
 
       const client = getAnthropicClient();
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [
           {
@@ -1075,7 +1075,7 @@ If no dates found, return { "extracted_dates": [] }.`
       const client = getAnthropicClient();
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 8192,
         messages: [
           {
@@ -1187,7 +1187,7 @@ If no dates found, return { "extracted_dates": [] }.`
       const client = getAnthropicClient();
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [
           {
@@ -1581,7 +1581,7 @@ Return only the summary paragraph, no JSON, no formatting.`
       const contextNote = companyContext ? ` (specifically ${companyContext})` : "";
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [
           {
@@ -1647,7 +1647,7 @@ Rules:
       const client = getAnthropicClient();
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [
           {
@@ -2107,7 +2107,7 @@ Rules:
       const client = getAnthropicClient();
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 2048,
         messages: [
           {
@@ -2244,7 +2244,7 @@ Total entities tracked: ${entities.length}`
       const client = getAnthropicClient();
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
         messages: [
           {
@@ -2403,7 +2403,7 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
       const client = getAnthropicClient();
 
       const message = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 2048,
         messages: [
           {
@@ -2657,7 +2657,7 @@ Rules:
       const client = getAnthropicClient();
 
       const headingMessage = await client.messages.create({
-        model: "claude-sonnet-4-6",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
         messages: [{
           role: "user",
@@ -2677,7 +2677,7 @@ Return only the paragraph, no JSON, no formatting.`
       const prodContext = await storage.getProductContext(tenantId);
       if (prodContext && prodContext.productName) {
         const meansMessage = await client.messages.create({
-          model: "claude-sonnet-4-6",
+          model: "claude-haiku-4-5-20251001",
           max_tokens: 512,
           messages: [{
             role: "user",
@@ -3429,7 +3429,7 @@ Return only 1-2 sentences, no JSON, no formatting.`
 
       const anthropic = getAnthropicClient();
       const response = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-haiku-4-5-20251001",
         max_tokens: 200,
         messages: [{
           role: "user",

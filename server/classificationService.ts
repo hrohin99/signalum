@@ -21,7 +21,7 @@ export async function classifyEntity(
     const prompt = `Classify this organisation. Return JSON only, no other text. Fields: entity_type (one of: local_business / regional_brand / enterprise / commodity / regulation / person / project), pricing_model (one of: per_service / subscription_monthly / subscription_annual / per_transaction / per_unit / per_seat / usage_tiered / freemium / commission / custom). Guidelines — local_business: clinic, salon, boutique, sole trader, single location. regional_brand: multi-location, national chain, funded startup. enterprise: public company, global brand, 500+ employees. commodity: gold, oil, interest rates, indices. regulation: GDPR, ISO standards, government policy. person: individual human. project: event, tender, initiative. For pricing — per_service: treatments, consultations, legal fees, repairs. subscription_monthly or per_seat: SaaS, software. subscription_annual or custom: enterprise software, government contracts. per_transaction: IDV verification, payments, API calls billed per use. per_unit: physical retail products. usage_tiered: cloud infrastructure, high-volume APIs. freemium: free tier plus paid upgrade. commission: marketplace, broker, revenue share. Entity name: ${name}. Description: ${description}.`;
 
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 200,
       messages: [{ role: "user", content: prompt }],
     });
