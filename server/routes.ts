@@ -3048,7 +3048,6 @@ Return only 1-2 sentences, no JSON, no formatting.`
     url: z.string().url("Please enter a valid URL"),
     urlCategory: z.enum(["pricing", "product", "news", "careers", "custom"]),
     checkFrequency: z.enum(["daily", "every_3_days", "weekly"]).default("daily"),
-    isActive: z.number().optional().default(1),
   });
 
   app.get("/api/topics/:entityId/monitored-urls", requireAuth, async (req: Request, res: Response) => {
@@ -3078,7 +3077,6 @@ Return only 1-2 sentences, no JSON, no formatting.`
         url: parsed.data.url,
         urlCategory: parsed.data.urlCategory,
         checkFrequency: parsed.data.checkFrequency,
-        isActive: parsed.data.isActive,
       });
 
       return res.status(201).json({ monitoredUrl: created });
