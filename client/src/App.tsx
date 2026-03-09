@@ -13,12 +13,14 @@ import OnboardingPage from "@/pages/onboarding";
 import Dashboard from "@/pages/dashboard";
 import { Loader2, Shield } from "lucide-react";
 import { Switch, Route, useLocation } from "wouter";
+import CompetitorWebsiteModal from "@/components/CompetitorWebsiteModal";
 
 function AppContent() {
   const { user, session, loading } = useAuth();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
   const [autoOnboarding, setAutoOnboarding] = useState(false);
+  const [pendingCompetitorUrls, setPendingCompetitorUrls] = useState<string[] | null>(null);
   const [location, setLocation] = useLocation();
   const initialLoadComplete = useRef(false);
   const checkedUserId = useRef<string | null>(null);
@@ -211,8 +213,19 @@ function AppContent() {
             checkedUserId.current = user.id;
             onboardingInProgress.current = false;
             setAutoOnboarding(false);
-            setHasCompletedOnboarding(true);
             initialLoadComplete.current = true;
+
+            // Check if any competitor entities were created
+            const competitorNames = categoriesWithWebsites
+              .flatMap((cat: any) => cat.entities || [])
+              .filter((e: any) => e.topic_type === "competitor" && !e.website_url)
+              .map((e: any) => e.name as string);
+
+            if (competitorNames.length > 0) {
+              setPendingCompetitorUrls(competitorNames);
+            } else {
+              setHasCompletedOnboarding(true);
+            }
             return;
           } catch {
             onboardingInProgress.current = false;
@@ -271,6 +284,34 @@ function AppContent() {
         <Route path="/signin" component={SigninPage} />
         <Route component={LandingPage} />
       </Switch>
+    );
+  }
+
+  if (pendingCompetitorUrls !== null) {
+    return (
+      <CompetitorWebsiteModal
+        competitors={pendingCompetitorUrls}
+        onComplete={async (entries) => {
+          if (entries.length > 0) {
+            try {
+              for (const entry of entries) {
+                await apiRequest("PATCH", "/api/entity/search-settings", {
+                  entityName: entry.name,
+                });
+                await apiRequest("POST", "/api/entity/update-website-url", {
+                  entityName: entry.name,
+                  categoryName: null,
+                  website_url: entry.url,
+                });
+              }
+            } catch (err) {
+              console.error("Failed to save competitor URLs:", err);
+            }
+          }
+          setPendingCompetitorUrls(null);
+          setHasCompletedOnboarding(true);
+        }}
+      />
     );
   }
 
