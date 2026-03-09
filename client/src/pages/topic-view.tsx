@@ -4373,51 +4373,9 @@ function SeoIntelligenceCard({ entity, categoryName }: { entity: ExtractedEntity
             )}
           </div>
 
-          {isLocalBusiness && (
-            <div>
-              <h4 className="text-xs font-semibold text-slate-700 mb-2">Google Business</h4>
-              {businessRating != null ? (
-                <div className="space-y-2">
-                  {businessRating < 4.0 && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 mb-1" data-testid="pill-low-rating">
-                      Low rating — monitor reviews
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2" data-testid="text-business-rating">
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map(s => (
-                        <Star key={s} className={`w-3 h-3 ${s <= Math.round(businessRating) ? "text-amber-400 fill-amber-400" : "text-slate-200"}`} />
-                      ))}
-                    </div>
-                    <span className="text-xs font-medium text-slate-700">{businessRating.toFixed(1)}</span>
-                    {seoData?.reviewCount != null && (
-                      <span className="text-xs text-slate-400">({seoData.reviewCount.toLocaleString()} reviews)</span>
-                    )}
-                  </div>
-                  {seoData?.businessAddress && (
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500" data-testid="text-business-address">
-                      <MapPin className="w-3 h-3 text-slate-400" />
-                      {seoData.businessAddress}
-                    </div>
-                  )}
-                  {seoData?.businessPhone && (
-                    <div className="flex items-center gap-1.5 text-xs text-slate-500" data-testid="text-business-phone">
-                      <Phone className="w-3 h-3 text-slate-400" />
-                      {seoData.businessPhone}
-                    </div>
-                  )}
-                  {seoData?.businessHours && (
-                    <div className="flex items-start gap-1.5 text-xs text-slate-500" data-testid="text-business-hours">
-                      <Clock className="w-3 h-3 text-slate-400 mt-0.5" />
-                      <span className="break-words">{seoData.businessHours}</span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400">No business profile data</p>
-              )}
-            </div>
-          )}
+          <div>
+            <p className="font-medium text-sm text-slate-400">Google Business <span className="text-xs bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded">Coming soon</span></p>
+          </div>
 
           <div className="flex items-center justify-between pt-2 border-t border-slate-100">
             <span className="text-[10px] text-slate-400" data-testid="text-seo-last-updated">
