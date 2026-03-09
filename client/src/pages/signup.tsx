@@ -43,6 +43,9 @@ export default function SignupPage() {
   const [resendingEmail, setResendingEmail] = useState(false);
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [seedUrls, setSeedUrls] = useState<string[]>([""]);
+  const [extractedCompetitors, setExtractedCompetitors] = useState<string[]>([]);
+  const [competitorWebsiteUrls, setCompetitorWebsiteUrls] = useState<Record<string, string>>({});
+  const [isExtractingEntities, setIsExtractingEntities] = useState(false);
 
   useEffect(() => {
     if (user && session) {
@@ -62,6 +65,9 @@ export default function SignupPage() {
     setIsLoading(true);
 
     const filteredSeedUrls = seedUrls.filter(u => u.trim() !== "");
+    const competitorUrlEntries = Object.entries(competitorWebsiteUrls)
+      .filter(([_, url]) => url.trim() !== "")
+      .map(([name, url]) => ({ name, url: url.trim() }));
 
     try {
       localStorage.setItem(
@@ -72,6 +78,7 @@ export default function SignupPage() {
           fullName,
           websiteUrl: companyWebsite.trim() || undefined,
           pendingSeedUrls: filteredSeedUrls.length > 0 ? filteredSeedUrls : undefined,
+          competitorWebsiteUrls: competitorUrlEntries.length > 0 ? competitorUrlEntries : undefined,
         })
       );
       localStorage.removeItem("watchloom_tracking_intent");
@@ -142,6 +149,9 @@ export default function SignupPage() {
 
   const handleGoogleSignIn = async () => {
     const filteredSeedUrls = seedUrls.filter(u => u.trim() !== "");
+    const competitorUrlEntries = Object.entries(competitorWebsiteUrls)
+      .filter(([_, url]) => url.trim() !== "")
+      .map(([name, url]) => ({ name, url: url.trim() }));
     localStorage.setItem(
       "pendingOnboarding",
       JSON.stringify({
@@ -150,6 +160,7 @@ export default function SignupPage() {
         fullName,
         websiteUrl: companyWebsite.trim() || undefined,
         pendingSeedUrls: filteredSeedUrls.length > 0 ? filteredSeedUrls : undefined,
+        competitorWebsiteUrls: competitorUrlEntries.length > 0 ? competitorUrlEntries : undefined,
       })
     );
     localStorage.removeItem("watchloom_tracking_intent");
@@ -318,14 +329,42 @@ export default function SignupPage() {
                 Back
               </Button>
               <Button
-                onClick={() => setStep(3)}
-                disabled={trackingText.trim().length < 10}
+                onClick={async () => {
+                  setIsExtractingEntities(true);
+                  try {
+                    const res = await fetch("/api/extract", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ description: trackingText }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      const competitors = (data.categories || [])
+                        .flatMap((cat: any) => cat.entities || [])
+                        .filter((e: any) => e.topic_type === "competitor")
+                        .map((e: any) => e.name as string);
+                      setExtractedCompetitors(competitors);
+                    }
+                  } catch {
+                    setExtractedCompetitors([]);
+                  } finally {
+                    setIsExtractingEntities(false);
+                  }
+                  setStep(3);
+                }}
+                disabled={trackingText.trim().length < 10 || isExtractingEntities}
                 className="flex-1 h-11 text-white font-semibold"
                 style={{ backgroundColor: "#1e3a5f" }}
                 data-testid="button-continue-step2"
               >
-                Continue
-                <ArrowRight className="w-4 h-4 ml-2" />
+                {isExtractingEntities ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analysing...
+                  </span>
+                ) : (
+                  <>Continue <ArrowRight className="w-4 h-4 ml-2" /></>
+                )}
               </Button>
             </div>
           </div>
@@ -411,6 +450,33 @@ export default function SignupPage() {
                   </button>
                 )}
               </div>
+
+              {extractedCompetitors.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    Competitor websites{" "}
+                    <span className="font-normal text-xs" style={{ color: "#94a3b8" }}>
+                      — helps us skip the "which one?" question
+                    </span>
+                  </Label>
+                  <div className="space-y-3">
+                    {extractedCompetitors.map((name) => (
+                      <div key={name} className="space-y-1">
+                        <p className="text-xs font-medium" style={{ color: "#475569" }}>{name}</p>
+                        <Input
+                          type="url"
+                          placeholder="https://example.com"
+                          value={competitorWebsiteUrls[name] || ""}
+                          onChange={(e) =>
+                            setCompetitorWebsiteUrls((prev) => ({ ...prev, [name]: e.target.value }))
+                          }
+                          className="h-9 text-sm"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-8">
