@@ -52,6 +52,7 @@ export default function Dashboard() {
           <main className="flex-1 overflow-auto">
             <Switch>
               <Route path="/" component={MapPage} />
+              <Route path="/workspace" component={MapPage} />
               <Route path="/capture" component={CapturePage} />
               <Route path="/inbox" component={InboxPage} />
               <Route path="/map" component={MapPage} />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,9 @@ const ROLES = [
 ] as const;
 
 export default function SignupPage() {
+  const { user, session, signUp, signInWithGoogle } = useAuth();
   const searchString = useSearch();
+  const { toast } = useToast();
   const fromHero = searchString.includes("from=hero");
   const heroIntent = typeof window !== "undefined" ? localStorage.getItem("watchloom_tracking_intent") : null;
   const skipToStep3 = fromHero && !!heroIntent;
@@ -39,8 +41,16 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
-  const { signUp, signInWithGoogle } = useAuth();
-  const { toast } = useToast();
+
+  useEffect(() => {
+    if (user && session) {
+      window.location.href = "/workspace";
+    }
+  }, [user, session]);
+
+  if (user && session) {
+    return null;
+  }
 
   const effectiveRole = selectedRole === "other" ? otherRoleText.trim() : selectedRole;
   const canContinueStep1 = selectedRole !== "" && (selectedRole !== "other" || otherRoleText.trim().length > 0);

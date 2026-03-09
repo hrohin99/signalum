@@ -339,7 +339,7 @@ export default function MapPage() {
 }
 
 function MapPageInner() {
-  const { user } = useAuth();
+  const { user, session, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
   const [wsPhase, setWsPhase] = useState<"loading" | "polling" | "timeout" | "ready" | "error">("loading");
@@ -358,7 +358,9 @@ function MapPageInner() {
   const [topAddTopicType, setTopAddTopicType] = useState("general");
   const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
 
+  const queryEnabled = !!user?.id && !!session && !authLoading;
   console.log("WS: component mounted");
+  console.log("WS_FETCH_GUARD:", { user: !!user, userId: !!user?.id, session: !!session, authLoading, queryEnabled });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -370,10 +372,11 @@ function MapPageInner() {
     }
   }, [user?.id]);
 
-  const { data: wsData, isLoading: wsLoading, error: wsError, refetch: refetchWorkspace } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
+  const { data: wsData, isLoading: wsLoading, error: wsError, refetch: refetchWorkspace, fetchStatus } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
-    enabled: !!user,
+    enabled: queryEnabled,
     retry: false,
+    refetchOnMount: "always",
   });
   refetchRef.current = refetchWorkspace;
 
@@ -427,7 +430,8 @@ function MapPageInner() {
       }
 
       if (wsPhase !== "loading") return;
-      if (wsLoading) return;
+      if (!queryEnabled) return;
+      if (wsLoading || fetchStatus === "fetching") return;
       if (wsError) {
         setWsPhase("error");
         return;
@@ -437,7 +441,7 @@ function MapPageInner() {
       console.error("[MyWorkspace] Phase transition error:", err);
       setWsPhase("error");
     }
-  }, [wsPhase, wsLoading, wsError, wsData]);
+  }, [wsPhase, wsLoading, wsError, wsData, queryEnabled, fetchStatus]);
 
   useEffect(() => {
     if (wsPhase !== "polling") return;
