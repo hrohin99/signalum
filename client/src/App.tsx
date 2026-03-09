@@ -272,13 +272,25 @@ function AppContent() {
         onComplete={async (entries) => {
           if (entries.length > 0) {
             try {
+              // Fetch current workspace to get category names
+              const wsRes = await apiRequest("GET", "/api/workspace/current");
+              const wsData = await wsRes.json();
+              const categories = wsData?.workspace?.categories || [];
+
               for (const entry of entries) {
-                await apiRequest("PATCH", "/api/entity/search-settings", {
+                // Find which category this competitor belongs to
+                let categoryName: string | null = null;
+                for (const cat of categories) {
+                  const found = (cat.entities || []).find(
+                    (e: any) => e.name.toLowerCase() === entry.name.toLowerCase()
+                  );
+                  if (found) { categoryName = cat.name; break; }
+                }
+
+                await apiRequest("POST", "/api/entity/confirm-disambiguation", {
                   entityName: entry.name,
-                });
-                await apiRequest("POST", "/api/entity/update-website-url", {
-                  entityName: entry.name,
-                  categoryName: null,
+                  categoryName: categoryName,
+                  disambiguation_context: entry.name,
                   website_url: entry.url,
                 });
               }
