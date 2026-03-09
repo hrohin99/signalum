@@ -22,6 +22,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
   const [extraction, setExtraction] = useState<ExtractionResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [entityWebsiteUrls, setEntityWebsiteUrls] = useState<Record<string, string>>({});
 
   const handleAnalyze = async () => {
     if (description.trim().length < 10) {
@@ -63,9 +64,18 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
 
     try {
       console.log("ONBOARDING: creating workspace for user", user.id, "with", extraction.categories?.length ?? 0, "categories");
+      const categoriesWithWebsites = extraction.categories.map((cat: any) => ({
+        ...cat,
+        entities: cat.entities.map((entity: any) => ({
+          ...entity,
+          website_url: entityWebsiteUrls[entity.name]?.trim() || undefined,
+          disambiguation_confirmed: entity.topic_type === "competitor" && entityWebsiteUrls[entity.name]?.trim() ? true : undefined,
+        })),
+      }));
+
       await apiRequest("POST", "/api/workspace", {
         userId: user.id,
-        categories: extraction.categories,
+        categories: categoriesWithWebsites,
         cityCountry: cityCountry.trim() || undefined,
         websiteUrl: websiteUrl.trim() || undefined,
       });
@@ -222,11 +232,23 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
                     {category.entities.length > 0 && (
                       <div className="flex flex-wrap gap-2 ml-11">
                         {category.entities.map((entity) => (
-                          <Badge key={entity.name} variant="secondary" className="text-xs">
-                            <Tag className="w-3 h-3 mr-1" />
-                            {entity.name}
-                            <span className="ml-1 text-muted-foreground">· {entity.type}</span>
-                          </Badge>
+                          <div key={entity.name} className="flex flex-col gap-1">
+                            <Badge variant="secondary" className="text-xs w-fit">
+                              <Tag className="w-3 h-3 mr-1" />
+                              {entity.name}
+                              <span className="ml-1 text-muted-foreground">· {entity.type}</span>
+                            </Badge>
+                            {entity.topic_type === "competitor" && (
+                              <Input
+                                placeholder={`${entity.name}'s website (optional — improves accuracy)`}
+                                value={entityWebsiteUrls[entity.name] || ""}
+                                onChange={(e) =>
+                                  setEntityWebsiteUrls((prev) => ({ ...prev, [entity.name]: e.target.value }))
+                                }
+                                className="text-xs h-7 ml-1"
+                              />
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}

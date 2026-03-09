@@ -1253,15 +1253,23 @@ Return only the summary paragraph, no JSON, no formatting.`
         return res.json({ success: true, workspace: workspace, siblingInference: null, existing: true });
       }
 
+      const incomingWebsiteUrl = (req.body.website_url && typeof req.body.website_url === "string" && req.body.website_url.trim()) ? req.body.website_url.trim() : null;
+
       const newEntity: ExtractedEntity = { name: entityName, type: safeEntityType, topic_type: safeTopicType, related_topic_ids: [], priority: 'medium' };
 
+      if (incomingWebsiteUrl) {
+        newEntity.website_url = incomingWebsiteUrl;
+      }
+
       const tenantId = "00000000-0000-0000-0000-000000000000";
-      const inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName, userId);
+      const inferenceResult = incomingWebsiteUrl ? null : await performSiblingInference(entityName, tenantId, { categories }, categoryName, userId);
 
       let siblingInference: SiblingInferenceResult | null = null;
 
       const aspectApplicableTypes = ["competitor", "account", "technology"];
-      if (!aspectApplicableTypes.includes(safeTopicType)) {
+      if (incomingWebsiteUrl) {
+        newEntity.disambiguation_confirmed = true;
+      } else if (!aspectApplicableTypes.includes(safeTopicType)) {
         newEntity.disambiguation_confirmed = true;
       } else if (inferenceResult) {
         siblingInference = inferenceResult;
