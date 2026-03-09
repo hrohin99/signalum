@@ -682,6 +682,10 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db
         .insert(entitySeoData)
         .values({ userId, entityId, ...data })
+        .onConflictDoUpdate({
+          target: [entitySeoData.userId, entitySeoData.entityId],
+          set: { ...data, lastUpdated: new Date() },
+        })
         .returning();
       return created;
     }
