@@ -4272,9 +4272,7 @@ function SeoIntelligenceCard({ entity, categoryName }: { entity: ExtractedEntity
   const { data: seoResponse, isLoading } = useQuery<{ seoData: EntitySeoData | null }>({
     queryKey: ["/api/entities", entityId, "seo-intelligence"],
     queryFn: async () => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/seo-intelligence`, {
-        headers: { Authorization: `Bearer ${user?.access_token}` },
-      });
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/seo-intelligence`);
       return res.json();
     },
     enabled: !!user && !!entity.website_url,
