@@ -231,9 +231,7 @@ function TopicViewContent({
   const { data: extractionStatus } = useQuery<{ extraction: { status: string; noDataFound?: boolean } | null }>({
     queryKey: ["/api/entity/website-extraction-status", entity.name],
     queryFn: async () => {
-      const res = await fetch(`/api/entity/website-extraction-status?entityName=${encodeURIComponent(entity.name)}`, {
-        headers: { Authorization: `Bearer ${user?.access_token}` },
-      });
+      const res = await apiRequest("GET", `/api/entity/website-extraction-status?entityName=${encodeURIComponent(entity.name)}`);
       return res.json();
     },
     enabled: !!user && !!entity.website_url,

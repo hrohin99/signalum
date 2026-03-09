@@ -4,6 +4,14 @@ import type { ExtractedCategory, InsertCapture } from "@shared/schema";
 
 const activeJobs = new Map<string, { status: string; completedAt?: number; noDataFound?: boolean }>();
 
+function normalizeUrl(url: string): string {
+  if (!url) return url;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return 'https://' + url;
+  }
+  return url;
+}
+
 export function getWebsiteExtractionStatus(userId: string, entityName: string): { status: string; noDataFound?: boolean } | null {
   const key = `${userId}:${entityName}`;
   const job = activeJobs.get(key);
@@ -25,7 +33,7 @@ export async function runWebsiteIntelligenceExtraction(
   activeJobs.set(key, { status: "running" });
 
   try {
-    const normalizedUrl = websiteUrl.replace(/\/+$/, "");
+    const normalizedUrl = normalizeUrl(websiteUrl).replace(/\/+$/, "");
 
     const discoveredUrls = await discoverPages(normalizedUrl);
     if (discoveredUrls.length === 0) {
