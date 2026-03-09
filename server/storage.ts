@@ -670,22 +670,27 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertEntitySeoData(userId: string, entityId: string, data: Partial<InsertEntitySeoData>): Promise<EntitySeoData> {
-    const existing = await this.getEntitySeoData(userId, entityId);
-    if (existing) {
-      const [updated] = await db
-        .update(entitySeoData)
-        .set({ ...data, lastUpdated: new Date() })
-        .where(and(eq(entitySeoData.userId, userId), eq(entitySeoData.entityId, entityId)))
-        .returning();
-      return updated;
-    } else {
-      const [created] = await db
+    try {
+      const [result] = await db
         .insert(entitySeoData)
         .values({ userId, entityId, ...data })
         .onConflictDoUpdate({
           target: [entitySeoData.userId, entitySeoData.entityId],
           set: { ...data, lastUpdated: new Date() },
         })
+        .returning();
+      return result;
+    } catch (err: any) {
+      console.error("[SEO upsert error]", err?.message, err?.code);
+      const [updated] = await db
+        .update(entitySeoData)
+        .set({ ...data, lastUpdated: new Date() })
+        .where(and(eq(entitySeoData.userId, userId), eq(entitySeoData.entityId, entityId)))
+        .returning();
+      if (updated) return updated;
+      const [created] = await db
+        .insert(entitySeoData)
+        .values({ userId, entityId, ...data })
         .returning();
       return created;
     }
