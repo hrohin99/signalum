@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { SiGoogle } from "react-icons/si";
-import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal, Mail, X, Plus } from "lucide-react";
+import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal, Mail } from "lucide-react";
 import { Link, useSearch } from "wouter";
 
 type SignupStep = 1 | 2 | 3 | 4;
@@ -42,10 +42,6 @@ export default function SignupPage() {
   const [accountCreated, setAccountCreated] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [companyWebsite, setCompanyWebsite] = useState("");
-  const [seedUrls, setSeedUrls] = useState<string[]>([""]);
-  const [extractedCompetitors, setExtractedCompetitors] = useState<string[]>([]);
-  const [competitorWebsiteUrls, setCompetitorWebsiteUrls] = useState<Record<string, string>>({});
-  const [isExtractingEntities, setIsExtractingEntities] = useState(false);
 
   useEffect(() => {
     if (user && session) {
@@ -64,11 +60,6 @@ export default function SignupPage() {
     e.preventDefault();
     setIsLoading(true);
 
-    const filteredSeedUrls = seedUrls.filter(u => u.trim() !== "");
-    const competitorUrlEntries = Object.entries(competitorWebsiteUrls)
-      .filter(([_, url]) => url.trim() !== "")
-      .map(([name, url]) => ({ name, url: url.trim() }));
-
     try {
       localStorage.setItem(
         "pendingOnboarding",
@@ -77,8 +68,6 @@ export default function SignupPage() {
           trackingText,
           fullName,
           websiteUrl: companyWebsite.trim() || undefined,
-          pendingSeedUrls: filteredSeedUrls.length > 0 ? filteredSeedUrls : undefined,
-          competitorWebsiteUrls: competitorUrlEntries.length > 0 ? competitorUrlEntries : undefined,
         })
       );
       localStorage.removeItem("watchloom_tracking_intent");
@@ -148,10 +137,6 @@ export default function SignupPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    const filteredSeedUrls = seedUrls.filter(u => u.trim() !== "");
-    const competitorUrlEntries = Object.entries(competitorWebsiteUrls)
-      .filter(([_, url]) => url.trim() !== "")
-      .map(([name, url]) => ({ name, url: url.trim() }));
     localStorage.setItem(
       "pendingOnboarding",
       JSON.stringify({
@@ -159,8 +144,6 @@ export default function SignupPage() {
         trackingText,
         fullName,
         websiteUrl: companyWebsite.trim() || undefined,
-        pendingSeedUrls: filteredSeedUrls.length > 0 ? filteredSeedUrls : undefined,
-        competitorWebsiteUrls: competitorUrlEntries.length > 0 ? competitorUrlEntries : undefined,
       })
     );
     localStorage.removeItem("watchloom_tracking_intent");
@@ -329,42 +312,13 @@ export default function SignupPage() {
                 Back
               </Button>
               <Button
-                onClick={async () => {
-                  setIsExtractingEntities(true);
-                  try {
-                    const res = await fetch("/api/extract", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ description: trackingText }),
-                    });
-                    if (res.ok) {
-                      const data = await res.json();
-                      const competitors = (data.categories || [])
-                        .flatMap((cat: any) => cat.entities || [])
-                        .filter((e: any) => e.topic_type === "competitor")
-                        .map((e: any) => e.name as string);
-                      setExtractedCompetitors(competitors);
-                    }
-                  } catch {
-                    setExtractedCompetitors([]);
-                  } finally {
-                    setIsExtractingEntities(false);
-                  }
-                  setStep(3);
-                }}
-                disabled={trackingText.trim().length < 10 || isExtractingEntities}
+                onClick={() => setStep(3)}
+                disabled={trackingText.trim().length < 10}
                 className="flex-1 h-11 text-white font-semibold"
                 style={{ backgroundColor: "#1e3a5f" }}
                 data-testid="button-continue-step2"
               >
-                {isExtractingEntities ? (
-                  <span className="flex items-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Analysing...
-                  </span>
-                ) : (
-                  <>Continue <ArrowRight className="w-4 h-4 ml-2" /></>
-                )}
+                Continue <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </div>
           </div>
@@ -402,81 +356,6 @@ export default function SignupPage() {
                 </p>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  Websites to track
-                </Label>
-                <div className="space-y-2">
-                  {seedUrls.map((url, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <Input
-                        type="url"
-                        placeholder="https://example.com"
-                        value={url}
-                        onChange={(e) => {
-                          const updated = [...seedUrls];
-                          updated[index] = e.target.value;
-                          setSeedUrls(updated);
-                        }}
-                        className="h-11 flex-1"
-                        data-testid={`input-seed-url-${index}`}
-                      />
-                      {seedUrls.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSeedUrls(seedUrls.filter((_, i) => i !== index));
-                          }}
-                          className="p-2 rounded-md hover:bg-gray-100 transition-colors"
-                          style={{ color: "#94a3b8" }}
-                          data-testid={`button-remove-seed-url-${index}`}
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {seedUrls.length < 5 && (
-                  <button
-                    type="button"
-                    onClick={() => setSeedUrls([...seedUrls, ""])}
-                    className="flex items-center gap-1 text-sm font-medium mt-1"
-                    style={{ color: "#1e3a5f" }}
-                    data-testid="button-add-seed-url"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    Add another
-                  </button>
-                )}
-              </div>
-
-              {extractedCompetitors.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium">
-                    Competitor websites{" "}
-                    <span className="font-normal text-xs" style={{ color: "#94a3b8" }}>
-                      — helps us skip the "which one?" question
-                    </span>
-                  </Label>
-                  <div className="space-y-3">
-                    {extractedCompetitors.map((name) => (
-                      <div key={name} className="space-y-1">
-                        <p className="text-xs font-medium" style={{ color: "#475569" }}>{name}</p>
-                        <Input
-                          type="url"
-                          placeholder="https://example.com"
-                          value={competitorWebsiteUrls[name] || ""}
-                          onChange={(e) =>
-                            setCompetitorWebsiteUrls((prev) => ({ ...prev, [name]: e.target.value }))
-                          }
-                          className="h-9 text-sm"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="flex gap-3 mt-8">
@@ -503,7 +382,6 @@ export default function SignupPage() {
                 type="button"
                 onClick={() => {
                   setCompanyWebsite("");
-                  setSeedUrls([""]);
                   setStep(4);
                 }}
                 className="text-sm hover:underline underline-offset-4"
