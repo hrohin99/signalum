@@ -1,0 +1,31 @@
+Great news on the white screen fix. Now let me look at the current onboarding flow live so I can write a precise prompt for where to add the competitor website step.Still logged into the test account. Let me log out and go through signup properly.Let me navigate to the root and find the logout option.Already logged out. Now I can see the full signup flow. Let me go through all 3 steps to screenshot each one so I write the prompt with exact step references.Good — **Step 1: What's your role?** Now let me go to step 2.**Step 2: "What do you most need to stay on top of?"** — free text input. Now I have the full picture. The flow is:
+
+- **Step 1** — Role selection
+- **Step 2** — What to track (free text)
+- **Step 3** — Create account (name, email, password)
+
+You're right — the new step should go between Step 2 and Step 3. After they've told us what they want to track, we know the context to ask smart questions about *who* they're tracking. Here's the precise prompt:
+
+---
+
+*"Add a new step to the onboarding flow between the current Step 2 ('What do you most need to stay on top of?') and the current Step 3 ('Create your account'). Update the progress indicator from 3 steps to 4 steps total.*
+
+*The new step is Step 3 of 4 with the headline 'Add your key sources' and subtext 'This helps Watchloom find accurate information from the start. You can add more later.'*
+
+*The step has three optional fields:*
+
+*Field 1 — label 'Your city or country', placeholder 'e.g. Ottawa, Canada', type text. Subtext: 'Helps us find local businesses and region-specific updates.'*
+
+*Field 2 — label 'Your company website', placeholder 'https://yourcompany.com', type text. Subtext: 'Used to personalise your daily brief and battlecards.'*
+
+*Field 3 — label 'A competitor or topic website', placeholder 'https://competitor.com', type text. Subtext: 'We will crawl this immediately to build your first intelligence profile.'*
+
+*All three fields are optional. Show a 'Skip for now' text link below the Continue button.*
+
+*On Continue, store: city_country on user_profiles, company_website_url on workspaces table as website_url, competitor_website_url as a separate field on the workspace record.*
+
+*After workspace creation, if competitor_website_url was provided: automatically create an entity record for that domain (extract company name from the URL or page title via Jina fetch), trigger the Jina website crawl job immediately for that entity, and add it to the Competitor Landscape category.*
+
+*If city_country was provided, use it to anchor all disambiguation calls as per the existing location-anchoring logic already in place.*
+
+*Update the existing Step 3 'Create your account' to show as Step 4 of 4. Do not change any other steps or logic."*
