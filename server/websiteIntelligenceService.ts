@@ -100,6 +100,25 @@ async function discoverPages(websiteUrl: string): Promise<string[]> {
     console.log(`[WebsiteIntel] Sitemap fetch failed, falling back to homepage:`, (err as Error).message);
   }
 
+  // Always add known high-value subpaths as fallback
+  const commonPaths = [
+    "",
+    "/services",
+    "/treatments",
+    "/pricing",
+    "/rates",
+    "/packages",
+    "/about",
+    "/about-us",
+    "/team",
+    "/menu",
+    "/our-services",
+    "/what-we-offer",
+    "/blog",
+  ];
+
+  const fallbackUrls = commonPaths.map(path => `${websiteUrl}${path}`);
+
   try {
     const homepageJinaUrl = `https://r.jina.ai/${websiteUrl}`;
     const homepageHeaders: Record<string, string> = { "Accept": "text/plain" };
@@ -113,14 +132,15 @@ async function discoverPages(websiteUrl: string): Promise<string[]> {
 
     if (response.ok) {
       const text = await response.text();
-      const urls = extractUrlsFromMarkdown(text, websiteUrl);
-      return [websiteUrl, ...urls];
+      const discoveredUrls = extractUrlsFromMarkdown(text, websiteUrl);
+      const combined = [...new Set([websiteUrl, ...discoveredUrls, ...fallbackUrls])];
+      return combined;
     }
   } catch (err) {
     console.log(`[WebsiteIntel] Homepage fetch failed:`, (err as Error).message);
   }
 
-  return [websiteUrl];
+  return fallbackUrls;
 }
 
 function extractUrlsFromMarkdown(markdown: string, baseUrl: string): string[] {
