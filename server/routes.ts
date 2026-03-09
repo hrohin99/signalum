@@ -3641,7 +3641,8 @@ Return ONLY a JSON array of 3 strings. No explanation.`
 
       if (true) {
         try {
-          const searchKeyword = entity.name;
+          const locationHint = entity.disambiguation_context?.match(/\b([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)\b/)?.find(w => w !== entity.name) || "";
+          const searchKeyword = locationHint ? `${entity.name} ${locationHint}` : entity.name;
           const lpResponse = await fetch(`${baseUrl}/serp/google/local_pack/live/regular`, {
             method: "POST",
             headers: { "Authorization": authHeader, "Content-Type": "application/json" },
