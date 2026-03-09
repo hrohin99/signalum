@@ -1,0 +1,74 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ArrowRight, Globe } from "lucide-react";
+
+interface CompetitorWebsiteModalProps {
+  competitors: string[];
+  onComplete: (urls: { name: string; url: string }[]) => void;
+}
+
+export default function CompetitorWebsiteModal({ competitors, onComplete }: CompetitorWebsiteModalProps) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+
+  const handleContinue = () => {
+    const entries = Object.entries(urls)
+      .filter(([_, url]) => url.trim() !== "")
+      .map(([name, url]) => ({ name, url: url.trim() }));
+    onComplete(entries);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ backgroundColor: "#f8fafc" }}>
+      <div className="w-full max-w-[480px] rounded-xl border p-8" style={{ backgroundColor: "#ffffff", borderColor: "#e2e8f0" }}>
+        <div className="flex items-center gap-2 mb-6">
+          <div className="w-8 h-8 rounded-md flex items-center justify-center" style={{ backgroundColor: "#1e3a5f" }}>
+            <Globe className="w-4 h-4 text-white" />
+          </div>
+          <span className="text-lg font-semibold" style={{ color: "#1e3a5f" }}>One quick thing</span>
+        </div>
+
+        <h2 className="text-xl font-bold mb-2" style={{ color: "#1e3a5f" }}>
+          Add your competitors' websites
+        </h2>
+        <p className="text-sm mb-6" style={{ color: "#64748b" }}>
+          This helps us find the right company and skip the "which one?" question. All optional.
+        </p>
+
+        <div className="space-y-4 mb-8">
+          {competitors.map((name) => (
+            <div key={name} className="space-y-1">
+              <p className="text-sm font-medium" style={{ color: "#334155" }}>{name}</p>
+              <Input
+                type="url"
+                placeholder="https://example.com"
+                value={urls[name] || ""}
+                onChange={(e) => setUrls((prev) => ({ ...prev, [name]: e.target.value }))}
+                className="h-10"
+              />
+            </div>
+          ))}
+        </div>
+
+<Button
+          onClick={handleContinue}
+          className="w-full h-11 text-white font-semibold"
+          style={{ backgroundColor: "#1e3a5f" }}
+        >
+          Continue to my workspace
+          <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
+        <div className="text-center mt-4">
+          <button
+            type="button"
+            onClick={() => onComplete([])}
+            className="text-sm hover:underline underline-offset-4"
+            style={{ color: "#64748b" }}
+          >
+            Skip this step →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
