@@ -3640,7 +3640,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         console.error("[SEO] Ranked keywords call failed:", err?.message || err);
       }
 
-      if (entity.entity_type_detected === "local_business") {
+      if (true) {
         try {
           const searchKeyword = entity.name;
           const lpResponse = await fetch(`${baseUrl}/serp/google/local_pack/live/regular`, {
