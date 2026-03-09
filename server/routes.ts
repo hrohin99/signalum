@@ -3582,6 +3582,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const entityId = decodeURIComponent(req.params.entityId);
+      console.log("[SEO START]", { userId, entityId });
 
       const workspace = await storage.getWorkspaceByUserId(userId);
       if (!workspace) {
@@ -3704,8 +3705,8 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       console.log("[SEO] saved result:", JSON.stringify(saved));
       return res.json({ seoData: saved });
     } catch (error: any) {
-      console.error("SEO intelligence error:", error);
-      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+      console.error("[SEO FATAL ERROR]", error?.message, error?.code, error?.stack);
+      return res.status(500).json({ message: error?.message || "SEO error" });
     }
   });
 
