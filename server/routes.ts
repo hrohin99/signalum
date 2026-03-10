@@ -3536,8 +3536,8 @@ Return only 1-2 sentences, no JSON, no formatting.`
         return res.status(400).json({ message: "Capability name is required" });
       }
       const existing = await storage.getWorkspaceCapabilities(userId);
-      if (existing.length >= 12) {
-        return res.status(400).json({ message: "Maximum of 12 capabilities allowed" });
+      if (existing.length >= 15) {
+        return res.status(400).json({ message: "Maximum of 15 capabilities allowed" });
       }
       const capability = await storage.createWorkspaceCapability({
         tenantId: userId,

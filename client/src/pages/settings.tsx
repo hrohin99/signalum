@@ -260,7 +260,7 @@ function CapabilitiesCard() {
                 </Button>
               </div>
             ) : (
-              capabilities.length < 12 && (
+              capabilities.length < 15 && (
                 <button
                   onClick={() => setShowAddInput(true)}
                   className="flex items-center gap-1.5 text-[#1e3a5f] hover:text-[#1e3a5f]/80 text-sm px-2 py-2 transition-colors"
@@ -272,8 +272,8 @@ function CapabilitiesCard() {
               )
             )}
 
-            {capabilities.length >= 12 && (
-              <p className="text-xs text-muted-foreground px-2 pt-1">Maximum of 12 capabilities reached.</p>
+            {capabilities.length >= 15 && (
+              <p className="text-xs text-muted-foreground px-2 pt-1">Maximum of 15 capabilities reached.</p>
             )}
           </div>
         )}
