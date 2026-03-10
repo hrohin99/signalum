@@ -205,6 +205,56 @@ app.use((req, res, next) => {
       });
 
       log("Weekly digest cron scheduled for Monday 8:00 AM UTC", "cron");
+
+      cron.schedule("0 * * * *", async () => {
+        log("Hourly briefing check triggered", "cron");
+        try {
+          const { storage } = await import("./storage");
+          const workspacesWithBriefing = await storage.getWorkspacesWithBriefingEnabled();
+
+          const now = new Date();
+          const currentDay = now.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }).toLowerCase();
+          const currentHour = now.getUTCHours().toString().padStart(2, "0") + ":00";
+
+          for (const ws of workspacesWithBriefing) {
+            try {
+              if (ws.briefingDay !== currentDay) continue;
+              if (ws.briefingTime !== currentHour) continue;
+
+              if (ws.briefingLastSent) {
+                const sixDaysAgo = new Date();
+                sixDaysAgo.setDate(sixDaysAgo.getDate() - 6);
+                if (ws.briefingLastSent > sixDaysAgo) continue;
+              }
+
+              const { generateBriefingForUser, sendBriefingEmail } = await import("./briefingService");
+              const briefingData = await generateBriefingForUser(ws.userId);
+              if (!briefingData) {
+                log(`No briefing data for user ${ws.userId}, skipping`, "cron");
+                continue;
+              }
+
+              const result = await sendBriefingEmail(ws.userId, ws.briefingEmail, briefingData);
+              if (result.success) {
+                await storage.updateBriefingLastSent(ws.userId);
+                log(`Briefing sent to ${ws.briefingEmail} for user ${ws.userId}`, "cron");
+              } else {
+                log(`Failed to send briefing to ${ws.briefingEmail}: ${result.error}`, "cron");
+              }
+            } catch (userError) {
+              console.error(`[cron] Briefing failed for user ${ws.userId}:`, userError);
+            }
+          }
+
+          log("Hourly briefing check complete", "cron");
+        } catch (error) {
+          console.error("[cron] Briefing scheduler failed:", error);
+        }
+      }, {
+        timezone: "UTC",
+      });
+
+      log("Briefing cron scheduled to check every hour UTC", "cron");
     },
   );
 })();

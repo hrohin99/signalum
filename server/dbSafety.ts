@@ -84,5 +84,18 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring weekly_digest_enabled column:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_enabled boolean DEFAULT false;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_day varchar(10) DEFAULT 'monday';
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_time varchar(5) DEFAULT '08:00';
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_email varchar(255);
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_last_sent timestamp;
+    `);
+    console.log("[DBSafety] briefing columns verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring briefing columns:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

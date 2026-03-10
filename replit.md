@@ -28,6 +28,7 @@ The backend is built with Node.js/Express. Supabase handles authentication via e
 - **Admin Dashboard:** A private route for administrators to view feedback, feature interest, and user activity.
 - **Feedback Widget:** A persistent widget for users to submit feedback.
 - **Weekly Digest Email:** Optional AI-generated weekly summary emails.
+- **Weekly Briefing Email:** AI-generated weekly briefing using Anthropic (ANTHROPIC_API_KEY, not AI_INTEGRATIONS) and Resend. Service in `server/briefingService.ts`. Settings stored as columns on `workspaces` table (briefing_enabled, briefing_day, briefing_time, briefing_email, briefing_last_sent). Hourly cron checks if any workspace needs a briefing sent. Settings page at `/settings/briefing`.
 - **Capabilities System:** User-defined market capabilities tracked across competitors, with AI assistance for status updates.
 - **Strategic Direction:** AI-generated strategic analyses for competitor topics, synthesizing insights and providing personalized recommendations.
 - **Onboarding Education Layer:** A multi-component frontend onboarding system including a welcome modal, coach marks for guided tours, and contextual topic banners.
@@ -41,7 +42,7 @@ The backend is built with Node.js/Express. Supabase handles authentication via e
 - **Resend:** Transactional email services.
 - **Replit AI Integrations (Anthropic Claude):** Core AI capabilities (content extraction, classification, transcription, insight generation).
 - **Perplexity AI:** Web research for automated intelligence gathering.
-- **node-cron:** Scheduling daily ambient searches and weekly digest emails.
+- **node-cron:** Scheduling daily ambient searches, weekly digest emails, and hourly briefing checks.
 - **PostgreSQL:** Primary database.
 - **pdfjs-dist:** Server-side PDF text extraction.
 - **mammoth:** Server-side DOCX text extraction.

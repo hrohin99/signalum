@@ -22,6 +22,7 @@ import {
   Settings,
   LogOut,
   Lock,
+  Zap,
 } from "lucide-react";
 
 const navItems = [
@@ -29,6 +30,7 @@ const navItems = [
   { title: "Capture", url: "/capture", icon: PenLine },
   { title: "Inbox", url: "/inbox", icon: Inbox },
   { title: "Daily Brief", url: "/brief", icon: Newspaper },
+  { title: "Briefing", url: "/settings/briefing", icon: Zap },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

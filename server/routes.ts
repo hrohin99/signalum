@@ -3709,5 +3709,75 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/briefing/settings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const settings = await storage.getBriefingSettings(userId);
+      return res.json(settings);
+    } catch (error: any) {
+      console.error("[briefing] Get settings error:", error);
+      return res.status(500).json({ message: error?.message || "Failed to get briefing settings" });
+    }
+  });
+
+  app.post("/api/briefing/settings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { briefingEnabled, briefingDay, briefingTime, briefingEmail } = req.body;
+
+      const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+      const validTimes = ["06:00", "07:00", "08:00", "09:00", "10:00"];
+
+      if (typeof briefingEnabled !== "boolean") {
+        return res.status(400).json({ message: "briefingEnabled must be a boolean" });
+      }
+      if (!validDays.includes(briefingDay)) {
+        return res.status(400).json({ message: "Invalid briefing day" });
+      }
+      if (!validTimes.includes(briefingTime)) {
+        return res.status(400).json({ message: "Invalid briefing time" });
+      }
+      if (!briefingEmail || typeof briefingEmail !== "string" || !briefingEmail.includes("@")) {
+        return res.status(400).json({ message: "Valid email address is required" });
+      }
+
+      await storage.saveBriefingSettings(userId, { briefingEnabled, briefingDay, briefingTime, briefingEmail });
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("[briefing] Save settings error:", error);
+      return res.status(500).json({ message: error?.message || "Failed to save briefing settings" });
+    }
+  });
+
+  app.post("/api/briefing/send-now", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const settings = await storage.getBriefingSettings(userId);
+      const email = settings.briefingEmail || (req as any).userEmail;
+
+      if (!email) {
+        return res.status(400).json({ message: "No email address configured for briefing" });
+      }
+
+      const { generateBriefingForUser, sendBriefingEmail } = await import("./briefingService");
+      const briefingData = await generateBriefingForUser(userId);
+
+      if (!briefingData) {
+        return res.status(404).json({ message: "No recent captures found to generate a briefing" });
+      }
+
+      const result = await sendBriefingEmail(userId, email, briefingData);
+      if (result.success) {
+        await storage.updateBriefingLastSent(userId);
+        return res.json({ success: true });
+      } else {
+        return res.status(500).json({ message: result.error || "Failed to send briefing email" });
+      }
+    } catch (error: any) {
+      console.error("[briefing] Send now error:", error);
+      return res.status(500).json({ message: error?.message || "Failed to send briefing" });
+    }
+  });
+
   return httpServer;
 }

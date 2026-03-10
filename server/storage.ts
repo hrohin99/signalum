@@ -74,6 +74,10 @@ export interface IStorage {
   upsertStrategicDirection(tenantId: string, entityId: string, data: { whereHeading?: string | null; whatMeansForYou?: string | null }): Promise<StrategicDirection>;
   getEntitySeoData(userId: string, entityId: string): Promise<EntitySeoData | undefined>;
   upsertEntitySeoData(userId: string, entityId: string, data: Partial<InsertEntitySeoData>): Promise<EntitySeoData>;
+  getBriefingSettings(userId: string): Promise<{ briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string | null; briefingLastSent: Date | null }>;
+  saveBriefingSettings(userId: string, settings: { briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string }): Promise<void>;
+  getWorkspacesWithBriefingEnabled(): Promise<Array<{ userId: string; briefingDay: string; briefingTime: string; briefingEmail: string; briefingLastSent: Date | null }>>;
+  updateBriefingLastSent(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -694,6 +698,51 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async getBriefingSettings(userId: string): Promise<{ briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string | null; briefingLastSent: Date | null }> {
+    const result = await pool.query(
+      `SELECT briefing_enabled, briefing_day, briefing_time, briefing_email, briefing_last_sent FROM workspaces WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    if (result.rows.length === 0) {
+      return { briefingEnabled: false, briefingDay: "monday", briefingTime: "08:00", briefingEmail: null, briefingLastSent: null };
+    }
+    const row = result.rows[0];
+    return {
+      briefingEnabled: row.briefing_enabled || false,
+      briefingDay: row.briefing_day || "monday",
+      briefingTime: row.briefing_time || "08:00",
+      briefingEmail: row.briefing_email || null,
+      briefingLastSent: row.briefing_last_sent ? new Date(row.briefing_last_sent) : null,
+    };
+  }
+
+  async saveBriefingSettings(userId: string, settings: { briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string }): Promise<void> {
+    await pool.query(
+      `UPDATE workspaces SET briefing_enabled = $1, briefing_day = $2, briefing_time = $3, briefing_email = $4 WHERE user_id = $5`,
+      [settings.briefingEnabled, settings.briefingDay, settings.briefingTime, settings.briefingEmail, userId]
+    );
+  }
+
+  async getWorkspacesWithBriefingEnabled(): Promise<Array<{ userId: string; briefingDay: string; briefingTime: string; briefingEmail: string; briefingLastSent: Date | null }>> {
+    const result = await pool.query(
+      `SELECT user_id, briefing_day, briefing_time, briefing_email, briefing_last_sent FROM workspaces WHERE briefing_enabled = true AND briefing_email IS NOT NULL`
+    );
+    return result.rows.map((row: any) => ({
+      userId: row.user_id,
+      briefingDay: row.briefing_day,
+      briefingTime: row.briefing_time,
+      briefingEmail: row.briefing_email,
+      briefingLastSent: row.briefing_last_sent ? new Date(row.briefing_last_sent) : null,
+    }));
+  }
+
+  async updateBriefingLastSent(userId: string): Promise<void> {
+    await pool.query(
+      `UPDATE workspaces SET briefing_last_sent = NOW() WHERE user_id = $1`,
+      [userId]
+    );
   }
 }
 
