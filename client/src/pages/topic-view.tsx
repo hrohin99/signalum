@@ -2182,7 +2182,7 @@ function ManualSearchButton({
   const todayManualCount = captures.filter(
     (c) => c.type === "web_search" && c.matchReason?.includes("Manual web search") && new Date(c.createdAt) >= today
   ).length;
-  const limitReached = todayManualCount >= 3;
+  const limitReached = false;
 
   const formatRelativeTime = (date: Date) => {
     const now = new Date();
