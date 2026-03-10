@@ -519,11 +519,15 @@ function TopicViewContent({
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <MonitoredUrlsCard entity={entity} />
           )}
-          {entity.website_url && (
-            <DigitalPresenceCard entity={entity} categoryName={categoryName} isExtractionRunning={isExtractionRunning} />
+          {false && (
+            entity.website_url && (
+              <DigitalPresenceCard entity={entity} categoryName={categoryName} isExtractionRunning={isExtractionRunning} />
+            )
           )}
-          {entity.website_url && (
-            <SeoIntelligenceCard entity={entity} categoryName={categoryName} />
+          {false && (
+            entity.website_url && (
+              <SeoIntelligenceCard entity={entity} categoryName={categoryName} />
+            )
           )}
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <AIVisibilityCard />
