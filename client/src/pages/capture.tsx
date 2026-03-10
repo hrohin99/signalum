@@ -124,10 +124,13 @@ export default function CapturePage() {
   const [showManualPicker, setShowManualPicker] = useState(false);
   const [selectedManualCategory, setSelectedManualCategory] = useState<string>("");
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatFocus, setNewCatFocus] = useState("");
 
   const [intentTopicName, setIntentTopicName] = useState("");
   const [intentCategory, setIntentCategory] = useState("");
   const [intentNewCategoryName, setIntentNewCategoryName] = useState("");
+  const [intentNewCategoryFocus, setIntentNewCategoryFocus] = useState("");
   const [intentTopicType, setIntentTopicType] = useState("general");
   const [isCreatingIntentTopic, setIsCreatingIntentTopic] = useState(false);
 
@@ -346,6 +349,7 @@ export default function CapturePage() {
         setIntentTopicType(data.topic_type || "general");
         setIntentCategory("");
         setIntentNewCategoryName("");
+        setIntentNewCategoryFocus("");
       } else if (data.multi_match === true) {
         setClassification(data as ClassificationMultiMatch);
         setMultiMatchSkipped(new Set());
@@ -361,6 +365,10 @@ export default function CapturePage() {
         });
       } else {
         setClassification(data as ClassificationResult);
+        if (!data.matched && data.suggestedCategory) {
+          setNewCatName(data.suggestedCategory.name || "");
+          setNewCatFocus("");
+        }
         if (data.matched && data.suggested_type_change) {
           const suggestedType = data.suggested_type_change;
           const displayName = topicTypeDisplayNames[suggestedType] || suggestedType;
@@ -705,12 +713,14 @@ export default function CapturePage() {
 
   const handleCreateCategoryAndConfirm = async () => {
     if (!classification || ('matched' in classification && classification.matched) || ('multi_match' in classification)) return;
+    if (!newCatName.trim()) return;
     setIsCreatingCategory(true);
 
     try {
       await apiRequest("POST", "/api/add-category", {
-        categoryName: classification.suggestedCategory.name,
+        categoryName: newCatName.trim(),
         categoryDescription: classification.suggestedCategory.description,
+        categoryFocus: newCatFocus.trim() || undefined,
         entityName: classification.suggestedEntity.name,
         entityType: classification.suggestedEntity.type,
         topicType: classification.suggestedEntity.topic_type || 'general',
@@ -720,12 +730,12 @@ export default function CapturePage() {
 
       await handleConfirmCapture(
         classification.suggestedEntity.name,
-        classification.suggestedCategory.name
+        newCatName.trim()
       );
 
       toast({
         title: "New category created and note filed",
-        description: `Created "${classification.suggestedCategory.name}" with topic "${classification.suggestedEntity.name}".`,
+        description: `Created "${newCatName.trim()}" with topic "${classification.suggestedEntity.name}".`,
       });
 
       const createdTopicType = (classification.suggestedEntity.topic_type || "general").toLowerCase();
@@ -757,6 +767,7 @@ export default function CapturePage() {
         await apiRequest("POST", "/api/add-category", {
           categoryName,
           categoryDescription: "",
+          categoryFocus: intentNewCategoryFocus.trim() || undefined,
           entityName: intentTopicName.trim(),
           entityType: "topic",
           topicType: intentTopicType,
@@ -1261,7 +1272,10 @@ export default function CapturePage() {
                 value={intentCategory}
                 onChange={(e) => {
                   setIntentCategory(e.target.value);
-                  if (e.target.value !== "__new__") setIntentNewCategoryName("");
+                  if (e.target.value !== "__new__") {
+                    setIntentNewCategoryName("");
+                    setIntentNewCategoryFocus("");
+                  }
                 }}
                 className="w-full h-10 px-3 rounded-md border border-border bg-background text-foreground text-sm"
                 data-testid="select-intent-category"
@@ -1272,15 +1286,32 @@ export default function CapturePage() {
                 ))}
                 <option value="__new__">+ Create new category</option>
               </select>
+              {intentCategory && intentCategory !== "__new__" && (() => {
+                const selectedCat = (workspaceData?.workspace?.categories || []).find(c => c.name === intentCategory);
+                return selectedCat?.focus ? (
+                  <p className="text-xs text-muted-foreground mt-1" data-testid="text-selected-category-focus">
+                    Focus: {selectedCat.focus}
+                  </p>
+                ) : null;
+              })()}
               {intentCategory === "__new__" && (
-                <Input
-                  value={intentNewCategoryName}
-                  onChange={(e) => setIntentNewCategoryName(e.target.value)}
-                  placeholder="New category name"
-                  className="h-10 mt-2"
-                  data-testid="input-intent-new-category"
-                  autoFocus
-                />
+                <div className="mt-2 space-y-2">
+                  <Input
+                    value={intentNewCategoryName}
+                    onChange={(e) => setIntentNewCategoryName(e.target.value)}
+                    placeholder="Category name"
+                    className="h-10"
+                    data-testid="input-intent-new-category"
+                    autoFocus
+                  />
+                  <Textarea
+                    value={intentNewCategoryFocus}
+                    onChange={(e) => setIntentNewCategoryFocus(e.target.value)}
+                    placeholder="What should we pay attention to within this category? e.g. Digital ID policy, UK government procurement"
+                    className="min-h-[60px] text-sm"
+                    data-testid="input-intent-new-category-focus"
+                  />
+                </div>
               )}
             </div>
 
@@ -1316,6 +1347,7 @@ export default function CapturePage() {
                 setIntentTopicName("");
                 setIntentCategory("");
                 setIntentNewCategoryName("");
+                setIntentNewCategoryFocus("");
                 setIntentTopicType("general");
               }}
               className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -1480,7 +1512,14 @@ export default function CapturePage() {
                                       </SelectTrigger>
                                       <SelectContent>
                                         {(workspaceData?.workspace?.categories || []).map(cat => (
-                                          <SelectItem key={cat.name} value={cat.name}>{cat.name}</SelectItem>
+                                          <SelectItem key={cat.name} value={cat.name}>
+                                            <div>
+                                              <span>{cat.name}</span>
+                                              {cat.focus && (
+                                                <p className="text-xs text-muted-foreground">Focus: {cat.focus}</p>
+                                              )}
+                                            </div>
+                                          </SelectItem>
                                         ))}
                                       </SelectContent>
                                     </Select>
@@ -1673,12 +1712,6 @@ export default function CapturePage() {
                 <p className="text-sm font-medium text-foreground" data-testid="text-no-category-match">
                   No existing category fits this note
                 </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm text-muted-foreground">We suggest creating a new category:</span>
-                  <Badge className="bg-[#1e3a5f] text-white hover:bg-[#1e3a5f]/90" data-testid="badge-suggested-category">
-                    {classification.suggestedCategory.name}
-                  </Badge>
-                </div>
                 {classification.suggestedEntity?.name && (
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm text-muted-foreground">With topic:</span>
@@ -1695,6 +1728,29 @@ export default function CapturePage() {
             </div>
           </div>
 
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Category name</label>
+              <Input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Category name"
+                className="h-10"
+                data-testid="input-new-category-name"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-foreground mb-1.5 block">Focus <span className="text-muted-foreground font-normal">(optional)</span></label>
+              <Textarea
+                value={newCatFocus}
+                onChange={(e) => setNewCatFocus(e.target.value)}
+                placeholder="What should we pay attention to within this category? e.g. Digital ID policy, UK government procurement"
+                className="min-h-[60px] text-sm"
+                data-testid="input-new-category-focus"
+              />
+            </div>
+          </div>
+
           <div className="flex items-center justify-end gap-3">
             <Button
               variant="outline"
@@ -1706,7 +1762,7 @@ export default function CapturePage() {
             </Button>
             <Button
               onClick={handleCreateCategoryAndConfirm}
-              disabled={isCreatingCategory || isSaving}
+              disabled={isCreatingCategory || isSaving || !newCatName.trim()}
               className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
               data-testid="button-create-category-confirm"
             >
@@ -1744,6 +1800,14 @@ export default function CapturePage() {
                 </option>
               ))}
             </select>
+            {selectedManualCategory && (() => {
+              const selectedCat = (workspaceData?.workspace?.categories || []).find(c => c.name === selectedManualCategory);
+              return selectedCat?.focus ? (
+                <p className="text-xs text-muted-foreground mt-1" data-testid="text-manual-category-focus">
+                  Focus: {selectedCat.focus}
+                </p>
+              ) : null;
+            })()}
           </div>
 
           <div className="flex items-center justify-end gap-3">

@@ -67,6 +67,7 @@ export type OnboardingInput = z.infer<typeof onboardingInputSchema>;
 export interface ExtractedCategory {
   name: string;
   description: string;
+  focus?: string;
   entities: ExtractedEntity[];
 }
 

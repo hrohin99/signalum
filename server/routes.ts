@@ -1321,7 +1321,7 @@ Return only the summary paragraph, no JSON, no formatting.`
   app.post("/api/add-category", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const { categoryName, categoryDescription, entityName, entityType, topicType } = req.body;
+      const { categoryName, categoryDescription, categoryFocus, entityName, entityType, topicType } = req.body;
 
       if (!categoryName || typeof categoryName !== "string" || categoryName.length > 200) {
         return res.status(400).json({ message: "Invalid or missing category name" });
@@ -1369,6 +1369,9 @@ Return only the summary paragraph, no JSON, no formatting.`
       let targetCategory: ExtractedCategory;
       if (existingCategory) {
         targetCategory = existingCategory;
+        if (typeof categoryFocus === "string" && categoryFocus.trim()) {
+          existingCategory.focus = categoryFocus.trim();
+        }
         if (newEntityObj) {
           const entityExists = existingCategory.entities.some(
             e => e.name.toLowerCase() === newEntityObj.name.toLowerCase()
@@ -1381,6 +1384,7 @@ Return only the summary paragraph, no JSON, no formatting.`
         targetCategory = {
           name: categoryName,
           description: typeof categoryDescription === "string" ? categoryDescription : "",
+          focus: typeof categoryFocus === "string" && categoryFocus.trim() ? categoryFocus.trim() : undefined,
           entities: newEntityObj ? [newEntityObj] : [],
         };
         categories.push(targetCategory);
