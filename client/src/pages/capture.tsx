@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, Calendar, Pencil } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -176,6 +176,16 @@ export default function CapturePage() {
     queryKey: ["/api/workspace/current"],
     enabled: showManualPicker || hasIntentClassification || hasMultiMatch || hasClassification,
   });
+
+  const { data: recentCapturesData } = useQuery<any[]>({
+    queryKey: ["/api/captures"],
+  });
+  const recentCaptures = useMemo(() => {
+    if (!Array.isArray(recentCapturesData)) return [];
+    return [...recentCapturesData]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+  }, [recentCapturesData]);
 
   const resetState = useCallback(() => {
     setTextContent("");
@@ -981,6 +991,52 @@ export default function CapturePage() {
           </Card>
         ))}
       </div>
+
+      {!activeType && recentCaptures.length > 0 && (
+        <div className="mt-8" data-testid="recent-captures-section">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">Recent Captures</p>
+          <div className="space-y-2">
+            {recentCaptures.map((cap: any) => {
+              const sourceEmojis: Record<string, string> = { web_search: "🔍", document: "📄", url: "🔗", text: "✍️", voice: "✍️" };
+              const emoji = sourceEmojis[cap.type] || "✍️";
+              const categoryColors: Record<string, string> = {
+                "Competitors": "#dc2626",
+                "Competitor Landscape": "#dc2626",
+                "Standards & Regulations": "#1d4ed8",
+                "Industry Topics": "#16a34a",
+                "Threat Intelligence": "#ea580c",
+              };
+              const pillColor = (cap.matchedCategory && categoryColors[cap.matchedCategory]) || "#6b7280";
+              const truncated = cap.content.length > 80 ? cap.content.slice(0, 80).trimEnd() + "…" : cap.content;
+              const dateStr = new Date(cap.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+              return (
+                <div
+                  key={cap.id}
+                  className="flex items-start gap-3 p-3 rounded-lg border border-border/50 bg-card"
+                  data-testid={`recent-capture-${cap.id}`}
+                >
+                  <span className="text-base shrink-0 mt-0.5">{emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      {cap.matchedEntity && (
+                        <span
+                          className="text-[11px] font-medium px-2 py-0.5 rounded-full text-white"
+                          style={{ backgroundColor: pillColor }}
+                          data-testid={`badge-entity-${cap.id}`}
+                        >
+                          {cap.matchedEntity}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed">{truncated}</p>
+                  </div>
+                  <span className="text-xs text-muted-foreground shrink-0 mt-0.5">{dateStr}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {activeType && !classification && !isClassifying && (
         <div className="mt-6 border border-border rounded-md p-6 space-y-4">

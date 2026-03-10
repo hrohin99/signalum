@@ -3,6 +3,14 @@ import { Inbox as InboxIcon, PenLine, Mic, Link2, FileText, Loader2 } from "luci
 import { Badge } from "@/components/ui/badge";
 import type { Capture } from "@shared/schema";
 
+const sourceEmoji: Record<string, string> = {
+  text: "✍️",
+  voice: "✍️",
+  url: "🔗",
+  document: "📄",
+  web_search: "🔍",
+};
+
 const typeConfig: Record<string, { icon: typeof PenLine; label: string }> = {
   text: { icon: PenLine, label: "Text Note" },
   voice: { icon: Mic, label: "Voice Note" },
@@ -43,9 +51,9 @@ export default function InboxPage() {
   return (
     <div className="p-8 max-w-4xl mx-auto">
       <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Inbox</h1>
+        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Updates Feed</h1>
         <p className="text-muted-foreground mt-1">
-          All confirmed submissions, most recent first.
+          Everything captured across your workspace, most recent first.
         </p>
       </div>
 
@@ -84,15 +92,17 @@ export default function InboxPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide" data-testid={`text-type-${capture.id}`}>
-                        {config.label}
+                        {sourceEmoji[capture.type] || "✍️"} {config.label}
                       </span>
-                      <Badge
-                        variant="outline"
-                        className="bg-green-50 text-green-700 border-green-200 text-xs"
-                        data-testid={`badge-status-${capture.id}`}
-                      >
-                        Confirmed
-                      </Badge>
+                      {(capture as any).status && (capture as any).status !== "confirmed" && (
+                        <Badge
+                          variant="outline"
+                          className="bg-gray-50 text-gray-500 border-gray-200 text-xs"
+                          data-testid={`badge-status-${capture.id}`}
+                        >
+                          Pending
+                        </Badge>
+                      )}
                     </div>
 
                     <p className="text-sm text-foreground mb-2 leading-relaxed" data-testid={`text-content-${capture.id}`}>

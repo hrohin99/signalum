@@ -23,6 +23,9 @@ import {
   BarChart3,
   Download,
   X,
+  Target,
+  Zap,
+  AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -79,6 +82,21 @@ const topicTypeMap: Record<string, { icon: string; displayName: string }> = {
   deal: { icon: "💰", displayName: "Deal" },
   risk: { icon: "⚠️", displayName: "Risk" },
   general: { icon: "📌", displayName: "General" },
+};
+
+const categoryColorMap: Record<string, { bg: string; icon: string }> = {
+  "Competitors": { bg: "#fee2e2", icon: "#dc2626" },
+  "Competitor Landscape": { bg: "#fee2e2", icon: "#dc2626" },
+  "Standards & Regulations": { bg: "#dbeafe", icon: "#1d4ed8" },
+  "Industry Topics": { bg: "#dcfce7", icon: "#16a34a" },
+  "Threat Intelligence": { bg: "#ffedd5", icon: "#ea580c" },
+};
+
+const topicIconMap: Record<string, { Icon: typeof Target; color: string }> = {
+  competitor: { Icon: Target, color: "#dc2626" },
+  regulation: { Icon: Shield, color: "#1d4ed8" },
+  technology: { Icon: Zap, color: "#16a34a" },
+  trend: { Icon: AlertTriangle, color: "#ea580c" },
 };
 
 const entityTypeLabels: Record<string, string> = {
@@ -773,7 +791,7 @@ function MapPageInner() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">My Workspace</h1>
           <p className="text-muted-foreground mt-1">
-            {categories.length} categories, {categories.reduce((a, c) => a + c.entities.length, 0)} topics, {captures.length} updates
+            {categories.length} categories, {categories.reduce((a, c) => a + c.entities.length, 0)} topics, {captures.length} updates this month
           </p>
         </div>
         <Button
@@ -803,6 +821,18 @@ function MapPageInner() {
             const isActive = effectiveCategory === cat.name;
             const count = getCaptureCountForCategory(cat.name);
             const catUrgency = getCategoryUrgency(cat);
+            const catColors = categoryColorMap[cat.name];
+            const latestCapture = captures
+              .filter((c) => c.matchedCategory === cat.name)
+              .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+            const latestActivityText = latestCapture
+              ? (() => {
+                  const preview = `${latestCapture.matchedEntity || ""} ${latestCapture.content}`.trim();
+                  const truncated = preview.length > 60 ? preview.slice(0, 60).trimEnd() + "…" : preview;
+                  const dateStr = new Date(latestCapture.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+                  return `${truncated} · ${dateStr}`;
+                })()
+              : null;
             return (
               <button
                 key={cat.name}
@@ -817,17 +847,31 @@ function MapPageInner() {
                 data-testid={`button-category-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-md flex items-center justify-center shrink-0 ${
-                    isActive ? "bg-white/20" : "bg-[#1e3a5f]/10"
-                  }`}>
-                    <FolderOpen className={`w-4 h-4 ${isActive ? "text-white" : "text-[#1e3a5f]"}`} />
+                  <div
+                    className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
+                    style={isActive
+                      ? { backgroundColor: "rgba(255,255,255,0.2)" }
+                      : catColors
+                        ? { backgroundColor: catColors.bg }
+                        : { backgroundColor: "rgba(30,58,95,0.1)" }
+                    }
+                  >
+                    <FolderOpen
+                      className="w-4 h-4"
+                      style={isActive
+                        ? { color: "white" }
+                        : catColors
+                          ? { color: catColors.icon }
+                          : { color: "#1e3a5f" }
+                      }
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className={`font-medium text-sm truncate ${isActive ? "text-white" : "text-foreground"}`}>
                       {cat.name}
                     </p>
                     <p className={`text-xs mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
-                      {cat.entities.length} topics{count > 0 ? ` · ${count} updates` : ""}
+                      {cat.entities.length} topics{count > 0 ? ` · ${count} updates this month` : ""}
                     </p>
                   </div>
                   {catUrgency && (
@@ -838,7 +882,13 @@ function MapPageInner() {
                   )}
                   <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isActive ? "text-white/70" : "text-muted-foreground group-hover:translate-x-0.5"}`} />
                 </div>
-                {cat.entities.length > 0 && (
+                {latestActivityText ? (
+                  <div className="pl-12">
+                    <p className={`text-[11px] italic truncate ${isActive ? "text-white/60" : "text-gray-400"}`}>
+                      {latestActivityText}
+                    </p>
+                  </div>
+                ) : cat.entities.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 pl-12">
                     {cat.entities.slice(0, 4).map((e) => {
                       const typeInfo = topicTypeMap[e.topic_type || "general"] || topicTypeMap.general;
@@ -861,7 +911,7 @@ function MapPageInner() {
                       </span>
                     )}
                   </div>
-                )}
+                ) : null}
               </button>
             );
           })}
@@ -1032,7 +1082,50 @@ function MapPageInner() {
                       const count = getCaptureCountForEntity(entity.name);
                       const entityDeadline = getEntityDeadline(entity.name);
                       const pill = entityDeadline ? formatDeadlinePill(entityDeadline.days_until, String(entityDeadline.date)) : null;
-                      const searchStatus = getLastSearchedLabel(entity.name);
+                      const topicType = (entity.topic_type || "general").toLowerCase();
+                      const iconConfig = topicIconMap[topicType];
+                      const catName = effectiveCategory || "";
+                      const categoryBasedIcon = !iconConfig
+                        ? (catName.toLowerCase().includes("competitor")
+                          ? topicIconMap.competitor
+                          : catName.toLowerCase().includes("regulation") || catName.toLowerCase().includes("standards")
+                            ? topicIconMap.regulation
+                            : catName.toLowerCase().includes("industry") || catName.toLowerCase().includes("topic")
+                              ? topicIconMap.technology
+                              : catName.toLowerCase().includes("threat") || catName.toLowerCase().includes("intelligence")
+                                ? topicIconMap.trend
+                                : null)
+                        : null;
+                      const finalIcon = iconConfig || categoryBasedIcon;
+                      const TopicIcon = finalIcon?.Icon || Tag;
+                      const topicIconColor = finalIcon?.color || "#1e3a5f";
+
+                      const entityCaptures = captures
+                        .filter((c) => c.matchedEntity === entity.name)
+                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+                      const latestCapture = entityCaptures[0];
+                      const lastUpdateText = latestCapture
+                        ? (() => {
+                            const d = new Date(latestCapture.createdAt);
+                            const now = new Date();
+                            const diffMs = now.getTime() - d.getTime();
+                            const diffMins = Math.floor(diffMs / 60000);
+                            const diffHours = Math.floor(diffMs / 3600000);
+                            const diffDays = Math.floor(diffMs / 86400000);
+                            if (diffMins < 1) return "Last update: just now";
+                            if (diffMins < 60) return `Last update: ${diffMins} min${diffMins !== 1 ? "s" : ""} ago`;
+                            if (diffHours < 24) return `Last update: ${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`;
+                            if (diffDays === 1) return "Last update: yesterday";
+                            if (diffDays < 7) return `Last update: ${diffDays} days ago`;
+                            return `Last update: ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+                          })()
+                        : "No updates yet";
+                      const previewText = latestCapture
+                        ? latestCapture.content.length > 70
+                          ? latestCapture.content.slice(0, 70).trimEnd() + "…"
+                          : latestCapture.content
+                        : null;
+
                       return (
                         <button
                           key={entity.name}
@@ -1040,27 +1133,29 @@ function MapPageInner() {
                           className="w-full text-left rounded-lg bg-card border border-border/50 p-4 flex items-center gap-3 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm transition-all group"
                           data-testid={`button-entity-${(entity?.name ?? "").toLowerCase().replace(/\s+/g, "-")}`}
                         >
-                          <div className="w-9 h-9 rounded-md bg-[#1e3a5f]/10 flex items-center justify-center shrink-0">
-                            <Tag className="w-4 h-4 text-[#1e3a5f]" />
+                          <div
+                            className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: `${topicIconColor}15` }}
+                          >
+                            <TopicIcon className="w-4 h-4" style={{ color: topicIconColor }} />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-sm text-foreground">{entity.name}</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              {topicTypeMap[(entity.topic_type || "general").toLowerCase()]?.displayName || entityTypeLabels[entity.type] || entity.type}
+                              {topicTypeMap[topicType]?.displayName || entityTypeLabels[entity.type] || entity.type}
                               {count > 0 ? ` · ${count} update${count !== 1 ? "s" : ""}` : ""}
                             </p>
                             <p
-                              className={`text-[11px] text-slate-400 mt-0.5 flex items-center gap-1 ${!searchStatus.isSearched ? "italic" : ""}`}
-                              data-testid={`text-last-searched-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
+                              className={`text-[11px] mt-0.5 ${latestCapture ? "text-slate-400" : "text-slate-400 italic"}`}
+                              data-testid={`text-last-update-${entity.name.toLowerCase().replace(/\s+/g, "-")}`}
                             >
-                              {searchStatus.isSearching && (
-                                <span className="relative flex h-1.5 w-1.5 shrink-0">
-                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1e3a5f] opacity-75" />
-                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-[#1e3a5f]" />
-                                </span>
-                              )}
-                              {searchStatus.text}
+                              {lastUpdateText}
                             </p>
+                            {previewText && (
+                              <p className="text-[13px] italic mt-0.5 truncate" style={{ color: "#6b7280" }}>
+                                {previewText}
+                              </p>
+                            )}
                             {pill && (
                               <span
                                 className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full mt-1.5 ${pill.className}`}
@@ -1075,11 +1170,6 @@ function MapPageInner() {
                       );
                     })}
                   </div>
-
-                  <InlineAddTopic
-                    onAdd={handleNudgeAdd}
-                    isPending={addEntityMutation.isPending}
-                  />
                 </>
               )}
             </div>

@@ -582,7 +582,18 @@ function TopBar({
   const [, navigate] = useLocation();
 
   return (
-    <div className="flex items-center justify-between flex-wrap gap-3 border-b border-border pb-4">
+    <div
+      className="flex items-center justify-between flex-wrap gap-3 border-b border-border pb-4 pl-4"
+      style={{
+        borderLeft: `4px solid ${
+          categoryName.toLowerCase().includes("competitor") ? "#dc2626"
+          : categoryName.toLowerCase().includes("regulation") || categoryName.toLowerCase().includes("standards") ? "#1d4ed8"
+          : categoryName.toLowerCase().includes("industry") || categoryName.toLowerCase().includes("topic") ? "#16a34a"
+          : categoryName.toLowerCase().includes("threat") || categoryName.toLowerCase().includes("intelligence") ? "#ea580c"
+          : "#94a3b8"
+        }`,
+      }}
+    >
       <div className="flex items-center gap-3 flex-wrap">
         <Button
           variant="ghost"
