@@ -1,0 +1,61 @@
+// generateBriefingForUser(userId: string):
+//   - Fetch all captures for userId from the last 7 days from the captures table
+//   - Filter to only medium and high signal: matchReason contains [medium] or [high], OR type is 'text', 'document', or 'url'
+//   - Group captures by matchedEntity and matchedCategory
+//   - For each entity that has captures, if multiple captures have very similar content, keep only the highest signal one
+//   - Call Anthropic API using model claude-haiku-4-5-20251001 and ANTHROPIC_API_KEY (not AI_INTEGRATIONS_ANTHROPIC_API_KEY) with this prompt:
+//
+//     "You are an intelligence analyst writing a weekly briefing for a product manager at Entrust, a company in the government identity verification space.
+//      Here is this week's captured intelligence grouped by entity:
+//      [insert grouped captures as JSON]
+//
+//      Return a JSON object with this exact structure:
+//      {
+//        executiveSummary: string (3-4 sentences, what moved this week overall, written for a busy PM),
+//        entities: [
+//          {
+//            name: string,
+//            category: string,
+//            bullets: string[] (2-3 bullets, one sentence each, highest signal first),
+//            soWhat: string (one sentence: what this means specifically for Entrust),
+//            captureCount: number
+//          }
+//        ]
+//      }
+//      Return only valid JSON, no markdown, no preamble."
+//
+//   - Return the parsed JSON plus the raw FLAGGED_FOR_BRIEF captures separately
+
+// sendBriefingEmail(userId: string, toEmail: string, briefingData: any):
+//   - Use Resend with from address rohin@rohin.co
+//   - Subject: "Your Watchloom Brief — [N] signals this week"
+//   - HTML email with dashboard card layout (inline CSS only, max 600px wide):
+//
+//     HEADER: Dark navy background (#1e293b), white text "Watchloom" left + date range right e.g. "March 3 – March 9, 2026". Padding 20px.
+//
+//     EXECUTIVE SUMMARY BOX: Light grey background (#f1f5f9), 12px padding, 8px rounded corners, dark text, labelled "This Week" in small caps above the paragraph.
+//
+//     ENTITY CARDS: One per entity, sorted by captureCount descending. White background, 1px solid #e2e8f0 border, 8px rounded corners, 16px padding, 12px margin-bottom.
+//       - Top row: entity name in bold 16px + category badge pill (inline-block, 10px padding horizontal, 4px padding vertical, 11px font, border-radius 999px):
+//           Competitors = #fee2e2 background #dc2626 text
+//           Standards & Regulations = #dbeafe background #1d4ed8 text
+//           Industry Topics = #dcfce7 background #16a34a text
+//           Threat Intelligence = #ffedd5 background #ea580c text
+//       - Bullets: each on its own line, source emoji prefix (🔍 web_search, 📄 document, 🔗 url, ✍️ text), 14px, #374151 color
+//       - So what line: italic, 13px, #6b7280 color, preceded by "→ So what for Entrust: "
+//       - Bottom right: "View full profile →" link to https://watchloom.rohin.co/topic/[entityName encoded]
+//
+//     WORTH YOUR ATTENTION: Only if there are FLAGGED_FOR_BRIEF captures. Yellow box (#fffbeb background, #92400e text, same card styling). Title "⚠️ Worth Your Attention" bold. List each flagged capture as a bullet.
+//
+//     QUIET THIS WEEK: Plain text line in #9ca3af color: "No updates this week: [comma separated entity names with zero captures]"
+//
+//     FOOTER: #f8fafc background, centered, 12px #6b7280 text. "Manage briefing preferences" link to https://watchloom.rohin.co/settings/briefing. "Sent by Watchloom · Unsubscribe"
+
+**3. DB migration**
+Run this directly against `postgresql://postgres:password@helium/heliumdb`:
+```sql
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_enabled boolean DEFAULT false;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_day varchar(10) DEFAULT 'monday';
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_time varchar(5) DEFAULT '08:00';
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_email varchar(255);
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_last_sent timestamp;
