@@ -2170,6 +2170,7 @@ function ManualSearchButton({
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [serverLimitReached, setServerLimitReached] = useState(false);
 
   const webSearchCaptures = captures
     .filter((c) => c.type === "web_search")
@@ -2182,7 +2183,7 @@ function ManualSearchButton({
   const todayManualCount = captures.filter(
     (c) => c.type === "web_search" && c.matchReason?.includes("Manual web search") && new Date(c.createdAt) >= today
   ).length;
-  const limitReached = false;
+  const limitReached = serverLimitReached;
 
   const formatRelativeTime = (date: Date) => {
     const now = new Date();
@@ -2205,10 +2206,6 @@ function ManualSearchButton({
         categoryName,
         topicType: entity.topic_type || "general",
       });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "Search failed");
-      }
       return res.json();
     },
     onSuccess: (data: { newFindings: number; message: string }) => {
@@ -2220,13 +2217,25 @@ function ManualSearchButton({
       });
     },
     onError: (err: Error) => {
-      if (err.message.includes("limit reached")) {
+      const isLimitError = err.message.includes("limit reached") || err.message.startsWith("429:");
+      let displayMessage = err.message;
+      if (err.message.startsWith("429:")) {
+        try {
+          const jsonPart = err.message.slice(err.message.indexOf("{"));
+          const parsed = JSON.parse(jsonPart);
+          displayMessage = parsed.message || "Daily search limit reached for today.";
+        } catch {
+          displayMessage = "Daily search limit reached for today.";
+        }
+      }
+      if (isLimitError) {
+        setServerLimitReached(true);
         queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
       }
       toast({
-        title: "Search failed",
-        description: err.message,
-        variant: err.message.includes("limit reached") ? "default" : "destructive",
+        title: isLimitError ? "Limit reached" : "Search failed",
+        description: displayMessage,
+        variant: isLimitError ? "default" : "destructive",
       });
     },
   });
@@ -2269,7 +2278,7 @@ function ManualSearchButton({
       )}
       {!limitReached && !searchMutation.isPending && (
         <p className="text-[10px] text-slate-400 mt-1 text-center" data-testid="text-searches-remaining">
-          {3 - todayManualCount} search{3 - todayManualCount !== 1 ? "es" : ""} remaining today
+          {Math.max(0, 3 - todayManualCount)} search{Math.max(0, 3 - todayManualCount) !== 1 ? "es" : ""} remaining today
         </p>
       )}
     </div>
