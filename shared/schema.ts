@@ -89,6 +89,8 @@ export interface ExtractedEntity {
   entity_type_detected?: string;
   pricing_model_detected?: string;
   website_url?: string;
+  soWhatText?: string;
+  soWhatGeneratedAt?: string;
 }
 
 export interface ExtractionResult {

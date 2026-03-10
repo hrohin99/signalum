@@ -16,6 +16,22 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   ArrowLeft,
   Sparkles,
   Pencil,
@@ -214,11 +230,15 @@ function TopicViewContent({
   const typeInfo = topicTypeMap[currentTopicType] || topicTypeMap.general;
   const priInfo = priorityConfig[currentPriority] || priorityConfig.medium;
 
+  const [, navigate] = useLocation();
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [showPriorityDropdown, setShowPriorityDropdown] = useState(false);
   const [showAspectModal, setShowAspectModal] = useState(false);
   const [showCoachMarks, setShowCoachMarks] = useState(false);
   const [showWebsiteModal, setShowWebsiteModal] = useState(false);
+  const [renameTopicOpen, setRenameTopicOpen] = useState(false);
+  const [renameTopicNewName, setRenameTopicNewName] = useState("");
+  const [deleteTopicOpen, setDeleteTopicOpen] = useState(false);
   const [websiteUrlInput, setWebsiteUrlInput] = useState("");
   const [websiteBannerDismissed, setWebsiteBannerDismissed] = useState(() => {
     return localStorage.getItem(`website_banner_dismissed_${entity.name}`) === "true";
@@ -323,6 +343,45 @@ function TopicViewContent({
     },
   });
 
+  const renameTopicMutation = useMutation({
+    mutationFn: async (data: { oldName: string; newName: string }) => {
+      const res = await apiRequest("PUT", `/api/topics/${encodeURIComponent(data.oldName)}`, {
+        name: data.newName,
+        categoryName,
+      });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      setRenameTopicOpen(false);
+      toast({ title: "Topic renamed", description: `Renamed to "${variables.newName}".` });
+      navigate(`/topic/${encodeURIComponent(categoryName)}/${encodeURIComponent(variables.newName)}`);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteTopicMutation = useMutation({
+    mutationFn: async (entityName: string) => {
+      const res = await apiRequest("DELETE", `/api/topics/${encodeURIComponent(entityName)}`, {
+        categoryName,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      setDeleteTopicOpen(false);
+      toast({ title: "Topic deleted" });
+      navigate("/");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   const showWebsiteBanner = entity.entity_type_detected === "local_business" && !entity.website_url && !websiteBannerDismissed;
 
   return (
@@ -342,6 +401,11 @@ function TopicViewContent({
         priorityDropdownRef={priorityDropdownRef}
         updateEntityMutation={updateEntityMutation}
         onBack={onBack}
+        onRename={() => {
+          setRenameTopicNewName(entity.name);
+          setRenameTopicOpen(true);
+        }}
+        onDelete={() => setDeleteTopicOpen(true)}
       />
 
       {detectMultipleEntities(entity.name) && (
@@ -488,6 +552,7 @@ function TopicViewContent({
       <div className="flex flex-col lg:flex-row gap-6 mt-6">
         <div className="lg:w-[65%] space-y-6">
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+          <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <StrategicDirectionCard entity={entity} categoryName={categoryName} captures={captures} />
           )}
@@ -544,6 +609,65 @@ function TopicViewContent({
           onComplete={() => setShowCoachMarks(false)}
         />
       )}
+
+      <Dialog open={renameTopicOpen} onOpenChange={setRenameTopicOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Topic</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Input
+              value={renameTopicNewName}
+              onChange={(e) => setRenameTopicNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameTopicNewName.trim()) {
+                  renameTopicMutation.mutate({ oldName: entity.name, newName: renameTopicNewName.trim() });
+                }
+              }}
+              placeholder="Topic name"
+              data-testid="input-rename-topic"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenameTopicOpen(false)} data-testid="button-rename-topic-cancel">
+                Cancel
+              </Button>
+              <Button
+                className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                disabled={!renameTopicNewName.trim() || renameTopicMutation.isPending}
+                onClick={() => renameTopicMutation.mutate({ oldName: entity.name, newName: renameTopicNewName.trim() })}
+                data-testid="button-rename-topic-confirm"
+              >
+                {renameTopicMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Rename
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteTopicOpen} onOpenChange={setDeleteTopicOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{entity.name}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the topic and all captured updates associated with it. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-delete-topic-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={deleteTopicMutation.isPending}
+              onClick={() => deleteTopicMutation.mutate(entity.name)}
+              data-testid="button-delete-topic-confirm"
+            >
+              {deleteTopicMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -563,6 +687,8 @@ function TopBar({
   priorityDropdownRef,
   updateEntityMutation,
   onBack,
+  onRename,
+  onDelete,
 }: {
   entity: ExtractedEntity;
   categoryName: string;
@@ -578,6 +704,8 @@ function TopBar({
   priorityDropdownRef: React.RefObject<HTMLDivElement>;
   updateEntityMutation: any;
   onBack: () => void;
+  onRename: () => void;
+  onDelete: () => void;
 }) {
   const [, navigate] = useLocation();
 
@@ -673,14 +801,103 @@ function TopBar({
         </span>
       </div>
 
-      <Button
-        className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
-        onClick={() => navigate("/capture")}
-        data-testid="button-add-update"
-      >
-        Add Update
-      </Button>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" data-testid="button-topic-actions-menu">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onRename} data-testid="menu-rename-topic">
+              <Pencil className="w-4 h-4 mr-2" />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDelete} className="text-red-600 focus:text-red-600" data-testid="menu-delete-topic">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+          onClick={() => navigate("/capture")}
+          data-testid="button-add-update"
+        >
+          Add Update
+        </Button>
+      </div>
     </div>
+  );
+}
+
+function SoWhatCard({ entity, categoryName, captureCount }: { entity: ExtractedEntity; categoryName: string; captureCount: number }) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [hasAutoTriggered, setHasAutoTriggered] = useState(false);
+
+  const soWhatMutation = useMutation({
+    mutationFn: async (force?: boolean) => {
+      const res = await apiRequest("POST", `/api/topics/${encodeURIComponent(entity.name)}/so-what`, {
+        force: force ?? false,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error generating analysis", description: err.message, variant: "destructive" });
+    },
+  });
+
+  useEffect(() => {
+    if (!hasAutoTriggered && !entity.soWhatText && captureCount >= 3 && !soWhatMutation.isPending) {
+      setHasAutoTriggered(true);
+      soWhatMutation.mutate(false);
+    }
+  }, [hasAutoTriggered, entity.soWhatText, captureCount, soWhatMutation.isPending]);
+
+  return (
+    <Card data-testid="card-so-what">
+      <div className="flex items-center justify-between gap-2 flex-wrap p-4 pb-0">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 text-muted-foreground" />
+          <h3 className="text-sm font-semibold" data-testid="text-so-what-title">So What for Us?</h3>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => soWhatMutation.mutate(true)}
+          disabled={soWhatMutation.isPending}
+          data-testid="button-regenerate-so-what"
+        >
+          {soWhatMutation.isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <RefreshCw className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
+      <CardContent className="pt-3">
+        {soWhatMutation.isPending ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground" data-testid="status-so-what-loading">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Analyzing strategic implications...</span>
+          </div>
+        ) : entity.soWhatText ? (
+          <p className="text-sm leading-relaxed" data-testid="text-so-what-content">{entity.soWhatText}</p>
+        ) : captureCount < 3 ? (
+          <p className="text-sm text-muted-foreground" data-testid="text-so-what-empty">
+            Add at least 3 captures to generate strategic implications.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground" data-testid="text-so-what-empty">
+            No analysis generated yet. Click the refresh button to generate.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

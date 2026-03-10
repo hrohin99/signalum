@@ -27,6 +27,9 @@ export interface IStorage {
   getBattlecard(tenantId: string, entityId: string): Promise<Battlecard | undefined>;
   upsertBattlecard(tenantId: string, entityId: string, data: Partial<InsertBattlecard>): Promise<Battlecard>;
   deleteCapturesByEntity(userId: string, entityName: string, categoryName: string): Promise<number>;
+  deleteCapturesByCategory(userId: string, categoryName: string): Promise<number>;
+  updateCapturesCategory(userId: string, oldCategoryName: string, newCategoryName: string): Promise<number>;
+  updateCapturesEntity(userId: string, oldEntityName: string, newEntityName: string): Promise<number>;
   getTopicDatesByEntity(tenantId: string, entityId: string): Promise<TopicDate[]>;
   getAllTopicDates(tenantId: string): Promise<TopicDate[]>;
   createTopicDate(data: InsertTopicDate): Promise<TopicDate>;
@@ -232,6 +235,32 @@ export class DatabaseStorage implements IStorage {
       .where(and(eq(captures.userId, userId), eq(captures.matchedEntity, entityName), eq(captures.matchedCategory, categoryName)))
       .returning();
     return deleted.length;
+  }
+
+  async deleteCapturesByCategory(userId: string, categoryName: string): Promise<number> {
+    const deleted = await db
+      .delete(captures)
+      .where(and(eq(captures.userId, userId), eq(captures.matchedCategory, categoryName)))
+      .returning();
+    return deleted.length;
+  }
+
+  async updateCapturesCategory(userId: string, oldCategoryName: string, newCategoryName: string): Promise<number> {
+    const updated = await db
+      .update(captures)
+      .set({ matchedCategory: newCategoryName })
+      .where(and(eq(captures.userId, userId), eq(captures.matchedCategory, oldCategoryName)))
+      .returning();
+    return updated.length;
+  }
+
+  async updateCapturesEntity(userId: string, oldEntityName: string, newEntityName: string): Promise<number> {
+    const updated = await db
+      .update(captures)
+      .set({ matchedEntity: newEntityName })
+      .where(and(eq(captures.userId, userId), eq(captures.matchedEntity, oldEntityName)))
+      .returning();
+    return updated.length;
   }
 
   async getTopicDatesByEntity(tenantId: string, entityId: string): Promise<TopicDate[]> {

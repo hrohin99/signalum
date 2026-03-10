@@ -16,6 +16,7 @@ function flattenEntities(categories: ExtractedCategory[]) {
       entityType: e.type,
       categoryName: cat.name,
       categoryDescription: cat.description,
+      categoryFocus: cat.focus || undefined,
     }))
   );
 }
@@ -63,8 +64,15 @@ export async function generateWeeklyDigest(userId: string): Promise<Brief | null
       .slice(0, 5)
       .map((c, i) => `  [${i + 1}] (${c.type}) ${c.content.slice(0, 300)}`)
       .join("\n");
-    return `Entity: ${e.entityName} (${e.entityType}) — Category: ${e.categoryName}\nRecent intel (${entityCaptures.length} items, ${highSignalCaptures.length} high-signal):\n${snippets}`;
+    const focusLine = e.categoryFocus ? ` [Focus: ${e.categoryFocus}]` : "";
+    return `Entity: ${e.entityName} (${e.entityType}) — Category: ${e.categoryName}${focusLine}\nRecent intel (${entityCaptures.length} items, ${highSignalCaptures.length} high-signal):\n${snippets}`;
   }).filter(Boolean);
+
+  const categoryFocusSummary = categories
+    .filter(c => c.focus)
+    .map(c => `- ${c.name}: ${c.focus}`)
+    .join("\n");
+  const focusPromptSection = categoryFocusSummary ? `\n\nCategory focus areas (prioritise signals relevant to these):\n${categoryFocusSummary}` : "";
 
   const briefingContext = entitySummaries.length > 0
     ? entitySummaries.join("\n\n")
@@ -93,7 +101,7 @@ export async function generateWeeklyDigest(userId: string): Promise<Brief | null
     messages: [
       {
         role: "user",
-        content: `You are a senior intelligence analyst preparing a weekly digest for a decision-maker. This covers the last 7 days. Based on the intel items and entity data below, write a narrative weekly intelligence digest.
+        content: `You are a senior intelligence analyst preparing a weekly digest for a decision-maker. This covers the last 7 days. Based on the intel items and entity data below, write a narrative weekly intelligence digest.${focusPromptSection}
 
 Structure the digest as follows:
 1. **Week in Review** — A 3-4 sentence high-level overview of the most important developments this week.

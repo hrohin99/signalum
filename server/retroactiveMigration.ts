@@ -158,11 +158,11 @@ async function regenerateCompetitorSummary(
 
     const message = await client.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 512,
+      max_tokens: 600,
       messages: [
         {
           role: "user",
-          content: `Generate a concise 2-3 sentence intelligence summary for the competitor "${entityName}" in the category "${categoryName}". Focus specifically on their "${disambiguationContext}" business area. Include their market position, recent developments, and competitive relevance. Return ONLY the summary text, no JSON or formatting.`
+          content: `Generate a comprehensive strategic summary of 150-200 words for the competitor "${entityName}" in the category "${categoryName}". Focus specifically on their "${disambiguationContext}" business area. Cover: what this entity is doing, recent notable developments, strategic direction, and relevance to the government identity verification space. Use plain paragraphs, no bullet points. Return ONLY the summary text, no JSON or formatting.`
         }
       ]
     });

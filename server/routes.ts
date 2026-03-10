@@ -1186,18 +1186,23 @@ If no dates found, return { "extracted_dates": [] }.`
 
       const client = getAnthropicClient();
 
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      const categories = workspace ? (workspace.categories as ExtractedCategory[]) : [];
+      const category = categories.find(c => c.name === categoryName);
+      const focusContext = category?.focus ? `\nCategory focus area: "${category.focus}". Weight your analysis toward this focus.\n` : "";
+
       const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [
           {
             role: "user",
-            content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a concise 2-3 sentence intelligence summary. Focus on what is known, key developments, and any notable patterns. Be direct and analytical — no filler.
-
+            content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a comprehensive strategic summary of 150-200 words covering: what this entity is doing, recent notable developments, strategic direction, and relevance to the user's competitive landscape. Use plain paragraphs, no bullet points. Be direct and analytical — no filler.
+${focusContext}
 Captured intel:
 ${contentSnippets}
 
-Return only the summary paragraph, no JSON, no formatting.`
+Return only the summary paragraphs, no JSON, no formatting.`
           }
         ]
       });
@@ -1394,6 +1399,211 @@ Return only the summary paragraph, no JSON, no formatting.`
       return res.json({ success: true, workspace: updated, newCategory: targetCategory, siblingInference });
     } catch (error: any) {
       console.error("Add category error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/categories/:name", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const oldName = decodeURIComponent(req.params.name);
+      const { name: newName, focus } = req.body;
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) return res.status(404).json({ message: "No workspace found" });
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const category = categories.find(c => c.name === oldName);
+      if (!category) return res.status(404).json({ message: "Category not found" });
+
+      if (typeof focus === "string") {
+        category.focus = focus.trim().slice(0, 300) || undefined;
+      }
+
+      if (newName && typeof newName === "string" && newName.trim() !== oldName) {
+        const trimmedName = newName.trim();
+        if (trimmedName.length > 200) return res.status(400).json({ message: "Category name too long" });
+        const duplicate = categories.find(c => c.name.toLowerCase() === trimmedName.toLowerCase() && c.name !== oldName);
+        if (duplicate) return res.status(400).json({ message: "A category with that name already exists" });
+
+        await storage.updateCapturesCategory(userId, oldName, trimmedName);
+        category.name = trimmedName;
+      }
+
+      await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, category });
+    } catch (error: any) {
+      console.error("Update category error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/categories/:name", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const categoryName = decodeURIComponent(req.params.name);
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) return res.status(404).json({ message: "No workspace found" });
+
+      const categories = workspace.categories as ExtractedCategory[];
+      const categoryIndex = categories.findIndex(c => c.name === categoryName);
+      if (categoryIndex === -1) return res.status(404).json({ message: "Category not found" });
+
+      await storage.deleteCapturesByCategory(userId, categoryName);
+
+      categories.splice(categoryIndex, 1);
+      await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete category error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/topics/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const oldEntityName = decodeURIComponent(req.params.entityName);
+      const { name: newName, categoryName } = req.body;
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) return res.status(404).json({ message: "No workspace found" });
+
+      const categories = workspace.categories as ExtractedCategory[];
+
+      let entity: ExtractedEntity | undefined;
+      let foundCategory: ExtractedCategory | undefined;
+      for (const cat of categories) {
+        if (categoryName && cat.name !== categoryName) continue;
+        const found = cat.entities.find(e => e.name === oldEntityName);
+        if (found) {
+          entity = found;
+          foundCategory = cat;
+          break;
+        }
+      }
+      if (!entity || !foundCategory) return res.status(404).json({ message: "Topic not found" });
+
+      if (newName && typeof newName === "string" && newName.trim() !== oldEntityName) {
+        const trimmedName = newName.trim();
+        if (trimmedName.length > 200) return res.status(400).json({ message: "Topic name too long" });
+
+        await storage.updateCapturesEntity(userId, oldEntityName, trimmedName);
+        entity.name = trimmedName;
+      }
+
+      await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true, entity });
+    } catch (error: any) {
+      console.error("Update topic error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/topics/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = decodeURIComponent(req.params.entityName);
+      const { categoryName } = req.body;
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) return res.status(404).json({ message: "No workspace found" });
+
+      const categories = workspace.categories as ExtractedCategory[];
+
+      let found = false;
+      for (const cat of categories) {
+        if (categoryName && cat.name !== categoryName) continue;
+        const entityIndex = cat.entities.findIndex(e => e.name === entityName);
+        if (entityIndex !== -1) {
+          await storage.deleteCapturesByEntity(userId, entityName, cat.name);
+          cat.entities.splice(entityIndex, 1);
+          found = true;
+          break;
+        }
+      }
+      if (!found) return res.status(404).json({ message: "Topic not found" });
+
+      await storage.updateWorkspaceCategories(userId, categories);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete topic error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/topics/:entityName/so-what", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = decodeURIComponent(req.params.entityName);
+      const { force } = req.body;
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) return res.status(404).json({ message: "No workspace found" });
+
+      const categories = workspace.categories as ExtractedCategory[];
+
+      let entity: ExtractedEntity | undefined;
+      let categoryName: string | undefined;
+      for (const cat of categories) {
+        const found = cat.entities.find(e => e.name === entityName);
+        if (found) {
+          entity = found;
+          categoryName = cat.name;
+          break;
+        }
+      }
+      if (!entity) return res.status(404).json({ message: "Topic not found" });
+
+      const allCaptures = await storage.getCapturesByUserId(userId);
+      const entityCaptures = allCaptures.filter(c => c.matchedEntity === entityName);
+
+      if (entityCaptures.length < 3) {
+        return res.status(400).json({ message: "Need at least 3 captures to generate analysis" });
+      }
+
+      if (!force && entity.soWhatText && entity.soWhatGeneratedAt) {
+        const lastGenerated = new Date(entity.soWhatGeneratedAt);
+        const newCapturesSince = entityCaptures.filter(c => new Date(c.createdAt) > lastGenerated);
+        if (newCapturesSince.length === 0) {
+          return res.json({ soWhatText: entity.soWhatText, soWhatGeneratedAt: entity.soWhatGeneratedAt, cached: true });
+        }
+      }
+
+      const contentSnippets = entityCaptures
+        .slice(0, 15)
+        .map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
+        .join("\n\n");
+
+      const categoryObj = categories.find(c => c.name === categoryName);
+      const focusContext = categoryObj?.focus ? `\nThis category has a specific focus: ${categoryObj.focus}. Prioritise signals relevant to this focus.` : "";
+
+      const anthropic = new Anthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+
+      const message = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 600,
+        messages: [
+          {
+            role: "user",
+            content: `You are a strategic analyst. Given the following intelligence captures about "${entityName}", explain in 3-5 sentences what this means specifically for an organisation like Entrust that operates in the government identity verification space. Focus on competitive implications, risks, and opportunities. Be direct and opinionated — avoid vague statements.${focusContext}\n\nCaptures:\n${contentSnippets}\n\nReturn only the analysis paragraph, no JSON, no formatting.`
+          }
+        ]
+      });
+
+      const soWhatText = (message.content[0] as any).text || "";
+      const soWhatGeneratedAt = new Date().toISOString();
+
+      entity.soWhatText = soWhatText;
+      entity.soWhatGeneratedAt = soWhatGeneratedAt;
+      await storage.updateWorkspaceCategories(userId, categories);
+
+      return res.json({ soWhatText, soWhatGeneratedAt, cached: false });
+    } catch (error: any) {
+      console.error("So-what generation error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
 import { storage, db } from "./storage";
 import { captures } from "@shared/schema";
+import type { ExtractedCategory } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
 
 function escapeHtml(str: string): string {
@@ -90,9 +91,17 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
     }
   }
 
+  const workspace = await storage.getWorkspaceByUserId(userId);
+  const workspaceCategories = (workspace?.categories || []) as ExtractedCategory[];
+  const categoryFocusMap: Record<string, string> = {};
+  for (const cat of workspaceCategories) {
+    if (cat.focus) categoryFocusMap[cat.name] = cat.focus;
+  }
+
   const groupedForPrompt = Object.values(grouped).map((g) => ({
     entity: g.entity,
     category: g.category,
+    categoryFocus: categoryFocusMap[g.category] || undefined,
     captureCount: g.captures.length,
     captures: g.captures.map((c) => ({
       type: c.type,
@@ -101,6 +110,9 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
       createdAt: c.createdAt,
     })),
   }));
+
+  const focusSummary = Object.entries(categoryFocusMap).map(([name, focus]) => `- ${name}: ${focus}`).join("\n");
+  const focusPromptSection = focusSummary ? `\n\nCategory focus areas (prioritise signals relevant to these):\n${focusSummary}` : "";
 
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
@@ -112,7 +124,7 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
     messages: [
       {
         role: "user",
-        content: `You are an intelligence analyst writing a weekly briefing for a product manager at Entrust, a company in the government identity verification space.
+        content: `You are an intelligence analyst writing a weekly briefing for a product manager at Entrust, a company in the government identity verification space.${focusPromptSection}
 Here is this week's captured intelligence grouped by entity:
 ${JSON.stringify(groupedForPrompt, null, 2)}
 

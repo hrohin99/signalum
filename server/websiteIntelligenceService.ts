@@ -436,6 +436,11 @@ async function regenerateSummary(userId: string, entityName: string, categoryNam
 
   if (entityCaptures.length === 0) return;
 
+  const workspace = await storage.getWorkspaceByUserId(userId);
+  const categories = (workspace?.categories || []) as ExtractedCategory[];
+  const categoryObj = categories.find(c => c.name === categoryName);
+  const focusContext = categoryObj?.focus ? `\nThis category has a specific focus: ${categoryObj.focus}. Prioritise signals relevant to this focus.` : "";
+
   const contentSnippets = entityCaptures
     .slice(0, 10)
     .map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
@@ -451,7 +456,7 @@ async function regenerateSummary(userId: string, entityName: string, categoryNam
     messages: [
       {
         role: "user",
-        content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a concise 2-3 sentence intelligence summary. Focus on what is known, key developments, and any notable patterns. Be direct and analytical — no filler.\n\nCaptured intel:\n${contentSnippets}\n\nReturn only the summary paragraph, no JSON, no formatting.`
+        content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a comprehensive strategic summary of 150-200 words covering: what this entity is doing, recent notable developments, strategic direction, and relevance to the government identity verification space. Use plain paragraphs, no bullet points. Be direct and analytical — no filler.${focusContext}\n\nCaptured intel:\n${contentSnippets}\n\nReturn only the summary paragraphs, no JSON, no formatting.`
       }
     ]
   });

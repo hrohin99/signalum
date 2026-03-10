@@ -4,12 +4,29 @@ import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   FolderOpen,
   Tag,
@@ -26,6 +43,10 @@ import {
   Target,
   Zap,
   AlertTriangle,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Type,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -375,6 +396,19 @@ function MapPageInner() {
   const [topAddTopicName, setTopAddTopicName] = useState("");
   const [topAddTopicType, setTopAddTopicType] = useState("general");
   const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
+  const [renameCategoryOpen, setRenameCategoryOpen] = useState(false);
+  const [renameCategoryOldName, setRenameCategoryOldName] = useState("");
+  const [renameCategoryNewName, setRenameCategoryNewName] = useState("");
+  const [editFocusOpen, setEditFocusOpen] = useState(false);
+  const [editFocusCategoryName, setEditFocusCategoryName] = useState("");
+  const [editFocusValue, setEditFocusValue] = useState("");
+  const [deleteCategoryOpen, setDeleteCategoryOpen] = useState(false);
+  const [deleteCategoryName, setDeleteCategoryName] = useState("");
+  const [renameTopicOpen, setRenameTopicOpen] = useState(false);
+  const [renameTopicOldName, setRenameTopicOldName] = useState("");
+  const [renameTopicNewName, setRenameTopicNewName] = useState("");
+  const [deleteTopicOpen, setDeleteTopicOpen] = useState(false);
+  const [deleteTopicName, setDeleteTopicName] = useState("");
 
   const queryEnabled = !!user?.id && !!session && !authLoading;
   console.log("WS: component mounted");
@@ -686,6 +720,100 @@ function MapPageInner() {
     },
   });
 
+  const renameCategoryMutation = useMutation({
+    mutationFn: async (data: { oldName: string; newName: string }) => {
+      const res = await apiRequest("PUT", `/api/categories/${encodeURIComponent(data.oldName)}`, {
+        name: data.newName,
+      });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      if (selectedCategory === variables.oldName) {
+        setSelectedCategory(variables.newName);
+      }
+      setRenameCategoryOpen(false);
+      toast({ title: "Category renamed", description: `Renamed to "${variables.newName}".` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const updateCategoryFocusMutation = useMutation({
+    mutationFn: async (data: { categoryName: string; focus: string }) => {
+      const res = await apiRequest("PUT", `/api/categories/${encodeURIComponent(data.categoryName)}`, {
+        focus: data.focus,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      setEditFocusOpen(false);
+      toast({ title: "Focus updated" });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryName: string) => {
+      const res = await apiRequest("DELETE", `/api/categories/${encodeURIComponent(categoryName)}`);
+      return res.json();
+    },
+    onSuccess: (_data, categoryName) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      if (selectedCategory === categoryName) {
+        setSelectedCategory(null);
+      }
+      setDeleteCategoryOpen(false);
+      toast({ title: "Category deleted", description: `"${categoryName}" and its topics have been removed.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const renameTopicMutation = useMutation({
+    mutationFn: async (data: { oldName: string; newName: string }) => {
+      const res = await apiRequest("PUT", `/api/topics/${encodeURIComponent(data.oldName)}`, {
+        name: data.newName,
+        categoryName: selectedCategory,
+      });
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      setRenameTopicOpen(false);
+      toast({ title: "Topic renamed", description: `Renamed to "${variables.newName}".` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteTopicMutation = useMutation({
+    mutationFn: async (entityName: string) => {
+      const res = await apiRequest("DELETE", `/api/topics/${encodeURIComponent(entityName)}`, {
+        categoryName: selectedCategory,
+      });
+      return res.json();
+    },
+    onSuccess: (_data, entityName) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
+      setDeleteTopicOpen(false);
+      toast({ title: "Topic deleted", description: `"${entityName}" has been removed.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   const handleCreateCategory = () => {
     const name = newCategoryName.trim();
     if (!name) return;
@@ -834,85 +962,144 @@ function MapPageInner() {
                 })()
               : null;
             return (
-              <button
+              <div
                 key={cat.name}
-                onClick={() => {
-                  setSelectedCategory(cat.name);
-                }}
-                className={`w-full text-left rounded-lg p-4 transition-all flex flex-col gap-2 group border ${
-                  isActive
-                    ? "bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md"
-                    : "bg-card border-border/50 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm"
-                }`}
-                data-testid={`button-category-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                className="relative group/cat"
               >
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
-                    style={isActive
-                      ? { backgroundColor: "rgba(255,255,255,0.2)" }
-                      : catColors
-                        ? { backgroundColor: catColors.bg }
-                        : { backgroundColor: "rgba(30,58,95,0.1)" }
-                    }
-                  >
-                    <FolderOpen
-                      className="w-4 h-4"
+                <button
+                  onClick={() => {
+                    setSelectedCategory(cat.name);
+                  }}
+                  className={`w-full text-left rounded-lg p-4 transition-all flex flex-col gap-2 group border ${
+                    isActive
+                      ? "bg-[#1e3a5f] text-white border-[#1e3a5f] shadow-md"
+                      : "bg-card border-border/50 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm"
+                  }`}
+                  data-testid={`button-category-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-9 h-9 rounded-md flex items-center justify-center shrink-0"
                       style={isActive
-                        ? { color: "white" }
+                        ? { backgroundColor: "rgba(255,255,255,0.2)" }
                         : catColors
-                          ? { color: catColors.icon }
-                          : { color: "#1e3a5f" }
+                          ? { backgroundColor: catColors.bg }
+                          : { backgroundColor: "rgba(30,58,95,0.1)" }
                       }
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className={`font-medium text-sm truncate ${isActive ? "text-white" : "text-foreground"}`}>
-                      {cat.name}
-                    </p>
-                    <p className={`text-xs mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
-                      {cat.entities.length} topics{count > 0 ? ` · ${count} updates this month` : ""}
-                    </p>
-                  </div>
-                  {catUrgency && (
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${urgencyDotColors[catUrgency]}`}
-                      data-testid={`dot-deadline-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
-                    />
-                  )}
-                  <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isActive ? "text-white/70" : "text-muted-foreground group-hover:translate-x-0.5"}`} />
-                </div>
-                {latestActivityText ? (
-                  <div className="pl-12">
-                    <p className={`text-[11px] italic truncate ${isActive ? "text-white/60" : "text-gray-400"}`}>
-                      {latestActivityText}
-                    </p>
-                  </div>
-                ) : cat.entities.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5 pl-12">
-                    {cat.entities.slice(0, 4).map((e) => {
-                      const typeInfo = topicTypeMap[e.topic_type || "general"] || topicTypeMap.general;
-                      return (
-                        <span
-                          key={e.name}
-                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            isActive
-                              ? "bg-white/15 text-white/80"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {typeInfo.icon} {e.name}
-                        </span>
-                      );
-                    })}
-                    {cat.entities.length > 4 && (
-                      <span className={`text-[10px] px-1.5 py-0.5 ${isActive ? "text-white/60" : "text-muted-foreground"}`}>
-                        +{cat.entities.length - 4} more
-                      </span>
+                    >
+                      <FolderOpen
+                        className="w-4 h-4"
+                        style={isActive
+                          ? { color: "white" }
+                          : catColors
+                            ? { color: catColors.icon }
+                            : { color: "#1e3a5f" }
+                        }
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-medium text-sm truncate ${isActive ? "text-white" : "text-foreground"}`}>
+                        {cat.name}
+                      </p>
+                      <p className={`text-xs mt-0.5 ${isActive ? "text-white/70" : "text-muted-foreground"}`}>
+                        {cat.entities.length} topics{count > 0 ? ` · ${count} updates this month` : ""}
+                      </p>
+                      {cat.focus && (
+                        <p className={`text-[11px] italic mt-0.5 truncate ${isActive ? "text-white/50" : "text-gray-400"}`} data-testid={`text-category-focus-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}>
+                          Focus: {cat.focus}
+                        </p>
+                      )}
+                    </div>
+                    {catUrgency && (
+                      <span
+                        className={`w-2.5 h-2.5 rounded-full shrink-0 ${urgencyDotColors[catUrgency]}`}
+                        data-testid={`dot-deadline-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      />
                     )}
+                    <ChevronRight className={`w-4 h-4 shrink-0 transition-transform ${isActive ? "text-white/70" : "text-muted-foreground group-hover:translate-x-0.5"}`} />
                   </div>
-                ) : null}
-              </button>
+                  {latestActivityText ? (
+                    <div className="pl-12">
+                      <p className={`text-[11px] italic truncate ${isActive ? "text-white/60" : "text-gray-400"}`}>
+                        {latestActivityText}
+                      </p>
+                    </div>
+                  ) : cat.entities.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5 pl-12">
+                      {cat.entities.slice(0, 4).map((e) => {
+                        const typeInfo = topicTypeMap[e.topic_type || "general"] || topicTypeMap.general;
+                        return (
+                          <span
+                            key={e.name}
+                            className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                              isActive
+                                ? "bg-white/15 text-white/80"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {typeInfo.icon} {e.name}
+                          </span>
+                        );
+                      })}
+                      {cat.entities.length > 4 && (
+                        <span className={`text-[10px] px-1.5 py-0.5 ${isActive ? "text-white/60" : "text-muted-foreground"}`}>
+                          +{cat.entities.length - 4} more
+                        </span>
+                      )}
+                    </div>
+                  ) : null}
+                </button>
+                <div className="absolute top-2 right-2 invisible group-hover/cat:visible" style={{ zIndex: 10 }}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className={`h-7 w-7 ${isActive ? "text-white/70 hover:text-white" : "text-muted-foreground"}`}
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`button-category-menu-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRenameCategoryOldName(cat.name);
+                          setRenameCategoryNewName(cat.name);
+                          setRenameCategoryOpen(true);
+                        }}
+                        data-testid={`menu-rename-category-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <Type className="w-4 h-4 mr-2" />
+                        Rename
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setEditFocusCategoryName(cat.name);
+                          setEditFocusValue(cat.focus || "");
+                          setEditFocusOpen(true);
+                        }}
+                        data-testid={`menu-edit-focus-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <Pencil className="w-4 h-4 mr-2" />
+                        Edit Focus
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setDeleteCategoryName(cat.name);
+                          setDeleteCategoryOpen(true);
+                        }}
+                        className="text-red-600 focus:text-red-600"
+                        data-testid={`menu-delete-category-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
             );
           })}
           {showNewCategoryInput ? (
@@ -961,6 +1148,11 @@ function MapPageInner() {
               <div className="mb-2">
                 <h2 className="text-lg font-semibold text-foreground">{activeCategory.name}</h2>
                 <p className="text-sm text-muted-foreground mt-0.5">{activeCategory.description}</p>
+                {activeCategory.focus && (
+                  <p className="text-xs italic text-gray-400 mt-1" data-testid="text-active-category-focus">
+                    Focus: {activeCategory.focus}
+                  </p>
+                )}
               </div>
 
               {justCreatedCategory === activeCategory.name && activeCategory.entities.length === 0 && (
@@ -1127,10 +1319,10 @@ function MapPageInner() {
                         : null;
 
                       return (
-                        <button
+                        <div
                           key={entity.name}
                           onClick={() => navigate(`/topic/${encodeURIComponent(effectiveCategory ?? "")}/${encodeURIComponent(entity?.name ?? "")}`)}
-                          className="w-full text-left rounded-lg bg-card border border-border/50 p-4 flex items-center gap-3 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm transition-all group"
+                          className="w-full text-left rounded-lg bg-card border border-border/50 p-4 flex items-center gap-3 hover:border-[#1e3a5f]/30 hover:bg-[#1e3a5f]/[0.03] hover:shadow-sm transition-all group cursor-pointer"
                           data-testid={`button-entity-${(entity?.name ?? "").toLowerCase().replace(/\s+/g, "-")}`}
                         >
                           <div
@@ -1165,8 +1357,44 @@ function MapPageInner() {
                               </span>
                             )}
                           </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                              <button
+                                className="invisible group-hover:visible p-1 rounded-md hover:bg-muted transition-colors shrink-0"
+                                data-testid={`button-topic-menu-${(entity?.name ?? "").toLowerCase().replace(/\s+/g, "-")}`}
+                              >
+                                <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRenameTopicOldName(entity.name);
+                                  setRenameTopicNewName(entity.name);
+                                  setRenameTopicOpen(true);
+                                }}
+                                data-testid={`menu-rename-topic-${(entity?.name ?? "").toLowerCase().replace(/\s+/g, "-")}`}
+                              >
+                                <Pencil className="w-4 h-4 mr-2" />
+                                Rename
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTopicName(entity.name);
+                                  setDeleteTopicOpen(true);
+                                }}
+                                className="text-red-600 focus:text-red-600"
+                                data-testid={`menu-delete-topic-${(entity?.name ?? "").toLowerCase().replace(/\s+/g, "-")}`}
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                           <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 group-hover:translate-x-0.5 transition-transform" />
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -1181,6 +1409,163 @@ function MapPageInner() {
           )}
         </div>
       </div>
+
+      <Dialog open={renameCategoryOpen} onOpenChange={setRenameCategoryOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Input
+              value={renameCategoryNewName}
+              onChange={(e) => setRenameCategoryNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameCategoryNewName.trim()) {
+                  renameCategoryMutation.mutate({ oldName: renameCategoryOldName, newName: renameCategoryNewName.trim() });
+                }
+              }}
+              placeholder="Category name"
+              data-testid="input-rename-category"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenameCategoryOpen(false)} data-testid="button-rename-category-cancel">
+                Cancel
+              </Button>
+              <Button
+                className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                disabled={!renameCategoryNewName.trim() || renameCategoryMutation.isPending}
+                onClick={() => renameCategoryMutation.mutate({ oldName: renameCategoryOldName, newName: renameCategoryNewName.trim() })}
+                data-testid="button-rename-category-confirm"
+              >
+                {renameCategoryMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Rename
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editFocusOpen} onOpenChange={setEditFocusOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Focus — {editFocusCategoryName}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <Textarea
+                value={editFocusValue}
+                onChange={(e) => {
+                  if (e.target.value.length <= 300) setEditFocusValue(e.target.value);
+                }}
+                placeholder="What should we pay attention to within this category? e.g. Digital ID policy, UK government procurement"
+                className="min-h-[80px] text-sm"
+                maxLength={300}
+                data-testid="input-edit-category-focus"
+              />
+              <p className="text-xs text-muted-foreground text-right mt-1" data-testid="text-focus-char-count">
+                {editFocusValue.length}/300
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditFocusOpen(false)} data-testid="button-edit-focus-cancel">
+                Cancel
+              </Button>
+              <Button
+                className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                disabled={updateCategoryFocusMutation.isPending}
+                onClick={() => updateCategoryFocusMutation.mutate({ categoryName: editFocusCategoryName, focus: editFocusValue.trim() })}
+                data-testid="button-edit-focus-confirm"
+              >
+                {updateCategoryFocusMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Save
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteCategoryOpen} onOpenChange={setDeleteCategoryOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteCategoryName}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the category, all its topics, and all captured updates associated with them. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-delete-category-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={deleteCategoryMutation.isPending}
+              onClick={() => deleteCategoryMutation.mutate(deleteCategoryName)}
+              data-testid="button-delete-category-confirm"
+            >
+              {deleteCategoryMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={renameTopicOpen} onOpenChange={setRenameTopicOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rename Topic</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <Input
+              value={renameTopicNewName}
+              onChange={(e) => setRenameTopicNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameTopicNewName.trim()) {
+                  renameTopicMutation.mutate({ oldName: renameTopicOldName, newName: renameTopicNewName.trim() });
+                }
+              }}
+              placeholder="Topic name"
+              data-testid="input-rename-topic"
+              autoFocus
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRenameTopicOpen(false)} data-testid="button-rename-topic-cancel">
+                Cancel
+              </Button>
+              <Button
+                className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                disabled={!renameTopicNewName.trim() || renameTopicMutation.isPending}
+                onClick={() => renameTopicMutation.mutate({ oldName: renameTopicOldName, newName: renameTopicNewName.trim() })}
+                data-testid="button-rename-topic-confirm"
+              >
+                {renameTopicMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Rename
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={deleteTopicOpen} onOpenChange={setDeleteTopicOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete "{deleteTopicName}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the topic and all captured updates associated with it. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-delete-topic-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 text-white hover:bg-red-700"
+              disabled={deleteTopicMutation.isPending}
+              onClick={() => deleteTopicMutation.mutate(deleteTopicName)}
+              data-testid="button-delete-topic-confirm"
+            >
+              {deleteTopicMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1306,11 +1306,17 @@ export default function CapturePage() {
                   />
                   <Textarea
                     value={intentNewCategoryFocus}
-                    onChange={(e) => setIntentNewCategoryFocus(e.target.value)}
+                    onChange={(e) => {
+                      if (e.target.value.length <= 300) setIntentNewCategoryFocus(e.target.value);
+                    }}
                     placeholder="What should we pay attention to within this category? e.g. Digital ID policy, UK government procurement"
                     className="min-h-[60px] text-sm"
+                    maxLength={300}
                     data-testid="input-intent-new-category-focus"
                   />
+                  <p className="text-xs text-muted-foreground text-right mt-1" data-testid="text-intent-focus-char-count">
+                    {intentNewCategoryFocus.length}/300
+                  </p>
                 </div>
               )}
             </div>
@@ -1743,11 +1749,17 @@ export default function CapturePage() {
               <label className="text-sm font-medium text-foreground mb-1.5 block">Focus <span className="text-muted-foreground font-normal">(optional)</span></label>
               <Textarea
                 value={newCatFocus}
-                onChange={(e) => setNewCatFocus(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value.length <= 300) setNewCatFocus(e.target.value);
+                }}
                 placeholder="What should we pay attention to within this category? e.g. Digital ID policy, UK government procurement"
                 className="min-h-[60px] text-sm"
+                maxLength={300}
                 data-testid="input-new-category-focus"
               />
+              <p className="text-xs text-muted-foreground text-right mt-1" data-testid="text-new-cat-focus-char-count">
+                {newCatFocus.length}/300
+              </p>
             </div>
           </div>
 
