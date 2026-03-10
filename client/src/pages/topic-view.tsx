@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import ReactMarkdown from 'react-markdown';
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -886,7 +887,7 @@ function SoWhatCard({ entity, categoryName, captureCount }: { entity: ExtractedE
             <span>Analyzing strategic implications...</span>
           </div>
         ) : entity.soWhatText ? (
-          <p className="text-sm leading-relaxed" data-testid="text-so-what-content">{entity.soWhatText}</p>
+          <ReactMarkdown className="prose prose-sm max-w-none text-sm leading-relaxed" data-testid="text-so-what-content">{entity.soWhatText}</ReactMarkdown>
         ) : captureCount < 3 ? (
           <p className="text-sm text-muted-foreground" data-testid="text-so-what-empty">
             Add at least 3 captures to generate strategic implications.
@@ -1005,9 +1006,9 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
             Unable to generate summary at this time. Try again later.
           </p>
         ) : (
-          <p className="text-[15px] text-foreground leading-relaxed" data-testid="text-ai-summary">
+          <ReactMarkdown className="prose prose-sm max-w-none text-[15px] text-foreground leading-relaxed" data-testid="text-ai-summary">
             {summaryData?.summary || `No updates available for ${entity.name} yet.`}
-          </p>
+          </ReactMarkdown>
         )}
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-4">
@@ -1187,9 +1188,9 @@ function StrategicDirectionCard({ entity, categoryName, captures }: { entity: Ex
                 Need at least 3 captures to generate strategic direction ({captureCount}/3 so far).
               </p>
             ) : direction?.whereHeading ? (
-              <p className="text-sm text-foreground leading-relaxed" data-testid="text-where-heading">
+              <ReactMarkdown className="prose prose-sm max-w-none text-sm text-foreground leading-relaxed" data-testid="text-where-heading">
                 {direction.whereHeading}
-              </p>
+              </ReactMarkdown>
             ) : (
               <p className="text-sm text-slate-400 italic">Unable to generate at this time.</p>
             )}
@@ -1223,9 +1224,9 @@ function StrategicDirectionCard({ entity, categoryName, captures }: { entity: Ex
                   <Skeleton className="h-4 w-2/3" />
                 </div>
               ) : direction?.whatMeansForYou ? (
-                <p className="text-sm text-foreground leading-relaxed" data-testid="text-what-means">
+                <ReactMarkdown className="prose prose-sm max-w-none text-sm text-foreground leading-relaxed" data-testid="text-what-means">
                   {direction.whatMeansForYou}
-                </p>
+                </ReactMarkdown>
               ) : !hasEnoughCaptures ? (
                 <p className="text-sm text-slate-400 italic">
                   Needs enough captures to generate insights.

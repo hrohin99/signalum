@@ -1203,7 +1203,14 @@ If no dates found, return { "extracted_dates": [] }.`
         messages: [
           {
             role: "user",
-            content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a comprehensive strategic summary of 150-200 words covering: what this entity is doing, recent notable developments, strategic direction, and relevance to the user's competitive landscape. Use plain paragraphs, no bullet points. Be direct and analytical — no filler.
+            content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a structured strategic summary covering: what this entity is and does, recent notable developments, strategic direction, and relevance to the government identity verification space.
+
+Use this format:
+One sentence overview of what this company is.
+
+Then 2-3 short paragraphs of 2-3 sentences each. Separate each paragraph with a blank line.
+
+Do not use bullet points. Do not use em dashes. Do not use headers. Return only the paragraphs.
 ${focusContext}
 Captured intel:
 ${contentSnippets}
@@ -1596,7 +1603,24 @@ Return only the summary paragraphs, no JSON, no formatting.`
         messages: [
           {
             role: "user",
-            content: `You are a strategic analyst. Given the following intelligence captures about "${entityName}", explain in 3-5 sentences what this means specifically for an organisation like Entrust that operates in the government identity verification space. Focus on competitive implications, risks, and opportunities. Be direct and opinionated — avoid vague statements.${focusContext}\n\nCaptures:\n${contentSnippets}\n\nReturn only the analysis paragraph, no JSON, no formatting.`
+            content: `You are a strategic analyst. Given the following intelligence captures about "${entityName}", provide a structured analysis of what this means for an organisation like Entrust in the government identity verification space.
+
+Use this exact format:
+
+**Threat level:** [one sentence on the competitive risk]
+
+**Key concerns:**
+- [concern 1]
+- [concern 2]
+- [concern 3]
+
+**Opportunities:**
+- [opportunity 1]
+- [opportunity 2]
+
+**Recommended action:** [one direct sentence on what Entrust should do]
+
+Do not use em dashes. Be direct and opinionated.${focusContext}\n\nCaptures:\n${contentSnippets}\n\nReturn only the structured analysis above, no JSON.`
           }
         ]
       });
@@ -2909,12 +2933,12 @@ Rules:
         max_tokens: 512,
         messages: [{
           role: "user",
-          content: `Based on these recent updates about ${entityName}, write 2-3 sentences describing their apparent strategic direction — what they are investing in, where they are expanding, and what this signals about their priorities.
+          content: `Based on these recent updates about ${entityName}, describe their strategic direction using 3-4 bullet points. Start each bullet with a strong verb: "Expanding...", "Doubling down on...", "Investing in...", "Pivoting toward...". One sentence per bullet. Do not use em dashes.
 
 Recent updates:
 ${contentSnippets}
 
-Return only the paragraph, no JSON, no formatting.`
+Return only the bullet points, no JSON, no headers.`
         }]
       });
 
@@ -2929,11 +2953,11 @@ Return only the paragraph, no JSON, no formatting.`
           max_tokens: 512,
           messages: [{
             role: "user",
-            content: `Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"} and weaknesses in ${prodContext.weaknesses || "certain areas"}, what does ${entityName}'s strategic direction mean for us? Be specific and actionable.
+            content: `Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"}, what does ${entityName}'s strategic direction mean for Entrust? Respond with 2-3 bullet points, one sentence each, starting with a strong verb. Do not use em dashes.
 
 ${entityName}'s strategic direction: ${whereHeading}
 
-Return only 1-2 sentences, no JSON, no formatting.`
+Return only the bullet points, no JSON, no headers.`
           }]
         });
 
