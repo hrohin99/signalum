@@ -17,8 +17,9 @@ function escapeHtml(str: string): string {
 interface BriefingEntity {
   name: string;
   category: string;
-  bullets: string[];
-  soWhat: string;
+  whatHappened: string[];
+  whyItMatters: string[];
+  watchFor: string;
   captureCount: number;
 }
 
@@ -125,18 +126,22 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
       {
         role: "user",
         content: `You are an intelligence analyst writing a weekly briefing for a product manager at Entrust, a company in the government identity verification space.${focusPromptSection}
+
+Do not use em dashes anywhere in your response. Use commas or plain sentences instead.
+
 Here is this week's captured intelligence grouped by entity:
 ${JSON.stringify(groupedForPrompt, null, 2)}
 
 Return a JSON object with this exact structure:
 {
-  "executiveSummary": "string (3-4 sentences, what moved this week overall, written for a busy PM)",
+  "executiveSummary": "Write 2-3 short paragraphs summarising the most important developments across all tracked entities this period. Each paragraph should cover one theme or pattern. Keep each paragraph to 2-3 sentences. No bullet points in the summary.",
   "entities": [
     {
       "name": "string",
       "category": "string",
-      "bullets": ["string (2-3 bullets, one sentence each, highest signal first)"],
-      "soWhat": "string (one sentence: what this means specifically for Entrust)",
+      "whatHappened": ["one sentence per bullet, 2-3 bullets, highest signal first"],
+      "whyItMatters": ["one sentence per bullet, 1-2 implications for Entrust"],
+      "watchFor": "one short sentence on what to monitor next",
       "captureCount": "number"
     }
   ]
@@ -190,7 +195,7 @@ export async function sendBriefingEmail(
 
   const formatDate = (d: Date) =>
     d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const dateRange = `${formatDate(weekAgo)} – ${formatDate(now)}`;
+  const dateRange = `${formatDate(weekAgo)} to ${formatDate(now)}`;
   const totalSignals = briefingData.entities.reduce((sum, e) => sum + e.captureCount, 0);
 
   const workspace = await storage.getWorkspaceByUserId(userId);
@@ -222,22 +227,34 @@ export async function sendBriefingEmail(
   const entityCardsHtml = briefingData.entities
     .sort((a, b) => b.captureCount - a.captureCount)
     .map((entity) => {
-      const bulletsHtml = entity.bullets
+      const whatHappenedHtml = (entity.whatHappened || [])
         .map(
           (b) =>
             `<div style="font-size:14px;color:#374151;margin-bottom:6px;">${sourceEmoji("web_search")} ${escapeHtml(b)}</div>`
         )
         .join("");
+      const whyItMattersHtml = (entity.whyItMatters || [])
+        .map(
+          (b) =>
+            `<div style="font-size:13px;color:#4b5563;margin-bottom:4px;">• ${escapeHtml(b)}</div>`
+        )
+        .join("");
+      const watchForHtml = entity.watchFor
+        ? `<div style="font-size:13px;color:#6b7280;margin-top:8px;">Watch for: ${escapeHtml(entity.watchFor)}</div>`
+        : "";
       return `
       <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <span style="font-weight:bold;font-size:16px;color:#1e293b;">${escapeHtml(entity.name)}</span>
           ${categoryBadge(entity.category)}
         </div>
-        ${bulletsHtml}
-        <div style="font-style:italic;font-size:13px;color:#6b7280;margin-top:8px;">→ So what for Entrust: ${escapeHtml(entity.soWhat)}</div>
+        <div style="font-weight:600;font-size:13px;color:#1e293b;margin-bottom:6px;">What happened</div>
+        ${whatHappenedHtml}
+        <div style="font-weight:600;font-size:13px;color:#1e293b;margin-top:10px;margin-bottom:6px;">Why it matters</div>
+        ${whyItMattersHtml}
+        ${watchForHtml}
         <div style="text-align:right;margin-top:8px;">
-          <a href="https://watchloom.rohin.co/topic/${encodeURIComponent(entity.name)}" style="font-size:12px;color:#3b82f6;text-decoration:none;">View full profile →</a>
+          <a href="https://watchloom.rohin.co/topic/${encodeURIComponent(entity.name)}" style="font-size:12px;color:#3b82f6;text-decoration:none;">View full profile</a>
         </div>
       </div>`;
     })
@@ -301,7 +318,7 @@ export async function sendBriefingEmail(
     await resend.emails.send({
       from: "rohin@rohin.co",
       to: toEmail,
-      subject: `Your Watchloom Brief — ${totalSignals} signals this week`,
+      subject: `Your Watchloom Brief, ${totalSignals} signals this week`,
       html,
     });
     return { success: true };

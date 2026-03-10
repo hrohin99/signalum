@@ -2310,7 +2310,7 @@ Rules:
           .slice(0, 5)
           .map((c, i) => `  [${i + 1}] (${c.type}) ${c.content.slice(0, 300)}`)
           .join("\n");
-        return `Entity: ${e.entityName} (${e.entityType}) — Category: ${e.categoryName}\nRecent intel (${entityCaptures.length} items):\n${snippets}`;
+        return `Entity: ${e.entityName} (${e.entityType}), Category: ${e.categoryName}\nRecent intel (${entityCaptures.length} items):\n${snippets}`;
       }).filter(Boolean);
 
       const briefingContext = entitySummaries.length > 0
@@ -2323,7 +2323,7 @@ Rules:
             const urgency = d.days_until < 0 ? "OVERDUE" : d.days_until <= 7 ? "SOON" : "UPCOMING";
             const rawDate = d.date instanceof Date ? d.date.toISOString().split("T")[0] : String(d.date).split("T")[0];
             const dateStr = new Date(rawDate + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-            return `- [${urgency}] ${d.label} for "${d.entityId}" — ${dateStr} (${d.days_until < 0 ? Math.abs(d.days_until) + " days overdue" : d.days_until + " days away"})`;
+            return `- [${urgency}] ${d.label} for "${d.entityId}", ${dateStr} (${d.days_until < 0 ? Math.abs(d.days_until) + " days overdue" : d.days_until + " days away"})`;
           }).join("\n")
         : "";
 
@@ -2337,14 +2337,36 @@ Rules:
             role: "user",
             content: `You are a senior intelligence analyst preparing a morning briefing for a decision-maker. Based on the intel items and entity data below, write a narrative daily intelligence brief.
 
+Do not use em dashes anywhere in your response. Use commas or plain sentences instead.
+
 Structure the brief as follows:
-1. **Executive Summary** — A 2-3 sentence high-level overview of the most important developments.
-2. **Key Developments** — A section for each category/entity that has notable activity. Use clear headers. For each, provide a short analytical paragraph synthesizing the captured intel.
-3. **Watch Items** — Any emerging patterns, risks, or items that deserve continued attention.
 
-Be direct, analytical, and concise. Write in a professional intelligence briefing style. Do not include any JSON or metadata — write pure narrative prose with markdown formatting. Do NOT use horizontal rules or separator lines (---) anywhere in the output. Use headings and spacing to separate sections instead.
+## Executive Summary
+Write 2-3 short paragraphs summarising the most important developments across all tracked entities this period. Each paragraph should cover one theme or pattern. Keep each paragraph to 2-3 sentences. No bullet points in the summary.
 
-If there are upcoming deadlines listed below, naturally weave them into the relevant sections of the narrative. For example, if a topic has a deadline approaching, mention the time pressure in the Key Developments or Watch Items section where that topic is discussed. Do not create a separate deadlines section — integrate them into the narrative flow.
+## Key Developments
+For each entity/topic with notable activity, use a ### heading with the entity name, then respond using this exact structure:
+
+**What happened**
+- [development 1]
+- [development 2]
+- [development 3 if relevant]
+
+**Why it matters**
+- [implication 1 for Entrust]
+- [implication 2 if relevant]
+
+**Watch for**
+[One short sentence on what to monitor next]
+
+Keep bullet points to one sentence each. Be direct. No vague statements.
+
+## Watch Items
+Any emerging patterns, risks, or items that deserve continued attention.
+
+Do not include any JSON or metadata. Write pure narrative prose with markdown formatting. Do NOT use horizontal rules or separator lines (---) anywhere in the output. Use headings and spacing to separate sections instead.
+
+If there are upcoming deadlines listed below, naturally weave them into the relevant sections of the narrative. For example, if a topic has a deadline approaching, mention the time pressure in the Key Developments or Watch Items section where that topic is discussed. Do not create a separate deadlines section, integrate them into the narrative flow.
 
 Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 

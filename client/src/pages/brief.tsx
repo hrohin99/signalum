@@ -5,111 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
+import ReactMarkdown from "react-markdown";
 import type { Brief, TopicDate, ExtractedCategory } from "@shared/schema";
 
 interface TopicDateWithDaysUntil extends TopicDate {
   days_until: number;
-}
-
-function MarkdownRenderer({ content }: { content: string }) {
-  const lines = content.split("\n");
-  const elements: JSX.Element[] = [];
-  let listItems: string[] = [];
-  let listType: "ul" | "ol" = "ul";
-  let key = 0;
-
-  function flushList() {
-    if (listItems.length > 0) {
-      const ListTag = listType === "ol" ? "ol" : "ul";
-      const listClass = listType === "ol" ? "list-decimal pl-5 mb-3 space-y-1" : "list-disc pl-5 mb-3 space-y-1";
-      elements.push(
-        <ListTag key={key++} className={listClass}>
-          {listItems.map((item, i) => (
-            <li key={i} className="text-sm text-foreground">{renderInline(item)}</li>
-          ))}
-        </ListTag>
-      );
-      listItems = [];
-      listType = "ul";
-    }
-  }
-
-  function renderInline(text: string) {
-    const parts: (string | JSX.Element)[] = [];
-    let remaining = text;
-    let idx = 0;
-    const regex = /\*\*(.+?)\*\*|\*(.+?)\*/g;
-    let match;
-    let lastIndex = 0;
-
-    while ((match = regex.exec(remaining)) !== null) {
-      if (match.index > lastIndex) {
-        parts.push(remaining.slice(lastIndex, match.index));
-      }
-      if (match[1]) {
-        parts.push(<strong key={idx++}>{match[1]}</strong>);
-      } else if (match[2]) {
-        parts.push(<em key={idx++}>{match[2]}</em>);
-      }
-      lastIndex = regex.lastIndex;
-    }
-    if (lastIndex < remaining.length) {
-      parts.push(remaining.slice(lastIndex));
-    }
-    return <>{parts}</>;
-  }
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    if (trimmed === "") {
-      flushList();
-      continue;
-    }
-
-    if (/^\s*([-*_])\1{2,}\s*$/.test(trimmed)) {
-      flushList();
-      continue;
-    }
-
-    if (trimmed.startsWith("### ")) {
-      flushList();
-      elements.push(
-        <h3 key={key++} className="text-base font-semibold mt-4 mb-2 text-foreground">
-          {renderInline(trimmed.slice(4))}
-        </h3>
-      );
-    } else if (trimmed.startsWith("## ")) {
-      flushList();
-      elements.push(
-        <h2 key={key++} className="text-lg font-semibold mt-5 mb-2 text-foreground">
-          {renderInline(trimmed.slice(3))}
-        </h2>
-      );
-    } else if (trimmed.startsWith("# ")) {
-      flushList();
-      elements.push(
-        <h1 key={key++} className="text-xl font-bold mt-6 mb-3 text-foreground">
-          {renderInline(trimmed.slice(2))}
-        </h1>
-      );
-    } else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-      listItems.push(trimmed.slice(2));
-    } else if (/^\d+\.\s/.test(trimmed)) {
-      if (listItems.length === 0) listType = "ol";
-      listItems.push(trimmed.replace(/^\d+\.\s/, ""));
-    } else {
-      flushList();
-      elements.push(
-        <p key={key++} className="text-sm text-foreground mb-3 leading-relaxed">
-          {renderInline(trimmed)}
-        </p>
-      );
-    }
-  }
-  flushList();
-
-  return <div>{elements}</div>;
 }
 
 function OnYourRadar({ deadlines, categories }: { deadlines: TopicDateWithDaysUntil[]; categories: ExtractedCategory[] }) {
@@ -319,7 +219,9 @@ export default function BriefPage() {
                 </div>
               </CardHeader>
               <CardContent data-testid={`text-brief-content-${brief.id}`}>
-                <MarkdownRenderer content={brief.content} />
+                <ReactMarkdown className="prose prose-sm max-w-none text-gray-700">
+                  {brief.content}
+                </ReactMarkdown>
               </CardContent>
             </Card>
           ))}
