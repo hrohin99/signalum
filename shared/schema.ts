@@ -259,7 +259,6 @@ export const monitoredUrls = pgTable("monitored_urls", {
   url: text("url").notNull(),
   urlCategory: text("url_category").notNull(),
   checkFrequency: text("check_frequency").notNull().default("daily"),
-  isActive: integer("is_active").notNull().default(1),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("monitored_urls_entity_id_idx").on(table.entityId),

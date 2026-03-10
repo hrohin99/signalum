@@ -48,14 +48,29 @@ export async function ensureDatabaseSchema(): Promise<void> {
         tenant_id UUID NOT NULL,
         entity_id TEXT NOT NULL,
         url TEXT NOT NULL,
-        label TEXT,
-        last_checked_at TIMESTAMP,
+        url_category TEXT NOT NULL DEFAULT 'custom',
+        check_frequency TEXT NOT NULL DEFAULT 'daily',
         created_at TIMESTAMP DEFAULT NOW() NOT NULL
       )
     `);
     console.log("[DBSafety] monitored_urls table verified.");
   } catch (error: any) {
     console.error("[DBSafety] Error ensuring monitored_urls table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      ALTER TABLE monitored_urls ADD COLUMN IF NOT EXISTS url_category TEXT NOT NULL DEFAULT 'custom';
+      ALTER TABLE monitored_urls ADD COLUMN IF NOT EXISTS check_frequency TEXT NOT NULL DEFAULT 'daily';
+    `);
+    console.log("[DBSafety] monitored_urls columns verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring monitored_urls columns:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`ALTER TABLE monitored_urls DROP COLUMN IF EXISTS is_active`);
+  } catch (error: any) {
   }
 
   try {
