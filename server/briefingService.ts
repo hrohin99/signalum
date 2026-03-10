@@ -96,7 +96,7 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
     captureCount: g.captures.length,
     captures: g.captures.map((c) => ({
       type: c.type,
-      content: c.content.substring(0, 500),
+      content: c.content?.slice(0, 200) ?? '',
       matchReason: c.matchReason,
       createdAt: c.createdAt,
     })),
@@ -108,7 +108,7 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
+    max_tokens: 4000,
     messages: [
       {
         role: "user",
@@ -137,16 +137,17 @@ Return only valid JSON, no markdown, no preamble.`,
   const textContent = response.content.find((c) => c.type === "text");
   if (!textContent || textContent.type !== "text") return null;
 
+  const responseText = textContent.text;
   let parsed: any;
   try {
-    parsed = JSON.parse(textContent.text);
-  } catch {
-    const jsonMatch = textContent.text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[0]);
-    } else {
-      return null;
-    }
+    const clean = responseText
+      .replace(/```json/g, '')
+      .replace(/```/g, '')
+      .trim();
+    parsed = JSON.parse(clean);
+  } catch (e) {
+    console.error('[briefing] JSON parse failed, raw response:', responseText.slice(0, 500));
+    throw new Error('Failed to parse briefing from AI response');
   }
 
   return {
