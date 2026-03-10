@@ -111,8 +111,8 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
     })),
   }));
 
-  const focusSummary = Object.entries(categoryFocusMap).map(([name, focus]) => `- ${name}: ${focus}`).join("\n");
-  const focusPromptSection = focusSummary ? `\n\nCategory focus areas (prioritise signals relevant to these):\n${focusSummary}` : "";
+  const focusSummary = Object.entries(categoryFocusMap).map(([name, focus]) => `- ${name}: Category focus: ${focus}. Only highlight developments relevant to this focus in the briefing summary.`).join("\n");
+  const focusPromptSection = focusSummary ? `\n\nThe user is specifically interested in the following focus areas for these categories. Prioritise and surface intelligence relevant to each focus. Deprioritise captures that are unrelated to them:\n${focusSummary}` : "";
 
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,

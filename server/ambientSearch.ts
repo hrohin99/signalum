@@ -95,19 +95,22 @@ export async function runAmbientSearchForUser(
         const isCommodity = entityType === "commodity";
         const isRegulation = entityType === "regulation";
 
+        const categoryFocus = category.focus || undefined;
+
         let findings;
         if (isCommodity) {
-          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "commodity" });
+          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "commodity", categoryFocus });
         } else if (isRegulation) {
-          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "regulation" });
+          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "regulation", categoryFocus });
         } else if (topicType === "competitor") {
           findings = await searchCompetitorNews(entity.name, category.name, lookbackDays, {
             websiteUrl,
             skipHiring: isLocalBusiness,
             skipFinancial: isLocalBusiness,
+            categoryFocus,
           });
         } else {
-          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl });
+          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, categoryFocus });
         }
 
         result.entitiesSearched++;

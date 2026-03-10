@@ -182,8 +182,12 @@ export async function searchCompetitorNews(
   competitorName: string,
   category: string,
   lookbackDays: number,
-  options?: { websiteUrl?: string; skipHiring?: boolean; skipFinancial?: boolean }
+  options?: { websiteUrl?: string; skipHiring?: boolean; skipFinancial?: boolean; categoryFocus?: string }
 ): Promise<PerplexityFinding[]> {
+  const searchName = options?.categoryFocus
+    ? `${competitorName} ${options.categoryFocus}`
+    : competitorName;
+
   const systemPrompt =
     "You are a competitive intelligence analyst. Return only factual, sourced information. Be concise and focus on commercially relevant developments. Return your findings as a JSON array with objects containing: summary (string), source_url (string or null), approximate_date (string or null), signal_strength (high/medium/low), and optionally signal_type (string, use \"hiring_signal\" for job postings or strategic hires). Return ONLY the JSON array, no other text.";
 
@@ -192,10 +196,11 @@ export async function searchCompetitorNews(
     try { sitePrefix = `site:${new URL(options.websiteUrl).hostname} OR `; } catch {}
   }
 
-  let userPrompt = `${sitePrefix}Find news, product updates, pricing changes${options?.skipFinancial ? "" : ", funding announcements"}, leadership changes, and notable developments about ${competitorName} in the ${category} space from the last ${lookbackDays} days. Return each finding as a separate item with: a one sentence summary, the source URL if available, and the approximate date. Focus on information that would be relevant to a competitor tracking this company.`;
+  let userPrompt = `${sitePrefix}Find news, product updates, pricing changes${options?.skipFinancial ? "" : ", funding announcements"}, leadership changes, and notable developments about ${searchName} in the ${category} space from the last ${lookbackDays} days. Return each finding as a separate item with: a one sentence summary, the source URL if available, and the approximate date. Focus on information that would be relevant to a competitor tracking this company.`;
 
   if (!options?.skipHiring) {
-    userPrompt += `\n\nAlso search for recent job postings or strategic hires at ${competitorName} from the last ${lookbackDays} days. Focus on leadership hires, AI/ML roles, and new market expansion roles as these signal strategic direction. If found, return as findings with signal_type: "hiring_signal".`;
+    const hiringFocusHint = options?.categoryFocus ? ` Prioritise roles related to ${options.categoryFocus}.` : "";
+    userPrompt += `\n\nAlso search for recent job postings or strategic hires at ${competitorName} from the last ${lookbackDays} days. Focus on leadership hires, AI/ML roles, and new market expansion roles as these signal strategic direction.${hiringFocusHint} If found, return as findings with signal_type: "hiring_signal".`;
   }
 
   const response = await callPerplexity(systemPrompt, userPrompt);
@@ -206,8 +211,12 @@ export async function searchTopicUpdates(
   topicName: string,
   topicType: string,
   lookbackDays: number,
-  options?: { websiteUrl?: string; entityType?: string }
+  options?: { websiteUrl?: string; entityType?: string; categoryFocus?: string }
 ): Promise<PerplexityFinding[]> {
+  const searchName = options?.categoryFocus
+    ? `${topicName} ${options.categoryFocus}`
+    : topicName;
+
   const systemPrompt =
     "You are an intelligence analyst. Return only factual, sourced information relevant to professional monitoring. Return your findings as a JSON array with objects containing: summary (string), source_url (string or null), approximate_date (string or null), signal_strength (high/medium/low). Return ONLY the JSON array, no other text.";
 
@@ -217,12 +226,12 @@ export async function searchTopicUpdates(
   }
 
   const promptMap: Record<string, string> = {
-    regulation: `${sitePrefix}Find updates, amendments, enforcement actions, compliance deadlines, and notable developments regarding ${topicName} from the last ${lookbackDays} days.`,
-    trend: `${sitePrefix}Find signals, data points, notable developments, and emerging examples related to ${topicName} from the last ${lookbackDays} days.`,
-    person: `${sitePrefix}Find public statements, role changes, publications, appearances, and notable activities by ${topicName} from the last ${lookbackDays} days.`,
-    technology: `${sitePrefix}Find product updates, adoption news, pricing changes, new use cases, and competitive developments related to ${topicName} from the last ${lookbackDays} days.`,
-    commodity: `${sitePrefix}Find current market prices, price movements, market news, and trading developments for ${topicName} from the last ${lookbackDays} days.`,
-    regulation_entity: `${sitePrefix}Find policy updates, regulatory changes, deadlines, and enforcement actions related to ${topicName} from the last ${lookbackDays} days.`,
+    regulation: `${sitePrefix}Find updates, amendments, enforcement actions, compliance deadlines, and notable developments regarding ${searchName} from the last ${lookbackDays} days.`,
+    trend: `${sitePrefix}Find signals, data points, notable developments, and emerging examples related to ${searchName} from the last ${lookbackDays} days.`,
+    person: `${sitePrefix}Find public statements, role changes, publications, appearances, and notable activities by ${searchName} from the last ${lookbackDays} days.`,
+    technology: `${sitePrefix}Find product updates, adoption news, pricing changes, new use cases, and competitive developments related to ${searchName} from the last ${lookbackDays} days.`,
+    commodity: `${sitePrefix}Find current market prices, price movements, market news, and trading developments for ${searchName} from the last ${lookbackDays} days.`,
+    regulation_entity: `${sitePrefix}Find policy updates, regulatory changes, deadlines, and enforcement actions related to ${searchName} from the last ${lookbackDays} days.`,
   };
 
   let effectiveType = topicType;
@@ -231,7 +240,7 @@ export async function searchTopicUpdates(
 
   const userPrompt =
     promptMap[effectiveType] ||
-    `${sitePrefix}Find recent news and notable developments related to ${topicName} from the last ${lookbackDays} days.`;
+    `${sitePrefix}Find recent news and notable developments related to ${searchName} from the last ${lookbackDays} days.`;
 
   const response = await callPerplexity(systemPrompt, userPrompt);
   return parseFindings(response);

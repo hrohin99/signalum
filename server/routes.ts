@@ -829,13 +829,17 @@ User's description: ${description}`
         const cat = (workspace.categories as ExtractedCategory[]).find(c => c.name === e.categoryName);
         const ent = cat?.entities.find(en => en.name === e.entityName);
         const topicType = ent?.topic_type || 'general';
-        return `- ${e.entityName} (${e.entityType}, topic_type: ${topicType}) in category "${e.categoryName}"`;
+        const focusPart = cat?.focus ? ` [category focus: ${cat.focus}]` : "";
+        return `- ${e.entityName} (${e.entityType}, topic_type: ${topicType}) in category "${e.categoryName}"${focusPart}`;
       }).join("\n");
 
       const client = getAnthropicClient();
 
       const categories = workspace.categories as ExtractedCategory[];
-      const categoryList = categories.map(c => `- "${c.name}": ${c.description}`).join("\n");
+      const categoryList = categories.map(c => {
+        const focusPart = c.focus ? ` (Focus: ${c.focus})` : "";
+        return `- "${c.name}": ${c.description}${focusPart}`;
+      }).join("\n");
 
       const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
@@ -854,7 +858,9 @@ If the captured content is a request, instruction, or question directed at the s
   "description": "A single sentence describing what this entity is, e.g. 'A European standard for injection attack detection in document verification systems.'"
 }
 
-If the content IS genuine intelligence (news, notes, observations, data about a topic), proceed with classification:
+If the content IS genuine intelligence (news, notes, observations, data about a topic), proceed with classification.
+
+When matching content to entities, pay attention to the category focus areas listed below. Prioritise matches that are relevant to the stated focus for each category. If a category has a focus, content that aligns with that focus should receive a higher confidence score.
 
 Available entities (with their current topic_type):
 ${entityList}
@@ -1296,11 +1302,12 @@ Return only the summary paragraphs, no JSON, no formatting.`
           const { searchCompetitorNews, searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
           const topicType = (safeTopicType || "general").toLowerCase();
           const searchContext = newEntity.disambiguation_context ? `${entityName} ${newEntity.disambiguation_context}` : entityName;
+          const catFocus = category?.focus || undefined;
           let findings;
           if (topicType === "competitor") {
-            findings = await searchCompetitorNews(searchContext, categoryName, 30);
+            findings = await searchCompetitorNews(searchContext, categoryName, 30, { categoryFocus: catFocus });
           } else {
-            findings = await searchTopicUpdates(searchContext, topicType, 30);
+            findings = await searchTopicUpdates(searchContext, topicType, 30, { categoryFocus: catFocus });
           }
           if (findings.length > 0) {
             const existingCaptures = await storage.getCapturesByUserId(userId);
@@ -1577,7 +1584,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
         .join("\n\n");
 
       const categoryObj = categories.find(c => c.name === categoryName);
-      const focusContext = categoryObj?.focus ? `\nThis category has a specific focus: ${categoryObj.focus}. Prioritise signals relevant to this focus.` : "";
+      const focusContext = categoryObj?.focus ? `\nThe user is specifically interested in the following focus area for this category: "${categoryObj.focus}". Prioritise and surface intelligence relevant to this focus. Deprioritise captures that are unrelated to it.` : "";
 
       const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
@@ -1990,7 +1997,8 @@ Rules:
         const { searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
         const topicType = (entity.topic_type || "general").toLowerCase();
         const searchQuery = `${entityName} ${disambiguation_context}`;
-        const findings = await searchTopicUpdates(searchQuery, topicType, 30, { websiteUrl: newWebsiteUrl || entity.website_url || undefined });
+        const disambigFocus = category.focus || undefined;
+        const findings = await searchTopicUpdates(searchQuery, topicType, 30, { websiteUrl: newWebsiteUrl || entity.website_url || undefined, categoryFocus: disambigFocus });
 
         if (findings.length > 0) {
           const thirtyDaysAgo = new Date();
@@ -2182,12 +2190,13 @@ Rules:
               try {
                 const topicType = (entity.topic_type || "general").toLowerCase();
                 const lookbackDays = 90;
+                const seedFocus = category.focus || undefined;
 
                 let findings;
                 if (topicType === "competitor") {
-                  findings = await searchCompetitorNews(entity.name, category.name, lookbackDays);
+                  findings = await searchCompetitorNews(entity.name, category.name, lookbackDays, { categoryFocus: seedFocus });
                 } else {
-                  findings = await searchTopicUpdates(entity.name, topicType, lookbackDays);
+                  findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { categoryFocus: seedFocus });
                 }
 
                 const existingCaptures = await storage.getCapturesByUserId(userId);
@@ -2340,7 +2349,10 @@ If there are upcoming deadlines listed below, naturally weave them into the rele
 Today's date: ${new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
 
 Categories being tracked:
-${categories.map(c => `- ${c.name}: ${c.description}`).join("\n")}
+${categories.map(c => {
+              const focusPart = c.focus ? ` (Category focus: ${c.focus}. Only highlight developments relevant to this focus in the briefing summary.)` : "";
+              return `- ${c.name}: ${c.description}${focusPart}`;
+            }).join("\n")}
 
 Intel data:
 ${briefingContext}${deadlineContext}
@@ -3175,12 +3187,17 @@ Return only 1-2 sentences, no JSON, no formatting.`
 
       const { searchCompetitorNews, searchTopicUpdates, deduplicateFindings, findingsToCaptures } = await import("./perplexityService");
 
+      const manualSearchWorkspace = await storage.getWorkspaceByUserId(userId);
+      const manualSearchCategories = (manualSearchWorkspace?.categories || []) as ExtractedCategory[];
+      const manualSearchCat = manualSearchCategories.find(c => c.name === categoryName);
+      const manualSearchFocus = manualSearchCat?.focus || undefined;
+
       const type = (topicType || "general").toLowerCase();
       let findings;
       if (type === "competitor") {
-        findings = await searchCompetitorNews(entityName, categoryName || "General", 30);
+        findings = await searchCompetitorNews(entityName, categoryName || "General", 30, { categoryFocus: manualSearchFocus });
       } else {
-        findings = await searchTopicUpdates(entityName, type, 30);
+        findings = await searchTopicUpdates(entityName, type, 30, { categoryFocus: manualSearchFocus });
       }
 
       const thirtyDaysAgo = new Date();

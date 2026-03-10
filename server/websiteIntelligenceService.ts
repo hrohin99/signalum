@@ -33,6 +33,11 @@ export async function runWebsiteIntelligenceExtraction(
   activeJobs.set(key, { status: "running" });
 
   try {
+    const workspace = await storage.getWorkspaceByUserId(userId);
+    const wsCategories = (workspace?.categories || []) as ExtractedCategory[];
+    const parentCategory = wsCategories.find(c => c.name === categoryName);
+    const categoryFocus = parentCategory?.focus || undefined;
+
     const normalizedUrl = normalizeUrl(websiteUrl).replace(/\/+$/, "");
 
     const discoveredUrls = await discoverPages(normalizedUrl);
@@ -50,7 +55,7 @@ export async function runWebsiteIntelligenceExtraction(
       return;
     }
 
-    const intelligence = await extractIntelligence(entityName, pageContents);
+    const intelligence = await extractIntelligence(entityName, pageContents, categoryFocus);
     if (!intelligence) {
       activeJobs.set(key, { status: "completed", completedAt: Date.now(), noDataFound: true });
       return;
@@ -270,11 +275,16 @@ interface WebsiteIntelligence {
 
 async function extractIntelligence(
   entityName: string,
-  pages: { url: string; content: string }[]
+  pages: { url: string; content: string }[],
+  categoryFocus?: string
 ): Promise<WebsiteIntelligence | null> {
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
+
+  const focusInstruction = categoryFocus
+    ? `The user is specifically interested in the following focus area for this category: "${categoryFocus}". Prioritise and surface intelligence relevant to this focus. Deprioritise captures that are unrelated to it.\n\n`
+    : "";
 
   const pagesText = pages.map((p, i) => `--- Page ${i + 1}: ${p.url} ---\n${p.content}`).join("\n\n");
 
@@ -284,7 +294,7 @@ async function extractIntelligence(
     messages: [
       {
         role: "user",
-        content: `Extract structured intelligence from these website pages for ${entityName}. Return JSON with these fields: services (array of objects with name, price if found, description), team_size_signal (text, e.g. solo practitioner / small team / large team), locations (array), founded_year (if found), key_differentiators (array of short phrases), current_promotions (array), recent_blog_topics (array of titles). Only include fields where data was actually found. Do not fabricate.\n\nPages:\n${pagesText}`
+        content: `${focusInstruction}Extract structured intelligence from these website pages for ${entityName}. Return JSON with these fields: services (array of objects with name, price if found, description), team_size_signal (text, e.g. solo practitioner / small team / large team), locations (array), founded_year (if found), key_differentiators (array of short phrases), current_promotions (array), recent_blog_topics (array of titles). Only include fields where data was actually found. Do not fabricate.\n\nPages:\n${pagesText}`
       }
     ],
   });
@@ -439,7 +449,7 @@ async function regenerateSummary(userId: string, entityName: string, categoryNam
   const workspace = await storage.getWorkspaceByUserId(userId);
   const categories = (workspace?.categories || []) as ExtractedCategory[];
   const categoryObj = categories.find(c => c.name === categoryName);
-  const focusContext = categoryObj?.focus ? `\nThis category has a specific focus: ${categoryObj.focus}. Prioritise signals relevant to this focus.` : "";
+  const focusContext = categoryObj?.focus ? `\nThe user is specifically interested in the following focus area for this category: "${categoryObj.focus}". Prioritise and surface intelligence relevant to this focus. Deprioritise captures that are unrelated to it.` : "";
 
   const contentSnippets = entityCaptures
     .slice(0, 10)
