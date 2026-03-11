@@ -116,10 +116,28 @@ export async function ensureDatabaseSchema(): Promise<void> {
     await db.execute(sql`
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS user_perspective TEXT;
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS tracking_types TEXT[];
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS tracking_intent TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS org_description TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS org_market TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS org_geographies TEXT[];
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS org_size TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS user_role TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS competitors TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS win_factors TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS vulnerability TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS early_warning_signal TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS regulations_monitored TEXT[];
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS regulatory_bodies TEXT[];
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS compliance_purpose TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS standards_bodies TEXT[];
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS standards_certified TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS standards_purpose TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_audience TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarding_completed BOOLEAN DEFAULT false;
     `);
-    console.log("[DBSafety] user_perspective and tracking_types columns verified.");
+    console.log("[DBSafety] workspace profile columns verified.");
   } catch (error: any) {
-    console.error("[DBSafety] Error ensuring user_perspective/tracking_types columns:", error?.message || error);
+    console.error("[DBSafety] Error ensuring workspace profile columns:", error?.message || error);
   }
 
   console.log("[DBSafety] All database schema safety checks complete.");

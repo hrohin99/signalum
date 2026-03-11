@@ -66,22 +66,50 @@ function AppContent() {
     onboardingInProgress.current = true;
 
     setCheckingOnboarding(true);
-    fetch(`/api/workspace/${user.id}`, {
-      credentials: "include",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
-    })
-      .then((res) => {
-        if (res.ok) return res.json();
-        return null;
-      })
-      .then(async (data) => {
-        if (data && data.exists) {
+
+    (async () => {
+      try {
+        const profileRes = await fetch("/api/workspace/profile", {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          if (profileData.onboarding_completed === true || profileData.onboarding_completed === "true") {
+            checkedUserId.current = user.id;
+            onboardingInProgress.current = false;
+            setHasCompletedOnboarding(true);
+            localStorage.removeItem("pendingOnboarding");
+            setCheckingOnboarding(false);
+            initialLoadComplete.current = true;
+            return;
+          }
+        }
+
+        const wsRes = await fetch(`/api/workspace/${user.id}`, {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+
+        let wsData = null;
+        if (wsRes.ok) {
+          wsData = await wsRes.json();
+        }
+
+        if (wsData && wsData.exists) {
+          if (profileRes.ok) {
+            checkedUserId.current = user.id;
+            onboardingInProgress.current = false;
+            setHasCompletedOnboarding(false);
+            setCheckingOnboarding(false);
+            initialLoadComplete.current = true;
+            return;
+          }
+
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
-          setHasCompletedOnboarding(true);
-          localStorage.removeItem("pendingOnboarding");
+          setHasCompletedOnboarding(false);
           setCheckingOnboarding(false);
           initialLoadComplete.current = true;
           return;
@@ -193,7 +221,6 @@ function AppContent() {
             setAutoOnboarding(false);
             initialLoadComplete.current = true;
 
-            // Check if any competitor entities were created
             const competitorNames = categoriesWithWebsites
               .flatMap((cat: any) => cat.entities || [])
               .filter((e: any) => e.topic_type === "competitor" && !e.website_url)
@@ -202,7 +229,7 @@ function AppContent() {
             if (competitorNames.length > 0) {
               setPendingCompetitorUrls(competitorNames);
             } else {
-              setHasCompletedOnboarding(true);
+              setHasCompletedOnboarding(false);
             }
             return;
           } catch {
@@ -218,13 +245,13 @@ function AppContent() {
         setHasCompletedOnboarding(false);
         setCheckingOnboarding(false);
         initialLoadComplete.current = true;
-      })
-      .catch(() => {
+      } catch {
         onboardingInProgress.current = false;
         setHasCompletedOnboarding(false);
         setCheckingOnboarding(false);
         initialLoadComplete.current = true;
-      });
+      }
+    })();
   }, [user, session]);
 
   const showInitialSpinner = !initialLoadComplete.current && (loading || checkingOnboarding || autoOnboarding);
@@ -272,13 +299,11 @@ function AppContent() {
         onComplete={async (entries) => {
           if (entries.length > 0) {
             try {
-              // Fetch current workspace to get category names
               const wsRes = await apiRequest("GET", "/api/workspace/current");
               const wsData = await wsRes.json();
               const categories = wsData?.workspace?.categories || [];
 
               for (const entry of entries) {
-                // Find which category this competitor belongs to
                 let categoryName: string | null = null;
                 for (const cat of categories) {
                   const found = (cat.entities || []).find(
@@ -299,13 +324,13 @@ function AppContent() {
             }
           }
           setPendingCompetitorUrls(null);
-          setHasCompletedOnboarding(true);
+          setHasCompletedOnboarding(false);
         }}
       />
     );
   }
 
-  if (!hasCompletedOnboarding) {
+  if (hasCompletedOnboarding === false) {
     return (
       <OnboardingPage
         onComplete={() => {
@@ -313,19 +338,42 @@ function AppContent() {
           queryClient.invalidateQueries({ queryKey: ["/api/workspace", user.id] });
           queryClient.invalidateQueries({ queryKey: ["/api/workspace"] });
           queryClient.removeQueries({ queryKey: ["/api/workspace", user.id] });
+          queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
           initialLoadComplete.current = true;
           setHasCompletedOnboarding(true);
-          const redirectPath = "/";
-          console.log("ONBOARDING REDIRECT TO:", redirectPath);
-          window.location.href = redirectPath;
+          setLocation("/");
         }}
       />
     );
   }
 
-  return <Dashboard />;
+  if (hasCompletedOnboarding !== true) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <Switch>
+      <Route path="/onboarding">
+        <OnboardingPage
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
+            checkedUserId.current = null;
+            setHasCompletedOnboarding(null);
+            setLocation("/");
+          }}
+        />
+      </Route>
+      <Route>
+        <Dashboard />
+      </Route>
+    </Switch>
+  );
 }
 
 function App() {
