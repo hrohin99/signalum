@@ -2885,6 +2885,24 @@ Rules:
         return res.status(400).json({ message: "No valid fields provided" });
       }
 
+      const existing = await storage.getWorkspaceByUserId(userId);
+      if (!existing) {
+        try {
+          await storage.createWorkspace({
+            id: randomUUID(),
+            userId,
+            categories: [],
+            websiteUrl: null,
+            pendingSeedUrls: null,
+          });
+          console.log("[workspace/profile] Auto-created blank workspace for user", userId);
+        } catch (createErr: any) {
+          if (createErr?.code !== "23505") {
+            throw createErr;
+          }
+        }
+      }
+
       values.push(userId);
       const query = `UPDATE workspaces SET ${setClauses.join(", ")} WHERE user_id = $${paramIndex} RETURNING *`;
       const result = await pool.query(query, values);
@@ -2985,16 +3003,32 @@ Rules:
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const workspace = await storage.getWorkspaceByUserId(userId);
-    const catCount = workspace && Array.isArray((workspace as any).categories) ? (workspace as any).categories.length : 0;
-    console.log("WORKSPACE API: categories found =", catCount);
-
-    if (workspace) {
-      return res.json({ exists: true, workspace });
+    const existing = await storage.getWorkspaceByUserId(userId);
+    if (!existing) {
+      try {
+        const newWorkspace = await storage.createWorkspace({
+          id: randomUUID(),
+          userId,
+          categories: [],
+          websiteUrl: null,
+          pendingSeedUrls: null,
+        });
+        console.log("WORKSPACE API: auto-created blank workspace for user", userId);
+        return res.json({ exists: true, workspace: newWorkspace });
+      } catch (createErr: any) {
+        if (createErr?.code === "23505") {
+          const raceWorkspace = await storage.getWorkspaceByUserId(userId);
+          if (raceWorkspace) {
+            return res.json({ exists: true, workspace: raceWorkspace });
+          }
+        }
+        console.error("WORKSPACE API: failed to auto-create workspace:", createErr?.message || createErr);
+        return res.status(500).json({ message: "Failed to create workspace" });
+      }
     }
-
-    console.log("WORKSPACE API: no workspace found for user", userId);
-    return res.json({ exists: false });
+    const catCount = Array.isArray((existing as any).categories) ? (existing as any).categories.length : 0;
+    console.log("WORKSPACE API: categories found =", catCount);
+    return res.json({ exists: true, workspace: existing });
   });
 
   app.get("/api/workspace-context", requireAuth, async (req: Request, res: Response) => {
