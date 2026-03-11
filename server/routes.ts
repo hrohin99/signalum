@@ -2893,7 +2893,82 @@ Rules:
         return res.status(404).json({ message: "Workspace not found" });
       }
 
-      return res.json(result.rows[0]);
+      const savedWorkspace = result.rows[0];
+
+      if (req.body.onboardingCompleted === true) {
+        try {
+          const workspace = await storage.getWorkspaceByUserId(userId);
+          if (workspace) {
+            const existingCategories = (workspace.categories as ExtractedCategory[]) || [];
+            if (existingCategories.length === 0) {
+              const newCategories: ExtractedCategory[] = [];
+              const trackingTypes: string[] = Array.isArray(savedWorkspace.tracking_types) ? savedWorkspace.tracking_types : [];
+              const competitors: string[] = Array.isArray(savedWorkspace.competitors) ? savedWorkspace.competitors : [];
+              const regulationsMonitored: string[] = Array.isArray(savedWorkspace.regulations_monitored) ? savedWorkspace.regulations_monitored : [];
+              const standardsCertified: string[] = Array.isArray(savedWorkspace.standards_certified) ? savedWorkspace.standards_certified : [];
+
+              if (trackingTypes.includes("competitors") && competitors.length > 0) {
+                newCategories.push({
+                  name: "Competitors",
+                  description: "Companies competing in your market",
+                  entities: competitors.map(name => ({
+                    name,
+                    type: "company",
+                    topic_type: "competitor",
+                    related_topic_ids: [],
+                    priority: "medium" as const,
+                  })),
+                });
+              }
+
+              if (trackingTypes.includes("regulations") && regulationsMonitored.length > 0) {
+                newCategories.push({
+                  name: "Regulations & Policy",
+                  description: "Regulatory frameworks and policies relevant to your organisation",
+                  entities: regulationsMonitored.map(name => ({
+                    name,
+                    type: "regulation",
+                    topic_type: "regulation",
+                    related_topic_ids: [],
+                    priority: "medium" as const,
+                  })),
+                });
+              }
+
+              if (trackingTypes.includes("standards") && standardsCertified.length > 0) {
+                newCategories.push({
+                  name: "Standards & Certifications",
+                  description: "Industry standards and certifications you track",
+                  entities: standardsCertified.map(name => ({
+                    name,
+                    type: "topic",
+                    topic_type: "standard",
+                    related_topic_ids: [],
+                    priority: "medium" as const,
+                  })),
+                });
+              }
+
+              if (trackingTypes.includes("trends")) {
+                newCategories.push({
+                  name: "Industry Trends",
+                  description: "Emerging trends and developments in your industry",
+                  entities: [],
+                });
+              }
+
+              if (newCategories.length > 0) {
+                await storage.updateWorkspaceCategories(userId, newCategories);
+                console.log(`[workspace/profile] Auto-created ${newCategories.length} starter categories for user ${userId}`);
+              }
+            }
+          }
+        } catch (setupError: any) {
+          console.error("[workspace/profile] Starter category creation error:", setupError?.message || setupError);
+        }
+      }
+
+      return res.json(savedWorkspace);
     } catch (error: any) {
       console.error("[workspace/profile] PUT error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });

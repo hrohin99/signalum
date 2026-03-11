@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, User, Pencil, Package, Mail, Search, Bell, GripVertical, X, Plus, Loader2, Crosshair, UserCog } from "lucide-react";
+import { LogOut, User, Pencil, Package, Mail, Search, Bell, GripVertical, X, Plus, Loader2, Crosshair, UserCog, Globe, AlertTriangle, Building2, Shield, Award, TrendingUp } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { useLocation } from "wouter";
 import type { WorkspaceCapability } from "@shared/schema";
@@ -283,6 +284,204 @@ function CapabilitiesCard() {
   );
 }
 
+const PERSPECTIVE_LABELS: Record<string, string> = {
+  vendor: "Product or Technology Vendor",
+  business_owner: "Business Owner or Founder",
+  government: "Government or Public Sector",
+  analyst: "Analyst, Consultant, or Advisor",
+  sales: "Sales or Business Development",
+};
+
+const TRACKING_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
+  competitors: { label: "Competitors", color: "bg-blue-100 text-blue-800" },
+  regulations: { label: "Regulations & Policy", color: "bg-amber-100 text-amber-800" },
+  standards: { label: "Standards & Certifications", color: "bg-green-100 text-green-800" },
+  trends: { label: "Technology Trends", color: "bg-purple-100 text-purple-800" },
+};
+
+function WorkspaceProfileCard() {
+  const [, setLocation] = useLocation();
+  const { data: profile, isLoading } = useQuery<any>({
+    queryKey: ["/api/workspace/profile"],
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const hasProfile = profile?.onboarding_completed;
+
+  if (!hasProfile) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
+              <UserCog className="w-5 h-5 text-[#1e3a5f]" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-medium text-foreground" data-testid="text-workspace-profile-header">Workspace Profile</h3>
+              <p className="text-sm text-muted-foreground">Complete onboarding to set up your workspace profile.</p>
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setLocation("/onboarding?edit=true")}
+            className="w-full"
+            data-testid="button-edit-workspace-profile"
+          >
+            <Pencil className="w-4 h-4 mr-2" />
+            Set up workspace profile
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const perspective = profile.user_perspective || "";
+  const orgDescription = profile.org_description || "";
+  const geographies: string[] = Array.isArray(profile.org_geographies) ? profile.org_geographies : [];
+  const trackingTypes: string[] = Array.isArray(profile.tracking_types) ? profile.tracking_types : [];
+  const competitors: string[] = Array.isArray(profile.competitors) ? profile.competitors : [];
+  const regulationsMonitored: string[] = Array.isArray(profile.regulations_monitored) ? profile.regulations_monitored : [];
+  const standardsCertified: string[] = Array.isArray(profile.standards_certified) ? profile.standards_certified : [];
+  const earlyWarning = profile.early_warning_signal || "";
+
+  return (
+    <Card>
+      <CardContent className="p-6">
+        <div className="flex items-center gap-4 mb-5">
+          <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
+            <UserCog className="w-5 h-5 text-[#1e3a5f]" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-medium text-foreground" data-testid="text-workspace-profile-header">My Profile</h3>
+            <p className="text-sm text-muted-foreground">Your perspective, tracking preferences, and organisation context.</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {perspective && (
+            <div data-testid="profile-perspective">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Perspective</Label>
+              <p className="text-sm font-medium mt-1">{PERSPECTIVE_LABELS[perspective] || perspective}</p>
+            </div>
+          )}
+
+          {orgDescription && (
+            <div data-testid="profile-org-description">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Organisation</Label>
+              <p className="text-sm mt-1">{orgDescription}</p>
+            </div>
+          )}
+
+          {geographies.length > 0 && (
+            <div data-testid="profile-geographies">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Geographies</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {geographies.map((geo) => (
+                  <span key={geo} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-slate-100 text-slate-700">
+                    <Globe className="w-3 h-3" />
+                    {geo}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {trackingTypes.length > 0 && (
+            <div data-testid="profile-tracking-types">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Tracking</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {trackingTypes.map((tt) => {
+                  const config = TRACKING_TYPE_CONFIG[tt];
+                  return (
+                    <Badge key={tt} variant="secondary" className={`text-xs font-normal ${config?.color || "bg-slate-100 text-slate-700"}`} data-testid={`badge-tracking-${tt}`}>
+                      {config?.label || tt}
+                    </Badge>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {competitors.length > 0 && (
+            <div data-testid="profile-competitors">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Competitors</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {competitors.map((c) => (
+                  <span key={c} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-blue-50 text-blue-700">
+                    <Building2 className="w-3 h-3" />
+                    {c}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {regulationsMonitored.length > 0 && (
+            <div data-testid="profile-regulations">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Regulations Monitored</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {regulationsMonitored.map((r) => (
+                  <span key={r} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-amber-50 text-amber-700">
+                    <Shield className="w-3 h-3" />
+                    {r}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {standardsCertified.length > 0 && (
+            <div data-testid="profile-standards">
+              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Standards & Certifications</Label>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {standardsCertified.map((s) => (
+                  <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-green-50 text-green-700">
+                    <Award className="w-3 h-3" />
+                    {s}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {earlyWarning && (
+            <div className="mt-4 p-3 rounded-lg bg-orange-50 border border-orange-200" data-testid="profile-early-warning">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <Label className="text-xs text-orange-700 uppercase tracking-wide font-medium">Early Warning Signal</Label>
+                  <p className="text-sm text-orange-800 mt-0.5">{earlyWarning}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Button
+          variant="outline"
+          onClick={() => setLocation("/onboarding?edit=true")}
+          className="w-full mt-5"
+          data-testid="button-edit-workspace-profile"
+        >
+          <Pencil className="w-4 h-4 mr-2" />
+          Edit profile
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
@@ -403,28 +602,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
-                <UserCog className="w-5 h-5 text-[#1e3a5f]" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-medium text-foreground" data-testid="text-workspace-profile-header">Workspace Profile</h3>
-                <p className="text-sm text-muted-foreground">Your perspective, tracking preferences, and organisation context.</p>
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => setLocation("/onboarding?edit=true")}
-              className="w-full"
-              data-testid="button-edit-workspace-profile"
-            >
-              <Pencil className="w-4 h-4 mr-2" />
-              Edit workspace profile
-            </Button>
-          </CardContent>
-        </Card>
+        <WorkspaceProfileCard />
 
         <Card>
           <CardContent className="p-6">
