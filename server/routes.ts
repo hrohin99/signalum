@@ -4074,7 +4074,12 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       const userId = (req as any).userId;
       const result = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
       if (result.rows.length === 0) {
-        return res.status(404).json({ message: "Workspace not found" });
+        const newId = randomUUID();
+        const createResult = await pool.query(
+          "INSERT INTO workspaces (id, user_id, categories, onboarding_completed) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id RETURNING *",
+          [newId, userId, JSON.stringify([]), false]
+        );
+        return res.json(createResult.rows[0]);
       }
       return res.json(result.rows[0]);
     } catch (error: any) {

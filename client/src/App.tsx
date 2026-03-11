@@ -85,54 +85,7 @@ function AppContent() {
           profileData = null;
         }
 
-        if (profileData && (profileData.onboarding_completed === true || profileData.onboarding_completed === "true")) {
-          checkedUserId.current = user.id;
-          onboardingInProgress.current = false;
-          setHasCompletedOnboarding(true);
-          localStorage.removeItem("pendingOnboarding");
-          setCheckingOnboarding(false);
-          initialLoadComplete.current = true;
-          return;
-        }
-
-        if (profileData) {
-          const categories = profileData.categories;
-          const hasExistingData = Array.isArray(categories) && categories.length > 0 &&
-            categories.some((cat: any) => Array.isArray(cat.entities) && cat.entities.length > 0);
-
-          if (hasExistingData) {
-            try {
-              await fetch("/api/workspace/profile", {
-                method: "PUT",
-                credentials: "include",
-                headers: {
-                  Authorization: `Bearer ${session.access_token}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ onboardingCompleted: true }),
-              });
-            } catch {}
-
-            checkedUserId.current = user.id;
-            onboardingInProgress.current = false;
-            setHasCompletedOnboarding(true);
-            localStorage.removeItem("pendingOnboarding");
-            setCheckingOnboarding(false);
-            initialLoadComplete.current = true;
-            return;
-          }
-        }
-
-        if (!profileRes) {
-          checkedUserId.current = user.id;
-          onboardingInProgress.current = false;
-          setHasCompletedOnboarding(true);
-          setCheckingOnboarding(false);
-          initialLoadComplete.current = true;
-          return;
-        }
-
-        if (profileRes.status === 404) {
+        if (!profileRes || !profileRes.ok || !profileData) {
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
           setHasCompletedOnboarding(false);
@@ -141,51 +94,14 @@ function AppContent() {
           return;
         }
 
-        if (!profileRes.ok) {
+        if (profileData.onboarding_completed === true || profileData.onboarding_completed === "true") {
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
           setHasCompletedOnboarding(true);
+          localStorage.removeItem("pendingOnboarding");
           setCheckingOnboarding(false);
           initialLoadComplete.current = true;
           return;
-        }
-
-        const wsRes = await fetch(`/api/workspace/${user.id}`, {
-          credentials: "include",
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        });
-
-        let wsData = null;
-        if (wsRes.ok) {
-          wsData = await wsRes.json();
-        }
-
-        if (wsData && wsData.exists) {
-          const wsCategories = wsData.workspace?.categories || wsData.categories;
-          const wsHasData = Array.isArray(wsCategories) && wsCategories.length > 0 &&
-            wsCategories.some((cat: any) => Array.isArray(cat.entities) && cat.entities.length > 0);
-
-          if (wsHasData) {
-            try {
-              await fetch("/api/workspace/profile", {
-                method: "PUT",
-                credentials: "include",
-                headers: {
-                  Authorization: `Bearer ${session.access_token}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ onboardingCompleted: true }),
-              });
-            } catch {}
-
-            checkedUserId.current = user.id;
-            onboardingInProgress.current = false;
-            setHasCompletedOnboarding(true);
-            localStorage.removeItem("pendingOnboarding");
-            setCheckingOnboarding(false);
-            initialLoadComplete.current = true;
-            return;
-          }
         }
 
         const pendingRaw = localStorage.getItem("pendingOnboarding");
@@ -320,7 +236,7 @@ function AppContent() {
         initialLoadComplete.current = true;
       } catch {
         onboardingInProgress.current = false;
-        setHasCompletedOnboarding(true);
+        setHasCompletedOnboarding(false);
         setCheckingOnboarding(false);
         initialLoadComplete.current = true;
       }
@@ -328,6 +244,18 @@ function AppContent() {
   }, [user, session]);
 
   const showInitialSpinner = !initialLoadComplete.current && (loading || checkingOnboarding || autoOnboarding);
+
+  useEffect(() => {
+    if (!showInitialSpinner) return;
+    const timeout = setTimeout(() => {
+      initialLoadComplete.current = true;
+      onboardingInProgress.current = false;
+      setAutoOnboarding(false);
+      setCheckingOnboarding(false);
+      setHasCompletedOnboarding(false);
+    }, 5000);
+    return () => clearTimeout(timeout);
+  }, [showInitialSpinner]);
 
   if (showInitialSpinner) {
     return (
