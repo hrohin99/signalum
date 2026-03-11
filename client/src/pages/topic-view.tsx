@@ -599,7 +599,6 @@ function TopicViewContent({
             <AIVisibilityCard />
           )}
           <InlineCaptureCard entity={entity} categoryName={categoryName} />
-          <AIInsightsCard entity={entity} categoryName={categoryName} captures={captures} />
         </div>
       </div>
 
@@ -911,6 +910,7 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
   const [thumbsDownOpen, setThumbsDownOpen] = useState(false);
   const [showFeedbackInput, setShowFeedbackInput] = useState(false);
   const [feedbackText, setFeedbackText] = useState("");
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
 
   const { data: summaryData, isLoading, isError, dataUpdatedAt } = useQuery<{ summary: string }>({
     queryKey: ["/api/entity-summary", entity.name, categoryName],
@@ -1005,14 +1005,36 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
             <Skeleton className="h-4 w-5/6" />
           </div>
         ) : isError ? (
-          <p className="text-sm text-muted-foreground leading-relaxed">
-            Unable to generate summary at this time. Try again later.
-          </p>
-        ) : (
-          <ReactMarkdown className="prose prose-sm max-w-none text-[15px] text-foreground leading-relaxed" data-testid="text-ai-summary">
-            {summaryData?.summary || `No updates available for ${entity.name} yet.`}
-          </ReactMarkdown>
-        )}
+          <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Unable to generate summary at this time. Try again later.
+            </p>
+          </div>
+        ) : (() => {
+          const summaryText = summaryData?.summary || `No updates available for ${entity.name} yet.`;
+          const summaryParagraphs = summaryText.split(/\n\n+/);
+          const hasMoreParagraphs = summaryParagraphs.length > 3;
+          const displayedSummary = hasMoreParagraphs && !summaryExpanded
+            ? summaryParagraphs.slice(0, 3).join('\n\n')
+            : summaryText;
+          return (
+            <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+              <ReactMarkdown className="prose prose-sm max-w-none text-[15px] text-foreground leading-relaxed" data-testid="text-ai-summary">
+                {displayedSummary}
+              </ReactMarkdown>
+              {hasMoreParagraphs && (
+                <button
+                  className="text-xs text-[#1e3a5f] hover:underline font-medium mt-3 inline-flex items-center gap-1"
+                  onClick={() => setSummaryExpanded(!summaryExpanded)}
+                  data-testid="button-toggle-summary"
+                >
+                  {summaryExpanded ? 'Read less' : 'Read more'}
+                  {summaryExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                </button>
+              )}
+            </div>
+          );
+        })()}
         <div className="flex items-center justify-between mt-3">
           <div className="flex items-center gap-4">
             {lastUpdated && (
@@ -1766,9 +1788,14 @@ function BattlecardWidget({
     },
   });
 
+  const [battlecardExpanded, setBattlecardExpanded] = useState(false);
+
   const bc = bcData?.battlecard;
   const lastUpdated = bc?.updatedAt ? new Date(bc.updatedAt) : null;
   const hasData = !!(bc?.whatTheyDo || (bc?.strengths as string[])?.length || (bc?.weaknesses as string[])?.length || (bc?.howToBeat as string[])?.length);
+
+  const firstStrength = (bc?.strengths as string[])?.[0] || null;
+  const previewText = firstStrength || "No battlecard yet — click to build one";
 
   const autofillButton = (
     <Button
@@ -1794,86 +1821,110 @@ function BattlecardWidget({
   return (
     <Card data-testid="widget-battlecard">
       <CardContent className="p-5">
-        <div className="flex items-center justify-between mb-4">
+        <div
+          className="flex items-center justify-between cursor-pointer"
+          onClick={() => setBattlecardExpanded(!battlecardExpanded)}
+          data-testid="button-battlecard-toggle"
+        >
           <div className="flex items-center gap-2">
             <span className="text-lg">⚔️</span>
             <span className="text-sm font-semibold text-[#1e3a5f]">Battlecard</span>
+            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${battlecardExpanded ? "rotate-180" : ""}`} />
           </div>
-          {lastUpdated && (
-            <span className="text-[11px] text-slate-400" data-testid="text-battlecard-timestamp">
-              Updated {lastUpdated.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at{" "}
-              {lastUpdated.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-            </span>
+          {!battlecardExpanded && (
+            <Button
+              size="sm"
+              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white text-xs"
+              onClick={(e) => { e.stopPropagation(); setBattlecardExpanded(true); }}
+              data-testid="button-view-battlecard"
+            >
+              View Battlecard
+            </Button>
           )}
         </div>
 
-        {isLoading ? (
-          <div className="space-y-3">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-20 w-full" />
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {!hasData && autofillButton}
+        {!battlecardExpanded && (
+          <p className="text-sm text-slate-500 mt-2 truncate" data-testid="text-battlecard-preview">
+            {isLoading ? "Loading..." : previewText}
+          </p>
+        )}
 
-            <div className="rounded-lg bg-slate-50 p-3">
-              <p className="text-xs font-medium text-slate-600 mb-1.5 flex items-center gap-1">
-                <span>📝</span> What they do
-                <Pencil className="w-3 h-3 ml-auto opacity-40" />
-              </p>
-              <EditableText
-                value={bc?.whatTheyDo || ""}
-                onSave={(val) => updateMutation.mutate({ whatTheyDo: val })}
-                placeholder="Click to describe what this competitor does..."
-                testId="input-battlecard-what"
-              />
+        {battlecardExpanded && (
+          isLoading ? (
+            <div className="space-y-3 mt-4">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
             </div>
+          ) : (
+            <div className="space-y-3 mt-4">
+              {lastUpdated && (
+                <span className="text-[11px] text-slate-400 block" data-testid="text-battlecard-timestamp">
+                  Updated {lastUpdated.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at{" "}
+                  {lastUpdated.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                </span>
+              )}
 
-            <div className="rounded-lg bg-emerald-50 p-3">
-              <p className="text-xs font-medium text-emerald-700 mb-1.5 flex items-center gap-1">
-                <span>💪</span> Their strengths
-                <Pencil className="w-3 h-3 ml-auto opacity-40" />
-              </p>
-              <EditableBulletList
-                items={(bc?.strengths as string[]) || []}
-                onSave={(items) => updateMutation.mutate({ strengths: items })}
-                placeholder="Click to add their strengths..."
-                testId="input-battlecard-strengths"
-              />
+              {!hasData && autofillButton}
+
+              <div className="rounded-lg bg-slate-50 p-4 mb-3">
+                <p className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
+                  <span>📝</span> What they do
+                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                </p>
+                <EditableText
+                  value={bc?.whatTheyDo || ""}
+                  onSave={(val) => updateMutation.mutate({ whatTheyDo: val })}
+                  placeholder="Click to describe what this competitor does..."
+                  testId="input-battlecard-what"
+                />
+              </div>
+
+              <div className="rounded-lg bg-green-50 p-4 mb-3 border-l-4 border-green-400">
+                <p className="text-sm font-semibold text-green-700 mb-1.5 flex items-center gap-1">
+                  <span>💪</span> Their strengths
+                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                </p>
+                <EditableBulletList
+                  items={(bc?.strengths as string[]) || []}
+                  onSave={(items) => updateMutation.mutate({ strengths: items })}
+                  placeholder="Click to add their strengths..."
+                  testId="input-battlecard-strengths"
+                />
+              </div>
+
+              <div className="rounded-lg bg-red-50 p-4 mb-3 border-l-4 border-red-400">
+                <p className="text-sm font-semibold text-red-700 mb-1.5 flex items-center gap-1">
+                  <span>🎯</span> Their weaknesses
+                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                </p>
+                <EditableBulletList
+                  items={(bc?.weaknesses as string[]) || []}
+                  onSave={(items) => updateMutation.mutate({ weaknesses: items })}
+                  placeholder="Click to add their weaknesses..."
+                  testId="input-battlecard-weaknesses"
+                />
+              </div>
+
+              <div className="rounded-lg bg-blue-50 p-4 mb-3 border-l-4 border-blue-500">
+                <p className="text-sm font-semibold text-blue-700 mb-1.5 flex items-center gap-1">
+                  <span>🏆</span> How to beat them
+                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                </p>
+                <EditableBulletList
+                  items={(bc?.howToBeat as string[]) || []}
+                  onSave={(items) => updateMutation.mutate({ howToBeat: items })}
+                  placeholder="Click to add competitive strategies..."
+                  testId="input-battlecard-howtobeat"
+                />
+                <p className="text-[11px] text-blue-500 mt-2 italic" data-testid="text-product-context-hint">
+                  Add your product details in Settings for personalised advice.
+                </p>
+              </div>
+
+              {hasData && autofillButton}
             </div>
-
-            <div className="rounded-lg bg-red-50 p-3">
-              <p className="text-xs font-medium text-red-700 mb-1.5 flex items-center gap-1">
-                <span>🎯</span> Their weaknesses
-                <Pencil className="w-3 h-3 ml-auto opacity-40" />
-              </p>
-              <EditableBulletList
-                items={(bc?.weaknesses as string[]) || []}
-                onSave={(items) => updateMutation.mutate({ weaknesses: items })}
-                placeholder="Click to add their weaknesses..."
-                testId="input-battlecard-weaknesses"
-              />
-            </div>
-
-            <div className="rounded-lg bg-blue-50 p-3">
-              <p className="text-xs font-medium text-blue-700 mb-1.5 flex items-center gap-1">
-                <span>🏆</span> How to beat them
-                <Pencil className="w-3 h-3 ml-auto opacity-40" />
-              </p>
-              <EditableBulletList
-                items={(bc?.howToBeat as string[]) || []}
-                onSave={(items) => updateMutation.mutate({ howToBeat: items })}
-                placeholder="Click to add competitive strategies..."
-                testId="input-battlecard-howtobeat"
-              />
-              <p className="text-[11px] text-blue-500 mt-2 italic" data-testid="text-product-context-hint">
-                Add your product details in Settings for personalised advice.
-              </p>
-            </div>
-
-            {hasData && autofillButton}
-          </div>
+          )
         )}
       </CardContent>
     </Card>
@@ -1910,24 +1961,24 @@ function QuickStatsWidget({
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div className="text-center">
-            <p className="text-2xl font-bold text-[#1e3a5f]" data-testid="stat-updates-month">{updatesThisMonth}</p>
-            <p className="text-xs text-slate-500">Updates this month</p>
+            <p className="text-3xl font-bold text-[#1e3a5f]" data-testid="stat-updates-month">{updatesThisMonth}</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Updates this month</p>
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-[#1e3a5f]" data-testid="stat-first-tracked">
+            <p className="text-3xl font-bold text-[#1e3a5f]" data-testid="stat-first-tracked">
               {firstTracked
                 ? firstTracked.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                 : "—"}
             </p>
-            <p className="text-xs text-slate-500">First tracked</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">First tracked</p>
           </div>
           <div className="text-center">
-            <p className="text-sm font-medium text-[#1e3a5f]" data-testid="stat-last-activity">
+            <p className="text-3xl font-bold text-[#1e3a5f]" data-testid="stat-last-activity">
               {lastActivity
                 ? lastActivity.toLocaleDateString("en-US", { month: "short", day: "numeric" })
                 : "—"}
             </p>
-            <p className="text-xs text-slate-500">Last activity</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wide">Last activity</p>
           </div>
         </div>
       </CardContent>
