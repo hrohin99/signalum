@@ -1,9 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
-import { storage, db } from "./storage";
+import { storage, db, pool } from "./storage";
 import { captures } from "@shared/schema";
 import type { ExtractedCategory } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
+import { buildProfileContext } from "./profileContext";
 
 function escapeHtml(str: string): string {
   return str
@@ -115,6 +116,10 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
   const focusSummary = Object.entries(categoryFocusMap).map(([name, focus]) => `- ${name}: Category focus: ${focus}. Only highlight developments relevant to this focus in the briefing summary.`).join("\n");
   const focusPromptSection = focusSummary ? `\n\nThe user is specifically interested in the following focus areas for these categories. Prioritise and surface intelligence relevant to each focus. Deprioritise captures that are unrelated to them:\n${focusSummary}` : "";
 
+  const briefingWsResult = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+  const briefingProfileCtx = buildProfileContext(briefingWsResult.rows[0] || null);
+  const briefingProfilePrefix = briefingProfileCtx ? `${briefingProfileCtx}\n\n` : "";
+
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
@@ -125,7 +130,7 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
     messages: [
       {
         role: "user",
-        content: `You are an intelligence analyst writing a weekly briefing for a product manager at Entrust, a company in the government identity verification space.${focusPromptSection}
+        content: `${briefingProfilePrefix}You are an intelligence analyst writing a weekly briefing for a product manager at Entrust, a company in the government identity verification space.${focusPromptSection}
 
 Do not use em dashes anywhere in your response. Use commas or plain sentences instead.
 

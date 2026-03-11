@@ -1,0 +1,38 @@
+if (p === 'vendor') {
+    ctx += `Competitors: ${(workspace.competitors || []).join(', ')}\n`;
+    ctx += `Wins on: ${workspace.winFactors || 'not specified'}\n`;
+    ctx += `Vulnerable on: ${workspace.vulnerability || 'not specified'}\n`;
+    ctx += `FRAMING: Surface competitive and commercial implications. Flag threats to market position, deal flow, or product differentiation.\n`;
+  } else if (p === 'business_owner') {
+    ctx += `Competitors: ${(workspace.competitors || []).join(', ')}\n`;
+    ctx += `Biggest risk: ${workspace.vulnerability || 'not specified'}\n`;
+    ctx += `FRAMING: Frame insights in terms of business survival, growth, and competitive threat. Flag what requires a decision now vs what to monitor.\n`;
+  } else if (p === 'government') {
+    ctx += `Procurement frameworks: ${workspace.winFactors || 'not specified'}\n`;
+    ctx += `FRAMING: Frame insights in terms of procurement implications and policy impact. Do not use commercial competitive framing.\n`;
+  } else if (p === 'analyst') {
+    ctx += `Client audience: ${workspace.briefingAudience || 'not specified'}\n`;
+    ctx += `FRAMING: Frame insights as advisory intelligence. Highlight what a client would need to know to make a decision.\n`;
+  } else if (p === 'sales') {
+    ctx += `Competing against: ${(workspace.competitors || []).join(', ')}\n`;
+    ctx += `Common objections: ${workspace.vulnerability || 'not specified'}\n`;
+    ctx += `FRAMING: Flag signals that indicate buying intent, competitive displacement opportunities, or objection handling ammunition.\n`;
+  } else if (p === 'legal_compliance') {
+    ctx += `Regulations monitored: ${(workspace.regulationsMonitored || []).join(', ')}\n`;
+    ctx += `Regulatory bodies: ${(workspace.regulatoryBodies || []).join(', ')}\n`;
+    ctx += `FRAMING: Frame insights in terms of compliance risk, enforcement exposure, and regulatory timeline.\n`;
+  }
+
+  if (trackingTypes.includes('regulations')) {
+    ctx += `Regulations tracked: ${(workspace.regulationsMonitored || []).join(', ')}\n`;
+  }
+  if (trackingTypes.includes('standards')) {
+    ctx += `Standards certified: ${(workspace.standardsCertified || []).join(', ')}\n`;
+  }
+  if (earlyWarning) {
+    ctx += `HIGH PRIORITY — flag immediately if this occurs: ${earlyWarning}\n`;
+  }
+
+  ctx += `IMPORTANT: If an insight is not relevant to this customer's context, say so directly rather than forcing a connection.`;
+  return ctx.trim();
+}

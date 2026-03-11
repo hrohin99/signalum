@@ -14,6 +14,7 @@ import type { ExtractionResult, ExtractedCategory, ExtractedEntity, SiblingInfer
 import { userProfiles, workspaces } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { buildProfileContext } from "./profileContext";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -1197,13 +1198,17 @@ If no dates found, return { "extracted_dates": [] }.`
       const category = categories.find(c => c.name === categoryName);
       const focusContext = category?.focus ? `\nCategory focus area: "${category.focus}". Weight your analysis toward this focus.\n` : "";
 
+      const wsProfileResult = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const profileCtx = buildProfileContext(wsProfileResult.rows[0] || null);
+      const profilePrefix = profileCtx ? `${profileCtx}\n\n` : "";
+
       const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 1024,
         messages: [
           {
             role: "user",
-            content: `You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a structured strategic summary covering: what this entity is and does, recent notable developments, strategic direction, and relevance to the government identity verification space.
+            content: `${profilePrefix}You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a structured strategic summary covering: what this entity is and does, recent notable developments, strategic direction, and relevance to the government identity verification space.
 
 Use this format:
 One sentence overview of what this company is.
@@ -1593,6 +1598,10 @@ Return only the summary paragraphs, no JSON, no formatting.`
       const categoryObj = categories.find(c => c.name === categoryName);
       const focusContext = categoryObj?.focus ? `\nThe user is specifically interested in the following focus area for this category: "${categoryObj.focus}". Prioritise and surface intelligence relevant to this focus. Deprioritise captures that are unrelated to it.` : "";
 
+      const soWhatWsResult = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const soWhatProfileCtx = buildProfileContext(soWhatWsResult.rows[0] || null);
+      const soWhatProfilePrefix = soWhatProfileCtx ? `${soWhatProfileCtx}\n\n` : "";
+
       const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
       });
@@ -1603,7 +1612,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
         messages: [
           {
             role: "user",
-            content: `You are a strategic analyst. Given the following intelligence captures about "${entityName}", provide a structured analysis of what this means for an organisation like Entrust in the government identity verification space.
+            content: `${soWhatProfilePrefix}You are a strategic analyst. Given the following intelligence captures about "${entityName}", provide a structured analysis of what this means for an organisation like Entrust in the government identity verification space.
 
 Use this exact format:
 
@@ -2928,12 +2937,16 @@ Rules:
 
       const client = getAnthropicClient();
 
+      const sdWsResult = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const sdProfileCtx = buildProfileContext(sdWsResult.rows[0] || null);
+      const sdProfilePrefix = sdProfileCtx ? `${sdProfileCtx}\n\n` : "";
+
       const headingMessage = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 512,
         messages: [{
           role: "user",
-          content: `Based on these recent updates about ${entityName}, describe their strategic direction using 3-4 bullet points. Start each bullet with a strong verb: "Expanding...", "Doubling down on...", "Investing in...", "Pivoting toward...". One sentence per bullet. Do not use em dashes.
+          content: `${sdProfilePrefix}Based on these recent updates about ${entityName}, describe their strategic direction using 3-4 bullet points. Start each bullet with a strong verb: "Expanding...", "Doubling down on...", "Investing in...", "Pivoting toward...". One sentence per bullet. Do not use em dashes.
 
 Recent updates:
 ${contentSnippets}
@@ -2953,7 +2966,7 @@ Return only the bullet points, no JSON, no headers.`
           max_tokens: 512,
           messages: [{
             role: "user",
-            content: `Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"}, what does ${entityName}'s strategic direction mean for Entrust? Respond with 2-3 bullet points, one sentence each, starting with a strong verb. Do not use em dashes.
+            content: `${sdProfilePrefix}Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"}, what does ${entityName}'s strategic direction mean for Entrust? Respond with 2-3 bullet points, one sentence each, starting with a strong verb. Do not use em dashes.
 
 ${entityName}'s strategic direction: ${whereHeading}
 
