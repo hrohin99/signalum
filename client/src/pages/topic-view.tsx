@@ -246,6 +246,7 @@ function TopicViewContent({
   });
   const [extractionNoData, setExtractionNoData] = useState(false);
   const [extractionNoDataDismissed, setExtractionNoDataDismissed] = useState(false);
+  const [battlecardExpanded, setBattlecardExpanded] = useState(false);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -558,9 +559,18 @@ function TopicViewContent({
             <StrategicDirectionCard entity={entity} categoryName={categoryName} captures={captures} />
           )}
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
-            <div className="grid grid-cols-2 gap-4">
-              <PricingCard entity={entity} />
-              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <PricingCard entity={entity} />
+                <BattlecardCollapsedHeader
+                  entity={entity}
+                  expanded={battlecardExpanded}
+                  onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
+                />
+              </div>
+              {battlecardExpanded && (
+                <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+              )}
             </div>
           )}
           <WidgetsSection
@@ -1458,7 +1468,7 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
 
   return (
     <>
-      <Card data-testid="section-pricing">
+      <Card className="min-h-[80px]" data-testid="section-pricing">
         <CardContent className="p-5">
           <div
             className="flex items-center justify-between cursor-pointer"
@@ -1813,14 +1823,9 @@ function BattlecardWidget({
     },
   });
 
-  const [battlecardExpanded, setBattlecardExpanded] = useState(false);
-
   const bc = bcData?.battlecard;
   const lastUpdated = bc?.updatedAt ? new Date(bc.updatedAt) : null;
   const hasData = !!(bc?.whatTheyDo || (bc?.strengths as string[])?.length || (bc?.weaknesses as string[])?.length || (bc?.howToBeat as string[])?.length);
-
-  const firstStrength = (bc?.strengths as string[])?.[0] || null;
-  const previewText = firstStrength || "No battlecard yet — click to build one";
 
   const autofillButton = (
     <Button
@@ -1844,45 +1849,15 @@ function BattlecardWidget({
   );
 
   return (
-    <Card data-testid="widget-battlecard">
-      <CardContent className="p-5">
-        <div
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => setBattlecardExpanded(!battlecardExpanded)}
-          data-testid="button-battlecard-toggle"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-lg">⚔️</span>
-            <span className="text-sm font-semibold text-[#1e3a5f]">Battlecard</span>
-            <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${battlecardExpanded ? "rotate-180" : ""}`} />
-          </div>
-          {!battlecardExpanded && (
-            <Button
-              size="sm"
-              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white text-xs"
-              onClick={(e) => { e.stopPropagation(); setBattlecardExpanded(true); }}
-              data-testid="button-view-battlecard"
-            >
-              View Battlecard
-            </Button>
-          )}
+    <div className="border rounded-xl p-5 bg-white" data-testid="widget-battlecard">
+      {isLoading ? (
+        <div className="space-y-3">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
         </div>
-
-        {!battlecardExpanded && (
-          <p className="text-sm text-slate-500 mt-2 truncate" data-testid="text-battlecard-preview">
-            {isLoading ? "Loading..." : previewText}
-          </p>
-        )}
-
-        {battlecardExpanded && (
-          isLoading ? (
-            <div className="space-y-3 mt-4">
-              <Skeleton className="h-16 w-full" />
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-20 w-full" />
-            </div>
-          ) : (
-            <div className="space-y-3 mt-4">
+      ) : (
+        <div className="space-y-3">
               {lastUpdated && (
                 <span className="text-[11px] text-slate-400 block" data-testid="text-battlecard-timestamp">
                   Updated {lastUpdated.toLocaleDateString("en-US", { month: "short", day: "numeric" })} at{" "}
@@ -1947,10 +1922,53 @@ function BattlecardWidget({
                 </p>
               </div>
 
-              {hasData && autofillButton}
-            </div>
-          )
-        )}
+        {hasData && autofillButton}
+      </div>
+      )}
+    </div>
+  );
+}
+
+function BattlecardCollapsedHeader({
+  entity,
+  expanded,
+  onToggle,
+}: {
+  entity: ExtractedEntity;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { data: bcData, isLoading } = useQuery<{ battlecard: Battlecard | null }>({
+    queryKey: ["/api/battlecard", entity.name],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/battlecard/${encodeURIComponent(entity.name)}`);
+      return res.json();
+    },
+  });
+
+  const bc = bcData?.battlecard;
+  const firstStrength = (bc?.strengths as string[])?.[0] || null;
+
+  return (
+    <Card className="min-h-[80px]" data-testid="widget-battlecard-header">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">⚔️</span>
+            <span className="text-sm font-semibold text-[#1e3a5f]">Battlecard</span>
+          </div>
+          <Button
+            size="sm"
+            className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white text-xs"
+            onClick={onToggle}
+            data-testid="button-view-battlecard"
+          >
+            {expanded ? "Close" : "View Battlecard"}
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="text-battlecard-preview">
+          {isLoading ? "Loading..." : firstStrength || "No battlecard yet"}
+        </p>
       </CardContent>
     </Card>
   );
