@@ -3073,7 +3073,7 @@ Rules:
 
   app.get("/api/product-context", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const tenantId = (req as any).tenantId;
       const context = await storage.getProductContext(tenantId);
       return res.json({ productContext: context || null });
     } catch (error: any) {
@@ -3084,7 +3084,7 @@ Rules:
 
   app.put("/api/product-context", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = "00000000-0000-0000-0000-000000000000";
+      const tenantId = (req as any).tenantId;
       const { productName, description, targetCustomer, strengths, weaknesses } = req.body;
 
       if (!productName || typeof productName !== "string" || productName.trim().length === 0) {
