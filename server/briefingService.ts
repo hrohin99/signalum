@@ -166,10 +166,12 @@ Return only valid JSON, no markdown, no preamble.`,
   let parsed: any;
   try {
     const clean = responseText
-      .replace(/```json/g, '')
+      .replace(/```json/gi, '')
       .replace(/```/g, '')
       .trim();
-    parsed = JSON.parse(clean);
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON object found in response');
+    parsed = JSON.parse(jsonMatch[0]);
   } catch (e) {
     console.error('[briefing] JSON parse failed, raw response:', responseText.slice(0, 500));
     throw new Error('Failed to parse briefing from AI response');
