@@ -279,10 +279,10 @@ function TopicViewContent({
 
   useEffect(() => {
     const tourSeen = localStorage.getItem("onboarding_topic_tour_seen") === "true";
-    if (!tourSeen) {
+    if (!tourSeen && entity?.disambiguation_confirmed) {
       setShowCoachMarks(true);
     }
-  }, []);
+  }, [entity?.disambiguation_confirmed]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -607,7 +607,10 @@ function TopicViewContent({
         <CoachMarks
           steps={topicTourSteps}
           storageKey="onboarding_topic_tour_seen"
-          onComplete={() => setShowCoachMarks(false)}
+          onComplete={() => {
+            localStorage.setItem("onboarding_topic_tour_seen", "true");
+            setShowCoachMarks(false);
+          }}
         />
       )}
 
