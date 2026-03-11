@@ -4115,6 +4115,23 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         onboardingCompleted: "onboarding_completed",
       };
 
+      const toArray = (val: any): string[] => {
+        if (!val) return [];
+        if (Array.isArray(val)) return val;
+        return val.split(',').map((s: string) => s.trim()).filter(Boolean);
+      };
+
+      const arrayFields = new Set([
+        "competitors",
+        "regulationsMonitored",
+        "regulatoryBodies",
+        "standardsBodies",
+        "standardsCertified",
+        "orgGeographies",
+        "orgMarket",
+        "trackingTypes",
+      ]);
+
       const setClauses: string[] = [];
       const values: any[] = [];
       let paramIndex = 1;
@@ -4122,7 +4139,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       for (const [camelKey, snakeCol] of Object.entries(fieldMap)) {
         if (req.body[camelKey] !== undefined) {
           setClauses.push(`${snakeCol} = $${paramIndex}`);
-          values.push(req.body[camelKey]);
+          values.push(arrayFields.has(camelKey) ? toArray(req.body[camelKey]) : req.body[camelKey]);
           paramIndex++;
         }
       }
