@@ -1,5 +1,5 @@
-import { useState, useRef, useCallback, useMemo } from "react";
-import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, Calendar, Pencil } from "lucide-react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { PenLine, Mic, Link2, FileText, Loader2, Check, X, ArrowRight, Square, Circle, Upload, Tag, FolderOpen, Plus, ChevronDown, Calendar, Pencil, Mail } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -463,6 +463,22 @@ export default function CapturePage() {
   };
 
   const [pricingModalEntityName, setPricingModalEntityName] = useState("");
+
+  const [captureEmail, setCaptureEmail] = useState<string>("capture@iialdoucla.resend.app");
+  const [emailCopied, setEmailCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/config/capture-email")
+      .then(r => r.json())
+      .then(d => { if (d.captureEmail) setCaptureEmail(d.captureEmail); })
+      .catch(() => {});
+  }, []);
+
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText(captureEmail);
+    setEmailCopied(true);
+    setTimeout(() => setEmailCopied(false), 2000);
+  };
 
   const isCompetitorTopic = (entityName: string) => {
     const categories = workspaceData?.workspace?.categories || [];
@@ -1001,6 +1017,29 @@ export default function CapturePage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Mail className="w-4 h-4 text-slate-500" />
+          <span className="font-semibold text-sm">Email forwarding</span>
+        </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Forward any email to Signalum and it will be automatically captured and classified against your tracked topics. Works with any email client.
+        </p>
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
+          <span className="text-sm font-mono text-slate-700 flex-1 select-all">{captureEmail}</span>
+          <button
+            onClick={handleCopyEmail}
+            className="text-xs font-semibold text-[#1e3a5f] hover:text-blue-700 transition-colors shrink-0 px-2 py-1 rounded hover:bg-slate-100"
+            data-testid="button-copy-capture-email"
+          >
+            {emailCopied ? "✓ Copied" : "Copy"}
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Signalum recognises you by your registered email address — just forward from the same email you signed up with.
+        </p>
       </div>
 
       {!activeType && recentCaptures.length > 0 && (

@@ -1142,6 +1142,72 @@ If no dates found, return { "extracted_dates": [] }.`
     }
   });
 
+  app.get("/api/config/capture-email", (req: Request, res: Response) => {
+    res.json({ captureEmail: process.env.CAPTURE_EMAIL || "capture@iialdoucla.resend.app" });
+  });
+
+  app.post("/api/capture/email-inbound", async (req: Request, res: Response) => {
+    try {
+      const payload = req.body;
+
+      const fromEmail = (
+        payload.from?.address ||
+        (typeof payload.from === "string" ? payload.from : "") ||
+        payload.sender ||
+        ""
+      ).toLowerCase().trim();
+
+      const subject = payload.subject || "(no subject)";
+      const bodyText = (
+        payload.text ||
+        (payload.html ? payload.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") : "") ||
+        ""
+      ).slice(0, 3000);
+
+      const content = `Subject: ${subject}\n\n${bodyText}`.trim();
+
+      console.log(`[email-inbound] Received from: ${fromEmail}, subject: ${subject}`);
+
+      if (!fromEmail || !content) {
+        return res.status(200).json({ message: "Empty payload, skipped" });
+      }
+
+      const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      if (error || !users) {
+        console.error("[email-inbound] Failed to list users:", error);
+        return res.status(200).json({ message: "User lookup failed" });
+      }
+
+      const matchedUser = users.find(u => u.email?.toLowerCase() === fromEmail);
+      if (!matchedUser) {
+        console.log(`[email-inbound] No Signalum user matched sender: ${fromEmail}`);
+        return res.status(200).json({ message: "Sender not a Signalum user" });
+      }
+
+      const userId = matchedUser.id;
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) {
+        return res.status(200).json({ message: "No workspace found for user" });
+      }
+
+      await storage.createCapture({
+        userId,
+        type: "email_forward",
+        content,
+        matchedEntity: null,
+        matchedCategory: null,
+        matchReason: `Forwarded email — ${subject}`,
+      });
+
+      console.log(`[email-inbound] ✅ Capture stored for user ${userId} from ${fromEmail}`);
+      return res.status(200).json({ success: true });
+
+    } catch (err) {
+      console.error("[email-inbound] Unhandled error:", err);
+      return res.status(200).json({ message: "Error processing inbound email" });
+    }
+  });
+
   app.post("/api/captures", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
