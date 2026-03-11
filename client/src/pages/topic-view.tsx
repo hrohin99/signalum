@@ -558,7 +558,10 @@ function TopicViewContent({
             <StrategicDirectionCard entity={entity} categoryName={categoryName} captures={captures} />
           )}
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
-            <PricingCard entity={entity} />
+            <div className="grid grid-cols-2 gap-4">
+              <PricingCard entity={entity} />
+              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+            </div>
           )}
           <WidgetsSection
             entity={entity}
@@ -1321,6 +1324,7 @@ const PRICING_MODEL_FIELDS: Record<string, { planLabel: string; planPlaceholder:
 function PricingCard({ entity }: { entity: ExtractedEntity }) {
   const { toast } = useToast();
   const entityId = entity.name;
+  const [pricingExpanded, setPricingExpanded] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedModel, setSelectedModel] = useState<string>(entity.pricing_model_detected || "per_service");
   const [formDate, setFormDate] = useState(new Date().toISOString().split("T")[0]);
@@ -1450,48 +1454,69 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
 
   const fields = PRICING_MODEL_FIELDS[selectedModel] || PRICING_MODEL_FIELDS.custom;
 
+  const pricingPreview = pricing.length > 0 ? pricing[0].planName : "No pricing data yet";
+
   return (
     <>
       <Card data-testid="section-pricing">
         <CardContent className="p-5">
-          <div className="flex items-center justify-between mb-4">
+          <div
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => setPricingExpanded(!pricingExpanded)}
+            data-testid="button-pricing-toggle"
+          >
             <div className="flex items-center gap-2">
               <Tag className="w-4 h-4 text-[#1e3a5f]" />
               <span className="text-sm font-semibold text-[#1e3a5f]">Pricing</span>
+              {pricingExpanded ? (
+                <ChevronUp className="w-4 h-4 text-slate-400" />
+              ) : (
+                <ChevronDown className="w-4 h-4 text-slate-400" />
+              )}
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAddModal(true)}
-              data-testid="button-add-pricing"
-            >
-              <Plus className="w-3 h-3 mr-1" />
-              Add pricing entry
-            </Button>
+            {pricingExpanded && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={(e) => { e.stopPropagation(); setShowAddModal(true); }}
+                data-testid="button-add-pricing"
+              >
+                <Plus className="w-3 h-3 mr-1" />
+                Add pricing entry
+              </Button>
+            )}
           </div>
 
-          {isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-8 w-full" />
-              <Skeleton className="h-8 w-full" />
-            </div>
-          ) : pricing.length === 0 ? (
-            <p className="text-sm text-slate-400 italic text-center py-4" data-testid="text-pricing-empty">
-              No pricing data yet. Add what you know about their pricing — even partial info is useful.
+          {!pricingExpanded && (
+            <p className="text-sm text-slate-500 mt-2 truncate" data-testid="text-pricing-preview">
+              {isLoading ? "Loading..." : pricingPreview}
             </p>
-          ) : hasMultipleModels ? (
-            <div className="space-y-4">
-              {modelKeys.map((model) => (
-                <div key={model}>
-                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" data-testid={`heading-pricing-model-${model}`}>
-                    {PRICING_MODEL_LABELS[model] || model}
-                  </h4>
-                  {renderPricingTable(groupedPricing[model], model)}
-                </div>
-              ))}
-            </div>
-          ) : (
-            renderPricingTable(pricing, modelKeys[0] || "per_service")
+          )}
+
+          {pricingExpanded && (
+            isLoading ? (
+              <div className="space-y-2 mt-4">
+                <Skeleton className="h-8 w-full" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ) : pricing.length === 0 ? (
+              <p className="text-sm text-slate-400 italic text-center py-4" data-testid="text-pricing-empty">
+                No pricing data yet. Add what you know about their pricing — even partial info is useful.
+              </p>
+            ) : hasMultipleModels ? (
+              <div className="space-y-4 mt-4">
+                {modelKeys.map((model) => (
+                  <div key={model}>
+                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2" data-testid={`heading-pricing-model-${model}`}>
+                      {PRICING_MODEL_LABELS[model] || model}
+                    </h4>
+                    {renderPricingTable(groupedPricing[model], model)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-4">{renderPricingTable(pricing, modelKeys[0] || "per_service")}</div>
+            )
           )}
         </CardContent>
       </Card>
@@ -1613,7 +1638,7 @@ function WidgetsSection({
       {nonFeedWidgets.map((widgetName) => {
         if (builtWidgets.includes(widgetName)) {
           if (widgetName === "battlecard") {
-            return <BattlecardWidget key={widgetName} entity={entity} categoryName={categoryName} captures={captures} />;
+            return null;
           }
           if (widgetName === "quick_stats") {
             return <QuickStatsWidget key={widgetName} entity={entity} captures={captures} allCaptures={allCaptures} />;
@@ -1996,6 +2021,8 @@ const statusConfig: Record<string, { emoji: string; label: string; bgClass: stri
 function CompetitorCapabilitiesCard({ entityName }: { entityName: string }) {
   const { toast } = useToast();
   const entityId = entityName;
+  const [capabilitiesExpanded, setCapabilitiesExpanded] = useState(false);
+  const [expandedCapabilityId, setExpandedCapabilityId] = useState<string | null>(null);
 
   const { data: capData } = useQuery<{ capabilities: WorkspaceCapability[] }>({
     queryKey: ["/api/capabilities"],
@@ -2040,118 +2067,118 @@ function CompetitorCapabilitiesCard({ entityName }: { entityName: string }) {
     return found?.evidence || "";
   };
 
-  const getCapUpdatedAt = (capId: string) => {
-    const found = competitorCaps.find(cc => cc.capabilityId === capId);
-    if (!found?.updatedAt) return null;
-    return new Date(found.updatedAt);
+  const statusDotClass: Record<string, string> = {
+    yes: "bg-green-500",
+    no: "bg-red-500",
+    partial: "bg-amber-500",
+    unknown: "bg-slate-300",
   };
+
+  const first3 = capabilities.slice(0, 3);
 
   return (
     <Card data-testid="card-competitor-capabilities">
       <CardContent className="p-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Crosshair className="w-4 h-4 text-[#1e3a5f]" />
-          <span className="text-sm font-semibold text-[#1e3a5f]">Capabilities</span>
-        </div>
+        <button
+          className="w-full flex items-center justify-between"
+          onClick={() => setCapabilitiesExpanded(!capabilitiesExpanded)}
+          data-testid="button-capabilities-toggle"
+        >
+          <div className="flex items-center gap-2">
+            <Crosshair className="w-4 h-4 text-[#1e3a5f]" />
+            <span className="text-sm font-semibold text-[#1e3a5f]">Capabilities ({capabilities.length})</span>
+            {capabilitiesExpanded ? (
+              <ChevronUp className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            )}
+          </div>
+          {!capabilitiesExpanded && (
+            <div className="flex items-center gap-1.5">
+              {first3.map((cap) => {
+                const st = getCapStatus(cap.id);
+                return (
+                  <div key={cap.id} className="flex items-center gap-1">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${statusDotClass[st] || "bg-slate-300"}`} />
+                    <span className="text-xs text-slate-500">{cap.name}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </button>
 
-        <div className="space-y-3">
-          {capabilities.map((cap) => {
-            const currentStatus = getCapStatus(cap.id);
-            const evidence = getCapEvidence(cap.id);
-            const updatedAt = getCapUpdatedAt(cap.id);
+        {capabilitiesExpanded && (
+          <div className="mt-3">
+            {capabilities.map((cap) => {
+              const currentStatus = getCapStatus(cap.id);
+              const evidence = getCapEvidence(cap.id);
+              const isExpanded = expandedCapabilityId === cap.id;
 
-            return (
-              <CapabilityRow
-                key={cap.id}
-                cap={cap}
-                currentStatus={currentStatus}
-                evidence={evidence}
-                updatedAt={updatedAt}
-                onStatusChange={(status) => updateMutation.mutate({ capabilityId: cap.id, status })}
-                onEvidenceChange={(ev) => updateMutation.mutate({ capabilityId: cap.id, status: currentStatus, evidence: ev })}
-              />
-            );
-          })}
-        </div>
+              const badgeClass: Record<string, string> = {
+                yes: "bg-green-100 text-green-700",
+                no: "bg-red-100 text-red-700",
+                partial: "bg-amber-100 text-amber-700",
+                unknown: "bg-slate-100 text-slate-500",
+              };
+              const badgeLabel: Record<string, string> = {
+                yes: "Yes", no: "No", partial: "Partial", unknown: "Unknown",
+              };
+
+              return (
+                <div key={cap.id} data-testid={`capability-row-${cap.id}`}>
+                  <div
+                    className="flex items-center justify-between py-2 border-b border-slate-100 cursor-pointer hover:bg-slate-50 rounded px-1"
+                    onClick={() => setExpandedCapabilityId(isExpanded ? null : cap.id)}
+                  >
+                    <span className="text-sm font-medium">{cap.name}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${badgeClass[currentStatus] || badgeClass.unknown}`}>
+                      {badgeLabel[currentStatus] || "Unknown"}
+                    </span>
+                  </div>
+                  {isExpanded && (
+                    <div className="px-1 py-2 bg-slate-50 rounded-b mb-1 space-y-2">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {(["yes", "no", "partial", "unknown"] as const).map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => updateMutation.mutate({ capabilityId: cap.id, status: s })}
+                            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
+                              currentStatus === s
+                                ? `${badgeClass[s]} ring-1 ring-current/20`
+                                : "bg-white border border-slate-200 text-slate-400 hover:bg-slate-100"
+                            }`}
+                            data-testid={`capability-status-${cap.id}-${s}`}
+                          >
+                            {badgeLabel[s]}
+                          </button>
+                        ))}
+                      </div>
+                      <input
+                        type="text"
+                        defaultValue={evidence}
+                        onBlur={(e) => {
+                          if (e.target.value !== evidence) {
+                            updateMutation.mutate({ capabilityId: cap.id, status: currentStatus, evidence: e.target.value });
+                          }
+                        }}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                        placeholder="Add a note or source..."
+                        className="w-full text-xs bg-white border border-border/50 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]/30 placeholder:text-slate-300"
+                        data-testid={`capability-evidence-${cap.id}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function CapabilityRow({
-  cap,
-  currentStatus,
-  evidence,
-  updatedAt,
-  onStatusChange,
-  onEvidenceChange,
-}: {
-  cap: WorkspaceCapability;
-  currentStatus: string;
-  evidence: string;
-  updatedAt: Date | null;
-  onStatusChange: (status: string) => void;
-  onEvidenceChange: (evidence: string) => void;
-}) {
-  const [localEvidence, setLocalEvidence] = useState(evidence);
-
-  useEffect(() => {
-    setLocalEvidence(evidence);
-  }, [evidence]);
-
-  return (
-    <div className="border border-border/50 rounded-lg p-3" data-testid={`capability-row-${cap.id}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-foreground">{cap.name}</span>
-        {updatedAt && (
-          <span className="text-[10px] text-slate-400" data-testid={`capability-updated-${cap.id}`}>
-            Updated {updatedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-          </span>
-        )}
-      </div>
-      <div className="flex gap-1.5 mb-2">
-        {(["yes", "no", "partial", "unknown"] as const).map((s) => {
-          const cfg = statusConfig[s];
-          const isActive = currentStatus === s;
-          return (
-            <button
-              key={s}
-              onClick={() => onStatusChange(s)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                isActive
-                  ? `${cfg.bgClass} ${cfg.textClass} ring-1 ring-current/20`
-                  : "bg-slate-50 text-slate-400 hover:bg-slate-100"
-              }`}
-              data-testid={`capability-status-${cap.id}-${s}`}
-            >
-              {cfg.emoji} {cfg.label}
-            </button>
-          );
-        })}
-      </div>
-      {currentStatus !== "unknown" && (
-        <input
-          type="text"
-          value={localEvidence}
-          onChange={(e) => setLocalEvidence(e.target.value)}
-          onBlur={() => {
-            if (localEvidence !== evidence) {
-              onEvidenceChange(localEvidence);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-          placeholder="Add a note or source..."
-          className="w-full text-xs bg-slate-50 border border-border/50 rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]/30 placeholder:text-slate-300"
-          data-testid={`capability-evidence-${cap.id}`}
-        />
-      )}
-    </div>
-  );
-}
 
 function SearchSettingsSection({ entity }: { entity: ExtractedEntity }) {
   const { user } = useAuth();
