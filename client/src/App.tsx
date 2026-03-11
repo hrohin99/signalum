@@ -363,10 +363,15 @@ function AppContent() {
       <Route path="/onboarding">
         <OnboardingPage
           onComplete={() => {
-            queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
-            checkedUserId.current = null;
-            setHasCompletedOnboarding(null);
-            setLocation("/");
+            const params = new URLSearchParams(window.location.search);
+            if (params.get("edit") === "true") {
+              setLocation("/settings");
+            } else {
+              queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
+              checkedUserId.current = null;
+              setHasCompletedOnboarding(null);
+              setLocation("/");
+            }
           }}
         />
       </Route>
