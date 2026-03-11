@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,7 +6,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { ChevronLeft, ArrowRight, Building2, User, Landmark, BarChart3, Handshake, Scale, Check, Loader2 } from "lucide-react";
+import { ChevronLeft, ArrowRight, Building2, User, Landmark, BarChart3, Handshake, Scale, Check, Loader2, X } from "lucide-react";
+import { useLocation, useSearch } from "wouter";
 
 const PERSPECTIVE_OPTIONS = [
   { value: "vendor", label: "Product or Technology Vendor", description: "You build and sell a product or platform and need to track your market", icon: Building2 },
@@ -93,8 +94,13 @@ function SectionHeading({ children }: { children: string }) {
 
 export default function OnboardingPage({ onComplete }: { onComplete: () => void }) {
   const { toast } = useToast();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const isEditMode = searchParams.get("edit") === "true";
+  const [, setLocation] = useLocation();
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(isEditMode);
 
   const [perspective, setPerspective] = useState("");
   const [trackingTypes, setTrackingTypes] = useState<string[]>([]);
@@ -133,6 +139,39 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
   const [legalJurisdictions, setLegalJurisdictions] = useState<string[]>([]);
   const [legalReportTo, setLegalReportTo] = useState("");
   const [legalCertsPursuing, setLegalCertsPursuing] = useState("");
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    (async () => {
+      try {
+        const res = await apiRequest("GET", "/api/workspace/profile");
+        const data = await res.json();
+        if (data.user_perspective) setPerspective(data.user_perspective);
+        if (data.tracking_types) setTrackingTypes(data.tracking_types);
+        if (data.org_description) setOrgDescription(data.org_description);
+        if (data.user_role) setUserRole(data.user_role);
+        if (data.org_geographies) setOrgGeographies(data.org_geographies);
+        if (data.competitors) setCompetitors(data.competitors);
+        if (data.win_factors) setWinFactors(data.win_factors);
+        if (data.vulnerability) setVulnerability(data.vulnerability);
+        if (data.early_warning_signal) setEarlyWarningSignal(data.early_warning_signal);
+        if (data.regulations_monitored) {
+          setRegulationsMonitored(data.regulations_monitored);
+          setRegulationsText(data.regulations_monitored.join(", "));
+        }
+        if (data.regulatory_bodies) setRegulatoryBodies(data.regulatory_bodies);
+        if (data.compliance_purpose) setCompliancePurpose(data.compliance_purpose);
+        if (data.standards_bodies) setStandardsBodies(data.standards_bodies);
+        if (data.standards_certified) setStandardsCertified(data.standards_certified);
+        if (data.standards_purpose) setStandardsPurpose(data.standards_purpose);
+        if (data.briefing_audience) setBriefingAudience(data.briefing_audience);
+      } catch (err) {
+        console.error("Failed to load profile for editing:", err);
+      } finally {
+        setLoadingProfile(false);
+      }
+    })();
+  }, [isEditMode]);
 
   const totalSteps = 6;
   const has = (t: string) => trackingTypes.includes(t);
@@ -187,7 +226,11 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
         onboardingCompleted: true,
       });
 
-      onComplete();
+      if (isEditMode) {
+        setLocation("/settings");
+      } else {
+        onComplete();
+      }
     } catch (err: any) {
       toast({
         title: "Error saving profile",
@@ -451,8 +494,26 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
     return sections;
   };
 
+  if (loadingProfile) {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-6">
+        <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-6">
+    <div className="min-h-screen bg-white flex items-center justify-center p-6 relative">
+      {isEditMode && (
+        <button
+          onClick={() => setLocation("/settings")}
+          className="absolute top-6 right-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          data-testid="button-cancel-edit"
+        >
+          Cancel
+          <X className="w-4 h-4" />
+        </button>
+      )}
       <div className="w-full max-w-[580px]">
         <div className="w-full h-1.5 bg-gray-100 rounded-full mb-8 overflow-hidden">
           <div
@@ -654,6 +715,8 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
               >
                 {submitting ? (
                   <span className="flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" />Saving...</span>
+                ) : isEditMode ? (
+                  "Save changes"
                 ) : (
                   "Go to my workspace"
                 )}

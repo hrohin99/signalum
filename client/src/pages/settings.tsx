@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, User, Pencil, Package, Mail, Search, Bell, GripVertical, X, Plus, Loader2, Crosshair } from "lucide-react";
+import { LogOut, User, Pencil, Package, Mail, Search, Bell, GripVertical, X, Plus, Loader2, Crosshair, UserCog } from "lucide-react";
 import { ComingSoonCard } from "@/components/coming-soon-card";
+import { useLocation } from "wouter";
 import type { WorkspaceCapability } from "@shared/schema";
 
 function CapabilitiesCard() {
@@ -285,6 +286,7 @@ function CapabilitiesCard() {
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
@@ -398,6 +400,29 @@ export default function SettingsPage() {
                 <p className="text-sm mt-1" data-testid="text-user-email">{user?.email}</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
+                <UserCog className="w-5 h-5 text-[#1e3a5f]" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-medium text-foreground" data-testid="text-workspace-profile-header">Workspace Profile</h3>
+                <p className="text-sm text-muted-foreground">Your perspective, tracking preferences, and organisation context.</p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setLocation("/onboarding?edit=true")}
+              className="w-full"
+              data-testid="button-edit-workspace-profile"
+            >
+              <Pencil className="w-4 h-4 mr-2" />
+              Edit workspace profile
+            </Button>
           </CardContent>
         </Card>
 
