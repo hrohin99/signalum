@@ -1142,56 +1142,42 @@ If no dates found, return { "extracted_dates": [] }.`
     }
   });
 
-  app.get("/api/config/capture-email", (req: Request, res: Response) => {
-    res.json({ captureEmail: process.env.CAPTURE_EMAIL || "capture@iialdoucla.resend.app" });
+  app.get("/api/config/capture-email", requireAuth, async (req: Request, res: Response) => {
+    const userId = (req as any).userId;
+    const workspace = await storage.getWorkspaceByUserId(userId);
+    const token = workspace?.captureToken || "capture";
+    const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
+    res.json({ captureEmail: `${token}@${domain}` });
   });
 
   app.post("/api/capture/email-inbound", async (req: Request, res: Response) => {
     try {
       const payload = req.body;
 
-      const fromEmail = (
-        payload.from?.address ||
-        (typeof payload.from === "string" ? payload.from : "") ||
-        payload.sender ||
-        ""
-      ).toLowerCase().trim();
+      const toAddress = payload.to?.address || (typeof payload.to === "string" ? payload.to : "") || "";
+      const tokenMatch = toAddress.match(/^([a-z0-9]+)@/i);
+      const captureToken = tokenMatch?.[1]?.toLowerCase() || null;
 
+      const fromEmail = payload.from?.address || (typeof payload.from === "string" ? payload.from : "") || "unknown";
       const subject = payload.subject || "(no subject)";
-      const bodyText = (
-        payload.text ||
-        (payload.html ? payload.html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") : "") ||
-        ""
-      ).slice(0, 3000);
+      const bodyText = (payload.text || payload.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") || "").slice(0, 3000);
+      const content = `Subject: ${subject}\n\nFrom: ${fromEmail}\n\n${bodyText}`.trim();
 
-      const content = `Subject: ${subject}\n\n${bodyText}`.trim();
+      console.log(`[email-inbound] to: ${toAddress}, token: ${captureToken}, from: ${fromEmail}`);
 
-      console.log(`[email-inbound] Received from: ${fromEmail}, subject: ${subject}`);
-
-      if (!fromEmail || !content) {
-        return res.status(200).json({ message: "Empty payload, skipped" });
+      if (!captureToken) {
+        console.log("[email-inbound] No capture token found in to address");
+        return res.status(200).json({ message: "No token" });
       }
 
-      const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
-      if (error || !users) {
-        console.error("[email-inbound] Failed to list users:", error);
-        return res.status(200).json({ message: "User lookup failed" });
-      }
-
-      const matchedUser = users.find(u => u.email?.toLowerCase() === fromEmail);
-      if (!matchedUser) {
-        console.log(`[email-inbound] No Signalum user matched sender: ${fromEmail}`);
-        return res.status(200).json({ message: "Sender not a Signalum user" });
-      }
-
-      const userId = matchedUser.id;
-      const workspace = await storage.getWorkspaceByUserId(userId);
+      const workspace = await storage.getWorkspaceByCaptureToken(captureToken);
       if (!workspace) {
-        return res.status(200).json({ message: "No workspace found for user" });
+        console.log(`[email-inbound] No workspace matched token: ${captureToken}`);
+        return res.status(200).json({ message: "Token not recognised" });
       }
 
       await storage.createCapture({
-        userId,
+        userId: workspace.userId,
         type: "email_forward",
         content,
         matchedEntity: null,
@@ -1199,12 +1185,12 @@ If no dates found, return { "extracted_dates": [] }.`
         matchReason: `Forwarded email — ${subject}`,
       });
 
-      console.log(`[email-inbound] ✅ Capture stored for user ${userId} from ${fromEmail}`);
+      console.log(`[email-inbound] ✅ Capture stored for workspace ${workspace.id} from ${fromEmail}`);
       return res.status(200).json({ success: true });
 
     } catch (err) {
-      console.error("[email-inbound] Unhandled error:", err);
-      return res.status(200).json({ message: "Error processing inbound email" });
+      console.error("[email-inbound] Error:", err);
+      return res.status(200).json({ message: "Error" });
     }
   });
 

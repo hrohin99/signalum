@@ -53,3 +53,8 @@ waitForPort = 5000
 
 [agent]
 integrations = ["javascript_anthropic_ai_integrations:2.0.0"]
+
+[userenv]
+
+[userenv.shared]
+RESEND_INBOUND_DOMAIN = "iialdoucla.resend.app"

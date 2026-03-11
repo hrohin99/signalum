@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { eq, desc, and, lt, gte, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -14,6 +15,7 @@ export interface IStorage {
   createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
   dismissWelcome(userId: string): Promise<void>;
   getWorkspaceByUserId(userId: string): Promise<Workspace | undefined>;
+  getWorkspaceByCaptureToken(token: string): Promise<Workspace | null>;
   createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
   updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined>;
   createCapture(capture: InsertCapture): Promise<Capture>;
@@ -115,7 +117,15 @@ export class DatabaseStorage implements IStorage {
     return workspace;
   }
 
+  async getWorkspaceByCaptureToken(token: string): Promise<Workspace | null> {
+    const result = await db.select().from(workspaces).where(eq(workspaces.captureToken, token)).limit(1);
+    return result[0] || null;
+  }
+
   async createWorkspace(workspace: InsertWorkspace): Promise<Workspace> {
+    if (!workspace.captureToken) {
+      workspace = { ...workspace, captureToken: randomUUID().replace(/-/g, '').slice(0, 12) };
+    }
     const [created] = await db
       .insert(workspaces)
       .values(workspace)

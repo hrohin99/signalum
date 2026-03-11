@@ -29,6 +29,7 @@ export const workspaces = pgTable("workspaces", {
   categories: jsonb("categories").notNull().$type<ExtractedCategory[]>(),
   websiteUrl: text("website_url"),
   pendingSeedUrls: jsonb("pending_seed_urls").$type<string[]>(),
+  captureToken: varchar("capture_token", { length: 32 }).unique(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
