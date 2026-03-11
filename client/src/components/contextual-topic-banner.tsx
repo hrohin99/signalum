@@ -24,7 +24,7 @@ function getBannerContent(
     case "competitor":
       if (!hasProductContext) {
         return {
-          message: "Watchloom can generate a battlecard for this competitor. Add your product details in Settings to unlock personalised competitive intelligence.",
+          message: "Signalum can generate a battlecard for this competitor. Add your product details in Settings to unlock personalised competitive intelligence.",
           actionType: "settings",
         };
       }
@@ -35,29 +35,29 @@ function getBannerContent(
     case "regulation":
     case "risk":
       return {
-        message: "Add the key compliance dates for this topic so Watchloom can surface them in your daily brief before they become a deadline crisis.",
+        message: "Add the key compliance dates for this topic so Signalum can surface them in your daily brief before they become a deadline crisis.",
         actionType: "date",
       };
     case "trend":
     case "technology":
       return {
-        message: "As intelligence builds up here, Watchloom will identify patterns and signals across everything you capture. Keep adding updates to sharpen the picture.",
+        message: "As intelligence builds up here, Signalum will identify patterns and signals across everything you capture. Keep adding updates to sharpen the picture.",
         actionType: "none",
       };
     case "person":
       return {
-        message: "Track what this person says and does publicly. Drop in articles, quotes, announcements, or meeting notes and Watchloom builds a profile over time.",
+        message: "Track what this person says and does publicly. Drop in articles, quotes, announcements, or meeting notes and Signalum builds a profile over time.",
         actionType: "none",
       };
     case "project":
     case "event":
       return {
-        message: "Add key dates, notes, and updates to keep this topic current. Watchloom will surface anything time-sensitive in your daily brief.",
+        message: "Add key dates, notes, and updates to keep this topic current. Signalum will surface anything time-sensitive in your daily brief.",
         actionType: "none",
       };
     default:
       return {
-        message: "Drop in anything relevant to this topic — articles, notes, links, documents. Watchloom connects the dots and keeps you briefed.",
+        message: "Drop in anything relevant to this topic — articles, notes, links, documents. Signalum connects the dots and keeps you briefed.",
         actionType: "none",
       };
   }

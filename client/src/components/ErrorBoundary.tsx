@@ -49,7 +49,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                 <Shield className="w-5 h-5 text-white" />
               </div>
               <span className="text-xl font-semibold" style={{ color: "#1e3a5f" }}>
-                Watchloom
+                Signalum
               </span>
             </div>
 

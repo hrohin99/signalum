@@ -273,7 +273,7 @@ function verificationResultPage(message: string, success: boolean): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Email Verification — Watchloom</title>
+  <title>Email Verification — Signalum</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f5f7;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f5f7;padding:80px 0;">
@@ -282,14 +282,14 @@ function verificationResultPage(message: string, success: boolean): string {
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
             <td style="background-color:#1e3a5f;padding:24px 40px;text-align:center;">
-              <span style="font-size:24px;font-weight:600;color:#ffffff;">Watchloom</span>
+              <span style="font-size:24px;font-weight:600;color:#ffffff;">Signalum</span>
             </td>
           </tr>
           <tr>
             <td style="padding:48px 40px;text-align:center;">
               <div style="width:56px;height:56px;border-radius:50%;background-color:${color};color:#fff;font-size:28px;line-height:56px;margin:0 auto 24px;">${icon}</div>
               <p style="margin:0 0 32px;font-size:17px;color:#333;line-height:1.5;">${safeMessage}</p>
-              <a href="/" style="display:inline-block;padding:12px 32px;background-color:#1e3a5f;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600;">Go to Watchloom</a>
+              <a href="/" style="display:inline-block;padding:12px 32px;background-color:#1e3a5f;color:#fff;text-decoration:none;border-radius:6px;font-size:15px;font-weight:600;">Go to Signalum</a>
             </td>
           </tr>
         </table>
@@ -500,9 +500,9 @@ export async function registerRoutes(
         const { Resend } = await import("resend");
         const resendClient = new Resend(process.env.RESEND_API_KEY);
         await resendClient.emails.send({
-          from: "Watchloom <rohin@rohin.co>",
+          from: "Signalum <rohin@rohin.co>",
           to: "hrohin99@gmail.com",
-          subject: "🎉 New Watchloom signup",
+          subject: "🎉 New Signalum signup",
           html: `
             <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
               <h2 style="color: #1e3a5f; margin-bottom: 8px;">New user signed up</h2>
@@ -3472,7 +3472,7 @@ Return only the bullet points, no JSON, no headers.`
 
       if (todayManualSearches.length >= 3) {
         return res.status(429).json({
-          message: "Search limit reached for today. Watchloom will automatically search again tomorrow.",
+          message: "Search limit reached for today. Signalum will automatically search again tomorrow.",
           limitReached: true,
         });
       }
@@ -3684,7 +3684,7 @@ Return only the bullet points, no JSON, no headers.`
         await transporter.sendMail({
           from: process.env.SMTP_FROM || process.env.SMTP_USER || "noreply@watchloom.com",
           to: "hrohin99@gmail.com",
-          subject: `Watchloom feedback — ${moodLabel}`,
+          subject: `Signalum feedback — ${moodLabel}`,
           text: `${parsed.data.message}\n\nUser: ${userEmail}\nTenant: ${tenantId}`,
         });
       } catch (emailErr) {

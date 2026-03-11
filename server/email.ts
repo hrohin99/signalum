@@ -27,7 +27,7 @@ export async function sendWeeklyDigestEmail(
   const { data, error } = await resend.emails.send({
     from: fromAddress,
     to,
-    subject: `Watchloom — Weekly Intelligence Digest`,
+    subject: `Signalum — Weekly Intelligence Digest`,
     html: `
 <!DOCTYPE html>
 <html lang="en">
@@ -42,7 +42,7 @@ export async function sendWeeklyDigestEmail(
         <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
             <td style="background-color:#1e3a5f;padding:24px 40px;text-align:center;">
-              <span style="font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.3px;">Watchloom — Weekly Digest</span>
+              <span style="font-size:20px;font-weight:600;color:#ffffff;letter-spacing:-0.3px;">Signalum — Weekly Digest</span>
             </td>
           </tr>
           <tr>
@@ -55,7 +55,7 @@ export async function sendWeeklyDigestEmail(
           <tr>
             <td style="padding:20px 40px;border-top:1px solid #eee;text-align:center;">
               <p style="margin:0;font-size:12px;color:#aaaaaa;">
-                You received this because you enabled weekly digests in Watchloom.<br>
+                You received this because you enabled weekly digests in Signalum.<br>
                 Disable this in Settings to stop receiving these emails.
               </p>
             </td>
@@ -88,7 +88,7 @@ export async function sendVerificationEmail(
   const { data, error } = await resend.emails.send({
     from: fromAddress,
     to,
-    subject: "Confirm your email — Watchloom",
+    subject: "Confirm your email — Signalum",
     html: `
 <!DOCTYPE html>
 <html lang="en">
@@ -103,7 +103,7 @@ export async function sendVerificationEmail(
         <table role="presentation" width="480" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
           <tr>
             <td style="background-color:#1e3a5f;padding:32px 40px;text-align:center;">
-              <span style="font-size:24px;font-weight:600;color:#ffffff;letter-spacing:-0.3px;">Watchloom</span>
+              <span style="font-size:24px;font-weight:600;color:#ffffff;letter-spacing:-0.3px;">Signalum</span>
             </td>
           </tr>
           <tr>
@@ -132,7 +132,7 @@ export async function sendVerificationEmail(
           <tr>
             <td style="padding:24px 40px;border-top:1px solid #eee;text-align:center;">
               <p style="margin:0;font-size:12px;color:#aaaaaa;">
-                You received this email because you signed up for Watchloom.<br>
+                You received this email because you signed up for Signalum.<br>
                 If you didn't create an account, you can safely ignore this email.
               </p>
             </td>
@@ -143,7 +143,7 @@ export async function sendVerificationEmail(
   </table>
 </body>
 </html>`,
-    text: `Watchloom\n\nConfirm your email to access your workspace\n\nThanks for signing up. Visit the link below to verify your email address:\n\n${verificationLink}\n\nIf you didn't create an account, you can safely ignore this email.`,
+    text: `Signalum\n\nConfirm your email to access your workspace\n\nThanks for signing up. Visit the link below to verify your email address:\n\n${verificationLink}\n\nIf you didn't create an account, you can safely ignore this email.`,
   });
 
   if (error) {

@@ -29,7 +29,7 @@ const FEATURE_CARDS = [
   },
   {
     title: "Industry Trends",
-    text: "Three major stories broke in your space this week. Watchloom pulled them together so you did not have to.",
+    text: "Three major stories broke in your space this week. Signalum pulled them together so you did not have to.",
   },
   {
     title: "Key Accounts",
@@ -37,11 +37,11 @@ const FEATURE_CARDS = [
   },
   {
     title: "Meeting Notes and Conversations",
-    text: "Drop in notes from a customer call or colleague conversation. Watchloom files the intelligence automatically and connects it to what you already track.",
+    text: "Drop in notes from a customer call or colleague conversation. Signalum files the intelligence automatically and connects it to what you already track.",
   },
   {
     title: "Anything You Define",
-    text: "You tell Watchloom what matters in plain English. It builds your workspace, tracks it, and briefs you on it every morning. No setup, no configuration, no IT required.",
+    text: "You tell Signalum what matters in plain English. It builds your workspace, tracks it, and briefs you on it every morning. No setup, no configuration, no IT required.",
     goldBorder: true,
   },
 ];
@@ -210,7 +210,7 @@ function FeaturesDropdown({ show }: { show: boolean }) {
                 <rect width="32" height="32" rx="6" fill="rgba(255,255,255,0.15)" />
                 <path d="M8 10l4 12 4-8 4 8 4-12" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
               </svg>
-              <span style={{ color: "#ffffff", fontSize: 12, fontWeight: 600 }}>Watchloom Workspace</span>
+              <span style={{ color: "#ffffff", fontSize: 12, fontWeight: 600 }}>Signalum Workspace</span>
             </div>
             <div className="flex gap-2 mb-2">
               <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.15)" }} />
@@ -380,7 +380,7 @@ export default function LandingPage() {
             <path d="M8 10l4 12 4-8 4 8 4-12" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
           </svg>
           <span className="text-lg font-bold" style={{ color: "#1e3a5f" }} data-testid="text-navbar-brand">
-            Watchloom
+            Signalum
           </span>
         </div>
 
@@ -469,7 +469,7 @@ export default function LandingPage() {
             }}
             data-testid="text-hero-subheadline"
           >
-            Every day you get hit with competitor moves, regulation changes, customer conversations, and industry noise. Watchloom turns all of it into one clear brief that tells you what changed and what to do about it.
+            Every day you get hit with competitor moves, regulation changes, customer conversations, and industry noise. Signalum turns all of it into one clear brief that tells you what changed and what to do about it.
           </p>
 
           <div className="flex items-center justify-center gap-4 mb-0">
@@ -590,7 +590,7 @@ export default function LandingPage() {
               You bookmark things you never revisit. You save articles you forget about. You take notes that sit in a folder nobody opens. Storing information is not the same as understanding it.
             </p>
             <p style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }} data-testid="text-problem-p3">
-              Watchloom does not just store what you capture. It reads it, connects it to everything else you track, and turns it into a clear picture of what is actually happening in your world.
+              Signalum does not just store what you capture. It reads it, connects it to everything else you track, and turns it into a clear picture of what is actually happening in your world.
             </p>
           </div>
 
@@ -610,7 +610,7 @@ export default function LandingPage() {
                       <line x1="18" y1="6" x2="6" y2="18" />
                       <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
-                    <span className="text-xs font-semibold" style={{ color: "#f87171" }}>Without Watchloom</span>
+                    <span className="text-xs font-semibold" style={{ color: "#f87171" }}>Without Signalum</span>
                   </div>
                   <div className="flex flex-col gap-3">
                     <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Bookmarks you never revisit</p>
@@ -626,7 +626,7 @@ export default function LandingPage() {
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
-                    <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>With Watchloom</span>
+                    <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>With Signalum</span>
                   </div>
                   <div className="flex flex-col gap-3">
                     <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Everything captured in one place</p>
@@ -746,7 +746,7 @@ export default function LandingPage() {
                 AI finds where it belongs
               </h3>
               <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                Watchloom reads what you captured, figures out where it belongs, and files it automatically. You never have to think about organisation again.
+                Signalum reads what you captured, figures out where it belongs, and files it automatically. You never have to think about organisation again.
               </p>
             </div>
 
@@ -809,7 +809,7 @@ export default function LandingPage() {
               style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
               data-testid="text-track-headline"
             >
-              Whatever you need to stay on top of, Watchloom has got it
+              Whatever you need to stay on top of, Signalum has got it
             </h2>
           </div>
 
@@ -916,7 +916,7 @@ export default function LandingPage() {
               data-testid="card-testimonial-3"
             >
               <p className="italic flex-1" style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                "I track six different topics across two industries. Watchloom files everything and I never miss a thing."
+                "I track six different topics across two industries. Signalum files everything and I never miss a thing."
               </p>
               <div>
                 <div style={{ width: 32, height: 2, backgroundColor: "#1e3a5f", marginTop: 16, marginBottom: 12 }} />
@@ -983,7 +983,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SECTION 10 - COMING SOON (Ask Watchloom) */}
+      {/* SECTION 10 - COMING SOON (Ask Signalum) */}
       <section
         id="coming-soon"
         ref={s7.ref}
@@ -1013,7 +1013,7 @@ export default function LandingPage() {
               style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
               data-testid="text-coming-soon-headline"
             >
-              Ask Watchloom anything about your tracked topics
+              Ask Signalum anything about your tracked topics
             </h3>
 
             <p
@@ -1021,7 +1021,7 @@ export default function LandingPage() {
               style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
               data-testid="text-coming-soon-description"
             >
-              Soon you will be able to ask Watchloom questions in plain English and get instant answers from everything it has captured for you. What has changed with a competitor this month? What are the biggest themes across your industry right now? What did I capture about pricing changes last week? Watchloom will search its own knowledge of your workspace and answer in seconds.
+              Soon you will be able to ask Signalum questions in plain English and get instant answers from everything it has captured for you. What has changed with a competitor this month? What are the biggest themes across your industry right now? What did I capture about pricing changes last week? Signalum will search its own knowledge of your workspace and answer in seconds.
             </p>
 
             <div className="flex flex-wrap gap-3 mb-6" data-testid="pills-coming-soon">
@@ -1148,7 +1148,7 @@ export default function LandingPage() {
         <div className="max-w-[1000px] mx-auto">
           <div className="flex items-center justify-between mb-6">
             <span className="text-base font-bold" style={{ color: "#1e3a5f" }} data-testid="text-footer-brand">
-              Watchloom
+              Signalum
             </span>
             <div className="flex items-center gap-6">
               <Link href="/signin">
@@ -1172,7 +1172,7 @@ export default function LandingPage() {
             </div>
           </div>
           <p className="text-xs" style={{ color: "#94a3b8" }}>
-            &copy; 2026 Watchloom
+            &copy; 2026 Signalum
           </p>
         </div>
       </footer>

@@ -5,18 +5,18 @@ import { Button } from "@/components/ui/button";
 const panels = [
   {
     icon: Rocket,
-    headline: "Watchloom is already working",
+    headline: "Signalum is already working",
     body: "We are already searching the web for recent updates on everything you are tracking. Your workspace will populate in the next few minutes.",
   },
   {
     icon: Sun,
     headline: "Your daily brief starts tomorrow",
-    body: "Every morning Watchloom sends you one clear brief covering what changed across all your topics, what signals matter, and what to do about it.",
+    body: "Every morning Signalum sends you one clear brief covering what changed across all your topics, what signals matter, and what to do about it.",
   },
   {
     icon: Inbox,
     headline: "Capture anything, anytime",
-    body: "A note from a meeting. A regulation you read. A price change you spotted. An article a colleague forwarded. Drop anything into Capture and Watchloom files it automatically.",
+    body: "A note from a meeting. A regulation you read. A price change you spotted. An article a colleague forwarded. Drop anything into Capture and Signalum files it automatically.",
   },
 ];
 

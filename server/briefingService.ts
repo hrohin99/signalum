@@ -297,7 +297,7 @@ export async function sendBriefingEmail(
   <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
     <div style="max-width:600px;margin:0 auto;background:#ffffff;">
       <div style="background:#1e293b;padding:20px;display:flex;justify-content:space-between;align-items:center;">
-        <span style="color:#ffffff;font-size:20px;font-weight:bold;">Watchloom</span>
+        <span style="color:#ffffff;font-size:20px;font-weight:bold;">Signalum</span>
         <span style="color:#94a3b8;font-size:13px;">${dateRange}</span>
       </div>
 
@@ -317,7 +317,7 @@ export async function sendBriefingEmail(
           <a href="https://watchloom.rohin.co/settings/briefing" style="color:#3b82f6;text-decoration:none;">Manage briefing preferences</a>
         </div>
         <div style="font-size:12px;color:#6b7280;margin-top:8px;">
-          Sent by Watchloom · <a href="https://watchloom.rohin.co/settings/briefing" style="color:#6b7280;text-decoration:none;">Unsubscribe</a>
+          Sent by Signalum · <a href="https://watchloom.rohin.co/settings/briefing" style="color:#6b7280;text-decoration:none;">Unsubscribe</a>
         </div>
       </div>
     </div>
@@ -328,7 +328,7 @@ export async function sendBriefingEmail(
     await resend.emails.send({
       from: "rohin@rohin.co",
       to: toEmail,
-      subject: `Your Watchloom Brief, ${totalSignals} signals this week`,
+      subject: `Your Signalum Brief, ${totalSignals} signals this week`,
       html,
     });
     return { success: true };

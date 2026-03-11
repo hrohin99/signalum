@@ -45,7 +45,7 @@ export function AppSidebar() {
           <div className="w-8 h-8 rounded-md bg-[#1e3a5f] flex items-center justify-center">
             <Shield className="w-4 h-4 text-white" />
           </div>
-          <span className="text-base font-semibold tracking-tight">Watchloom</span>
+          <span className="text-base font-semibold tracking-tight">Signalum</span>
         </div>
       </SidebarHeader>
       <SidebarContent>
