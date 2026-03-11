@@ -431,14 +431,15 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
         if (data.tracking_types) setTrackingTypes(data.tracking_types);
         if (data.org_description) setOrgDescription(data.org_description);
         if (data.user_role) setUserRole(data.user_role);
-        if (data.org_geographies) setOrgGeographies(data.org_geographies);
-        if (data.competitors) setCompetitors(data.competitors);
+        if (data.org_geographies) setOrgGeographies(Array.isArray(data.org_geographies) ? data.org_geographies : []);
+        if (data.competitors) setCompetitors(Array.isArray(data.competitors) ? data.competitors.join(", ") : data.competitors);
         if (data.win_factors) setWinFactors(data.win_factors);
         if (data.vulnerability) setVulnerability(data.vulnerability);
         if (data.early_warning_signal) setEarlyWarningSignal(data.early_warning_signal);
         if (data.regulations_monitored) {
-          setRegulationsMonitored(data.regulations_monitored);
-          setRegulationsText(data.regulations_monitored.join(", "));
+          const regs = Array.isArray(data.regulations_monitored) ? data.regulations_monitored : [];
+          setRegulationsMonitored(regs);
+          setRegulationsText(regs.join(", "));
         }
         if (data.regulatory_bodies) setRegulatoryBodies(data.regulatory_bodies);
         if (data.compliance_purpose) setCompliancePurpose(data.compliance_purpose);
