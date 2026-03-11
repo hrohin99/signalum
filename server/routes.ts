@@ -495,6 +495,31 @@ export async function registerRoutes(
         expiresIn: "24h",
       });
 
+      // Send new user alert to admin
+      try {
+        const { Resend } = await import("resend");
+        const resendClient = new Resend(process.env.RESEND_API_KEY);
+        await resendClient.emails.send({
+          from: "Watchloom <rohin@rohin.co>",
+          to: "hrohin99@gmail.com",
+          subject: "🎉 New Watchloom signup",
+          html: `
+            <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
+              <h2 style="color: #1e3a5f; margin-bottom: 8px;">New user signed up</h2>
+              <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Email</td><td style="padding: 8px 0; font-size: 14px; font-weight: 600;">${email}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Role</td><td style="padding: 8px 0; font-size: 14px;">${role || "not set"}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Tracking context</td><td style="padding: 8px 0; font-size: 14px;">${trackingText || "not set"}</td></tr>
+                <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Time</td><td style="padding: 8px 0; font-size: 14px;">${new Date().toUTCString()}</td></tr>
+              </table>
+            </div>
+          `,
+        });
+        console.log("[admin alert] New user signup notification sent for", email);
+      } catch (alertErr) {
+        console.error("[admin alert] Failed to send signup notification:", alertErr);
+      }
+
       const emailResult = await sendVerificationEmail(email, token);
 
       if (!emailResult.success) {
@@ -2901,30 +2926,6 @@ Rules:
             pendingSeedUrls: null,
           });
           console.log("[workspace/profile] Auto-created blank workspace for user", userId);
-
-          const userEmail = (req as any).userEmail || (req as any).email || null;
-          try {
-            const { Resend } = await import("resend");
-            const resendClient = new Resend(process.env.RESEND_API_KEY);
-            await resendClient.emails.send({
-              from: "Watchloom <rohin@rohin.co>",
-              to: "hrohin99@gmail.com",
-              subject: "🎉 New Watchloom signup",
-              html: `
-                <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
-                  <h2 style="color: #1e3a5f; margin-bottom: 8px;">New user signed up</h2>
-                  <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
-                    <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Email</td><td style="padding: 8px 0; font-size: 14px; font-weight: 600;">${userEmail || userId}</td></tr>
-                    <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Perspective</td><td style="padding: 8px 0; font-size: 14px;">${req.body.userPerspective || "not set"}</td></tr>
-                    <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Organisation</td><td style="padding: 8px 0; font-size: 14px;">${req.body.orgDescription?.slice(0, 100) || "not set"}</td></tr>
-                    <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Time</td><td style="padding: 8px 0; font-size: 14px;">${new Date().toUTCString()}</td></tr>
-                  </table>
-                </div>
-              `,
-            });
-          } catch (alertErr) {
-            console.error("[admin alert] Failed to send new user notification:", alertErr);
-          }
         } catch (createErr: any) {
           if (createErr?.code !== "23505") {
             throw createErr;

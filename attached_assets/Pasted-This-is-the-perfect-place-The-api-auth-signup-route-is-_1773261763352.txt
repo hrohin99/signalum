@@ -1,0 +1,32 @@
+This is the perfect place. The /api/auth/signup route is called exactly once per new user. Here's the precise Replit prompt:
+
+Edit server/routes.ts only. One addition.
+Find this block around line 453 (inside the /api/auth/signup route), specifically find the line:
+typescriptconst emailResult = await sendVerificationEmail(email, token);
+Immediately before that line, add:
+typescript// Send new user alert to admin
+try {
+  const { Resend } = await import("resend");
+  const resendClient = new Resend(process.env.RESEND_API_KEY);
+  await resendClient.emails.send({
+    from: "Watchloom <rohin@rohin.co>",
+    to: "hrohin99@gmail.com",
+    subject: "🎉 New Watchloom signup",
+    html: `
+      <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px;">
+        <h2 style="color: #1e3a5f; margin-bottom: 8px;">New user signed up</h2>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+          <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Email</td><td style="padding: 8px 0; font-size: 14px; font-weight: 600;">${email}</td></tr>
+          <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Role</td><td style="padding: 8px 0; font-size: 14px;">${role || "not set"}</td></tr>
+          <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Tracking context</td><td style="padding: 8px 0; font-size: 14px;">${trackingText || "not set"}</td></tr>
+          <tr><td style="padding: 8px 0; color: #666; font-size: 14px;">Time</td><td style="padding: 8px 0; font-size: 14px;">${new Date().toUTCString()}</td></tr>
+        </table>
+      </div>
+    `,
+  });
+  console.log("[admin alert] New user signup notification sent for", email);
+} catch (alertErr) {
+  console.error("[admin alert] Failed to send signup notification:", alertErr);
+}
+Also remove the old alert blocks added at lines ~2907 and ~2165 and ~3038 (near the createWorkspace calls) to avoid duplicate emails. Look for any block that has hrohin99@gmail.com and New Watchloom signup near a createWorkspace call and delete those try/catch alert blocks only.
+Do not change any other logic or files.
