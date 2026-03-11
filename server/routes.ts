@@ -2907,7 +2907,7 @@ Rules:
             const { Resend } = await import("resend");
             const resendClient = new Resend(process.env.RESEND_API_KEY);
             await resendClient.emails.send({
-              from: "Watchloom <notifications@watchloom.rohin.co>",
+              from: "Watchloom <rohin@rohin.co>",
               to: "hrohin99@gmail.com",
               subject: "🎉 New Watchloom signup",
               html: `
