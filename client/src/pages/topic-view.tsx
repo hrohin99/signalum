@@ -4275,26 +4275,8 @@ function DisambiguationCard({
   useEffect(() => {
     if ((entity.disambiguation_confirmed ?? false) || entity.disambiguation_context) return;
 
-    const fetchCompanies = async () => {
-      try {
-        const res = await apiRequest("POST", "/api/entity/disambiguate-companies", {
-          entityName: entity.name,
-        });
-        const data = await res.json();
-
-        if (data.single) {
-          setModalOpen(true);
-          loadAspects(undefined);
-        } else {
-          setCompanies(data.companies || []);
-          setStep("companies");
-          setModalOpen(true);
-        }
-      } catch {
-        setStep("done");
-      }
-    };
-    fetchCompanies();
+    setStep("companies");
+    setModalOpen(true);
   }, [entity.name, entity.disambiguation_confirmed ?? false, entity.disambiguation_context]);
 
   const loadAspects = async (companyContext?: string) => {
@@ -4378,33 +4360,31 @@ function DisambiguationCard({
   return (
     <Dialog open={modalOpen} onOpenChange={() => {}}>
       <DialogContent className="sm:max-w-lg" data-testid="modal-disambiguation-card" onPointerDownOutside={(e) => e.preventDefault()}>
-        {step === "companies" && companies.length > 0 && (
+        {step === "companies" && (
           <>
             <DialogHeader>
-              <DialogTitle>Which {entity.name} do you mean?</DialogTitle>
+              <DialogTitle>Confirm: {entity.name}</DialogTitle>
+              <p className="text-sm text-muted-foreground pt-1">Help Watchloom find the right organisation.</p>
             </DialogHeader>
-            <div className="space-y-2 py-2">
-              {companies.map((company, i) => (
-                <button
-                  key={i}
-                  className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-[#1e3a5f] hover:bg-[#1e3a5f]/5 transition-colors"
-                  onClick={() => handleCompanySelect(company.name)}
-                  data-testid={`button-company-option-${i}`}
-                >
-                  <p className="text-sm font-medium text-foreground">{company.name}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{company.description}</p>
-                </button>
-              ))}
-              <div className="pt-2">
-                <label className="text-xs text-muted-foreground mb-1 block">Their website</label>
+            <div className="space-y-4 py-2">
+              <div>
+                <label className="text-xs font-medium text-foreground mb-1 block">Their website <span className="text-muted-foreground font-normal">(strongly recommended)</span></label>
                 <Input
                   value={disambigWebsiteUrl}
                   onChange={(e) => setDisambigWebsiteUrl(e.target.value)}
-                  placeholder="https://example.com — improves accuracy significantly"
+                  placeholder="https://example.com"
                   className="h-9 text-sm"
                   data-testid="input-company-website"
                 />
+                <p className="text-xs text-muted-foreground mt-1">Adding a URL anchors all searches to the right company, especially for common names.</p>
               </div>
+              <Button
+                className="w-full bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
+                onClick={() => loadAspects(undefined)}
+                disabled={confirming}
+              >
+                Continue
+              </Button>
             </div>
           </>
         )}
