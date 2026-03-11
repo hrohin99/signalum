@@ -129,7 +129,7 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
 
   const response = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 4000,
+    max_tokens: 8000,
     messages: [
       {
         role: "user",
@@ -142,13 +142,13 @@ ${JSON.stringify(groupedForPrompt, null, 2)}
 
 Return a JSON object with this exact structure:
 {
-  "executiveSummary": "Write 2-3 short paragraphs summarising the most important developments across all tracked entities this period. Each paragraph should cover one theme or pattern. Keep each paragraph to 2-3 sentences. No bullet points in the summary.",
+  "executiveSummary": "2-3 sentences maximum, summarising the most important developments across all tracked entities this period. No bullet points.",
   "entities": [
     {
       "name": "string",
       "category": "string",
       "whatHappened": ["one sentence per bullet, 2-3 bullets, highest signal first"],
-      "whyItMatters": ["one sentence per bullet, 1-2 implications for ${prodContext?.productName || "your organisation"}"],
+      "whyItMatters": ["max 1 implication, one short sentence only"],
       "watchFor": "one short sentence on what to monitor next",
       "captureCount": "number"
     }
