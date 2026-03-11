@@ -1,0 +1,40 @@
+I have everything I need. Here's the full Replit prompt — this is a meaningful schema change so it touches 4 files:
+
+Edit shared/schema.ts, server/storage.ts, server/routes.ts, and client/src/pages/capture.tsx. Do not touch any other files.
+
+shared/schema.ts — CHANGE: Find the workspaces table definition:
+typescriptexport const workspaces = pgTable("workspaces", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull().unique(),
+  categories: jsonb("categories").notNull().$type<ExtractedCategory[]>(),
+  websiteUrl: text("website_url"),
+  pendingSeedUrls: jsonb("pending_seed_urls").$type<string[]>(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+Replace with:
+typescriptexport const workspaces = pgTable("workspaces", {
+  id: varchar("id", { length: 255 }).primaryKey(),
+  userId: varchar("user_id", { length: 255 }).notNull().unique(),
+  categories: jsonb("categories").notNull().$type<ExtractedCategory[]>(),
+  websiteUrl: text("website_url"),
+  pendingSeedUrls: jsonb("pending_seed_urls").$type<string[]>(),
+  captureToken: varchar("capture_token", { length: 32 }).unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+server/storage.ts — CHANGE: Find the createWorkspace method. Inside it, before inserting, add logic to generate a capture token if one isn't provided:
+Find the insert call inside createWorkspace and add this immediately before it:
+typescriptif (!workspace.captureToken) {
+  workspace = { ...workspace, captureToken: randomUUID().replace(/-/g, '').slice(0, 12) };
+}
+Also add getWorkspaceByCaptureToken method — find where other getWorkspace methods are defined and add:
+typescriptasync getWorkspaceByCaptureToken(token: string): Promise<Workspace | null> {
+  const result = await db.select().from(workspaces).where(eq(workspaces.captureToken, token)).limit(1);
+  return result[0] || null;
+}
+Make sure randomUUID is imported at the top of storage.ts — add import { randomUUID } from "crypto"; if not already present.
+Also add getWorkspaceByCaptureToken to the IStorage interface near the other workspace method signatures:
+typescriptgetWorkspaceByCaptureToken(token: string): Promise<Workspace | null>;
+
+server/routes.ts — THREE CHANGES:
+Change 1 — Find the existing /api/capture/email-inbound POST route and replace the entire route body with this updated version that uses token-based routing instead of sender email matching:
