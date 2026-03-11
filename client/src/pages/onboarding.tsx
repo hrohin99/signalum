@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { ChevronLeft, ArrowRight, Building2, User, Landmark, BarChart3, Handshake, Scale, Check, Loader2, X } from "lucide-react";
+import { ChevronLeft, ArrowRight, Building2, User, Landmark, BarChart3, Handshake, Scale, Check, Loader2, X, AlertTriangle } from "lucide-react";
 import { useLocation, useSearch } from "wouter";
 
 const PERSPECTIVE_OPTIONS = [
@@ -90,6 +90,287 @@ function SectionDivider() {
 
 function SectionHeading({ children }: { children: string }) {
   return <h3 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-3">{children}</h3>;
+}
+
+const PERSPECTIVE_ACCENT: Record<string, string> = {
+  vendor: "#3b82f6",
+  business_owner: "#ef4444",
+  government: "#22c55e",
+  analyst: "#a855f7",
+  sales: "#f59e0b",
+  legal_compliance: "#06b6d4",
+};
+
+const TRACKING_TYPE_COLORS: Record<string, { bg: string; text: string }> = {
+  competitors: { bg: "rgba(239,68,68,0.15)", text: "#ef4444" },
+  regulations: { bg: "rgba(6,182,212,0.15)", text: "#06b6d4" },
+  standards: { bg: "rgba(168,85,247,0.15)", text: "#a855f7" },
+  trends: { bg: "rgba(245,158,11,0.15)", text: "#f59e0b" },
+  vendors: { bg: "rgba(34,197,94,0.15)", text: "#22c55e" },
+  media: { bg: "rgba(59,130,246,0.15)", text: "#3b82f6" },
+};
+
+interface ProfileCardProps {
+  perspective: string;
+  trackingTypes: string[];
+  orgDescription: string;
+  userRole: string;
+  orgGeographies: string[];
+  competitors: string;
+  earlyWarningSignal: string;
+}
+
+function ProfileCard({
+  perspective,
+  trackingTypes,
+  orgDescription,
+  userRole,
+  orgGeographies,
+  competitors,
+  earlyWarningSignal,
+}: ProfileCardProps) {
+  const accentColor = PERSPECTIVE_ACCENT[perspective] || "#6b7280";
+  const perspectiveOption = PERSPECTIVE_OPTIONS.find((o) => o.value === perspective);
+  const PerspectiveIcon = perspectiveOption?.icon;
+
+  const segments = useMemo(() => {
+    const roleComplete = !!perspective;
+    const trackingComplete = trackingTypes.length > 0;
+    const orgComplete = !!orgDescription.trim();
+    const focusComplete = !!earlyWarningSignal.trim();
+    return [
+      { label: "Role", complete: roleComplete },
+      { label: "Tracking", complete: trackingComplete },
+      { label: "Org", complete: orgComplete },
+      { label: "Focus", complete: focusComplete },
+    ];
+  }, [perspective, trackingTypes, orgDescription, earlyWarningSignal]);
+
+  const completedCount = segments.filter((s) => s.complete).length;
+  const percentage = Math.round((completedCount / segments.length) * 100);
+
+  const accentBarWidth = useMemo(() => {
+    let filled = 0;
+    if (perspective) filled++;
+    if (trackingTypes.length > 0) filled++;
+    if (orgDescription.trim()) filled++;
+    if (userRole) filled++;
+    if (orgGeographies.length > 0) filled++;
+    if (earlyWarningSignal.trim()) filled++;
+    return Math.min(100, Math.round((filled / 6) * 100));
+  }, [perspective, trackingTypes, orgDescription, userRole, orgGeographies, earlyWarningSignal]);
+
+  return (
+    <div className="w-[300px] shrink-0" data-testid="profile-card-wrapper">
+      <div
+        className="rounded-xl border border-white/10 overflow-hidden"
+        style={{ backgroundColor: "#0f0f13" }}
+        data-testid="profile-card"
+      >
+        <div className="h-1 bg-white/5 relative overflow-hidden">
+          <div
+            className="h-full rounded-r-full"
+            style={{
+              width: `${accentBarWidth}%`,
+              backgroundColor: accentColor,
+              transition: "width 0.4s ease, background-color 0.4s ease",
+            }}
+            data-testid="profile-accent-bar"
+          />
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div
+            className="flex items-center gap-2.5 min-h-[28px]"
+            style={{ transition: "opacity 0.3s ease" }}
+          >
+            {PerspectiveIcon && (
+              <div
+                className="w-7 h-7 rounded-md flex items-center justify-center"
+                style={{
+                  backgroundColor: `${accentColor}20`,
+                  transition: "background-color 0.4s ease",
+                }}
+              >
+                <PerspectiveIcon
+                  className="w-4 h-4"
+                  style={{ color: accentColor, transition: "color 0.4s ease" }}
+                />
+              </div>
+            )}
+            <span
+              className="text-sm font-medium"
+              style={{
+                color: perspective ? "#e5e7eb" : "#6b7280",
+                transition: "color 0.3s ease",
+              }}
+              data-testid="profile-perspective-label"
+            >
+              {perspectiveOption?.label || "Select your perspective"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1.5" data-testid="profile-segments">
+            {segments.map((seg) => (
+              <div key={seg.label} className="text-center">
+                <div
+                  className="h-1 rounded-full mb-1"
+                  style={{
+                    backgroundColor: seg.complete ? accentColor : "rgba(255,255,255,0.08)",
+                    transition: "background-color 0.4s ease",
+                  }}
+                />
+                <span
+                  className="text-[10px] uppercase tracking-wider"
+                  style={{
+                    color: seg.complete ? accentColor : "#4b5563",
+                    transition: "color 0.4s ease",
+                  }}
+                >
+                  {seg.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          {orgDescription.trim() && (
+            <div
+              className="text-xs text-gray-400 leading-relaxed"
+              style={{
+                transition: "opacity 0.3s ease",
+                animation: "profileFadeIn 0.3s ease",
+              }}
+              data-testid="profile-org-description"
+            >
+              {orgDescription.length > 120 ? orgDescription.slice(0, 120) + "…" : orgDescription}
+            </div>
+          )}
+
+          {trackingTypes.length > 0 && (
+            <div
+              className="flex flex-wrap gap-1.5"
+              style={{ animation: "profileFadeIn 0.3s ease" }}
+              data-testid="profile-tracking-chips"
+            >
+              {trackingTypes.map((t) => {
+                const colors = TRACKING_TYPE_COLORS[t] || { bg: "rgba(255,255,255,0.1)", text: "#9ca3af" };
+                const label = TRACKING_TYPE_OPTIONS.find((o) => o.value === t)?.label || t;
+                return (
+                  <span
+                    key={t}
+                    className="px-2 py-0.5 rounded text-[10px] font-medium"
+                    style={{
+                      backgroundColor: colors.bg,
+                      color: colors.text,
+                      transition: "all 0.3s ease",
+                    }}
+                  >
+                    {label}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+
+          {orgGeographies.length > 0 && (
+            <div
+              className="flex flex-wrap gap-1.5"
+              style={{ animation: "profileFadeIn 0.3s ease" }}
+              data-testid="profile-geo-chips"
+            >
+              {orgGeographies.map((g) => (
+                <span
+                  key={g}
+                  className="px-2 py-0.5 rounded text-[10px] font-medium"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.08)",
+                    color: "#9ca3af",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  {g}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {competitors.trim() && (
+            <div
+              className="text-xs text-gray-500"
+              style={{ animation: "profileFadeIn 0.3s ease" }}
+              data-testid="profile-competitors"
+            >
+              <span className="text-gray-600 font-medium">Competitors: </span>
+              {competitors.length > 80 ? competitors.slice(0, 80) + "…" : competitors}
+            </div>
+          )}
+
+          {earlyWarningSignal.trim() && (
+            <div
+              className="rounded-lg p-3 text-xs leading-relaxed"
+              style={{
+                backgroundColor: `${accentColor}10`,
+                border: `1px solid ${accentColor}30`,
+                color: "#d1d5db",
+                animation: "profileFadeIn 0.3s ease",
+                transition: "border-color 0.4s ease, background-color 0.4s ease",
+              }}
+              data-testid="profile-early-warning"
+            >
+              <div className="flex items-center gap-1.5 mb-1">
+                <AlertTriangle className="w-3 h-3" style={{ color: accentColor }} />
+                <span className="font-medium text-[10px] uppercase tracking-wider" style={{ color: accentColor }}>
+                  Early Warning
+                </span>
+              </div>
+              {earlyWarningSignal.length > 100 ? earlyWarningSignal.slice(0, 100) + "…" : earlyWarningSignal}
+            </div>
+          )}
+        </div>
+
+        <div
+          className="px-5 py-3 border-t border-white/5 flex items-center justify-between"
+          data-testid="profile-footer"
+        >
+          <span
+            className="text-xs font-bold tracking-wider"
+            style={{
+              color: accentColor,
+              transition: "color 0.4s ease",
+            }}
+            data-testid="profile-percentage"
+          >
+            {percentage}% COMPLETE
+          </span>
+          <div className="flex gap-0.5">
+            {segments.map((seg) => (
+              <div
+                key={seg.label}
+                className="w-2 h-2 rounded-full"
+                style={{
+                  backgroundColor: seg.complete ? accentColor : "rgba(255,255,255,0.1)",
+                  transition: "background-color 0.4s ease",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      <p
+        className="text-center text-[10px] uppercase tracking-widest mt-3"
+        style={{ color: "#4b5563" }}
+        data-testid="profile-realtime-label"
+      >
+        Your profile builds in real time
+      </p>
+      <style>{`
+        @keyframes profileFadeIn {
+          from { opacity: 0; transform: translateY(4px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  );
 }
 
 export default function OnboardingPage({ onComplete }: { onComplete: () => void }) {
@@ -507,14 +788,15 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
       {isEditMode && (
         <button
           onClick={() => setLocation("/settings")}
-          className="absolute top-6 right-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+          className="absolute top-6 right-6 flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 transition-colors z-10"
           data-testid="button-cancel-edit"
         >
           Cancel
           <X className="w-4 h-4" />
         </button>
       )}
-      <div className="w-full max-w-[580px]">
+      <div className="w-full max-w-[920px] flex gap-8 items-start">
+      <div className="flex-1 min-w-0 max-w-[580px]">
         <div className="w-full h-1.5 bg-gray-100 rounded-full mb-8 overflow-hidden">
           <div
             className="h-full bg-[#1e3a5f] rounded-full transition-all duration-300"
@@ -738,6 +1020,19 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
             </Button>
           </div>
         )}
+      </div>
+
+      <div className="hidden md:block sticky top-6">
+        <ProfileCard
+          perspective={perspective}
+          trackingTypes={trackingTypes}
+          orgDescription={orgDescription}
+          userRole={userRole}
+          orgGeographies={orgGeographies}
+          competitors={competitors}
+          earlyWarningSignal={earlyWarningSignal}
+        />
+      </div>
       </div>
     </div>
   );
