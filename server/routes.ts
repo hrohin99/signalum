@@ -1602,6 +1602,9 @@ Return only the summary paragraphs, no JSON, no formatting.`
       const soWhatProfileCtx = buildProfileContext(soWhatWsResult.rows[0] || null);
       const soWhatProfilePrefix = soWhatProfileCtx ? `${soWhatProfileCtx}\n\n` : "";
 
+      const soWhatTenantId = "00000000-0000-0000-0000-000000000000";
+      const prodContext = await storage.getProductContext(soWhatTenantId);
+
       const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
       });
@@ -1612,7 +1615,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
         messages: [
           {
             role: "user",
-            content: `${soWhatProfilePrefix}You are a strategic analyst. Given the following intelligence captures about "${entityName}", provide a structured analysis of what this means for an organisation like Entrust in the government identity verification space.
+            content: `${soWhatProfilePrefix}You are a strategic analyst. Given the following intelligence captures about "${entityName}", provide a structured analysis of what this means for an organisation like ${prodContext?.productName || "the user's organisation"}.
 
 Use this exact format:
 
@@ -1627,7 +1630,7 @@ Use this exact format:
 - [opportunity 1]
 - [opportunity 2]
 
-**Recommended action:** [one direct sentence on what Entrust should do]
+**Recommended action:** [one direct sentence on what ${prodContext?.productName || "your organisation"} should do]
 
 Do not use em dashes. Be direct and opinionated.${focusContext}\n\nCaptures:\n${contentSnippets}\n\nReturn only the structured analysis above, no JSON.`
           }
@@ -2362,6 +2365,8 @@ Rules:
 
       const client = getAnthropicClient();
 
+      const briefProdContext = await storage.getProductContext(tenantId);
+
       const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 2048,
@@ -2386,7 +2391,7 @@ For each entity/topic with notable activity, use a ### heading with the entity n
 - [development 3 if relevant]
 
 **Why it matters**
-- [implication 1 for Entrust]
+- [implication 1 for ${briefProdContext?.productName || "your organisation"}]
 - [implication 2 if relevant]
 
 **Watch for**
@@ -3169,7 +3174,7 @@ Return only the bullet points, no JSON, no headers.`
           max_tokens: 512,
           messages: [{
             role: "user",
-            content: `${sdProfilePrefix}Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"}, what does ${entityName}'s strategic direction mean for Entrust? Respond with 2-3 bullet points, one sentence each, starting with a strong verb. Do not use em dashes.
+            content: `${sdProfilePrefix}Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"}, what does ${entityName}'s strategic direction mean for ${prodContext?.productName || "your organisation"}? Respond with 2-3 bullet points, one sentence each, starting with a strong verb. Do not use em dashes.
 
 ${entityName}'s strategic direction: ${whereHeading}
 

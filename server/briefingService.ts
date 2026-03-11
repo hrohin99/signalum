@@ -120,6 +120,9 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
   const briefingProfileCtx = buildProfileContext(briefingWsResult.rows[0] || null);
   const briefingProfilePrefix = briefingProfileCtx ? `${briefingProfileCtx}\n\n` : "";
 
+  const tenantId = "00000000-0000-0000-0000-000000000000";
+  const prodContext = await storage.getProductContext(tenantId);
+
   const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
   });
@@ -130,7 +133,7 @@ export async function generateBriefingForUser(userId: string): Promise<BriefingD
     messages: [
       {
         role: "user",
-        content: `${briefingProfilePrefix}You are an intelligence analyst writing a weekly briefing for a product manager at Entrust, a company in the government identity verification space.${focusPromptSection}
+        content: `${briefingProfilePrefix}You are an intelligence analyst writing a weekly briefing for a product manager${prodContext?.productName ? ` at ${prodContext.productName}` : ""}${prodContext?.targetCustomer ? `, focused on ${prodContext.targetCustomer}` : ""}.${focusPromptSection}
 
 Do not use em dashes anywhere in your response. Use commas or plain sentences instead.
 
@@ -145,7 +148,7 @@ Return a JSON object with this exact structure:
       "name": "string",
       "category": "string",
       "whatHappened": ["one sentence per bullet, 2-3 bullets, highest signal first"],
-      "whyItMatters": ["one sentence per bullet, 1-2 implications for Entrust"],
+      "whyItMatters": ["one sentence per bullet, 1-2 implications for ${prodContext?.productName || "your organisation"}"],
       "watchFor": "one short sentence on what to monitor next",
       "captureCount": "number"
     }
