@@ -1,0 +1,54 @@
+// Match sender email to a Signalum user account
+    const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    if (error || !users) {
+      console.error("[email-inbound] Failed to list users:", error);
+      return res.status(200).json({ message: "User lookup failed" });
+    }
+
+    const matchedUser = users.find(u => u.email?.toLowerCase() === fromEmail);
+    if (!matchedUser) {
+      console.log(`[email-inbound] No Signalum user matched sender: ${fromEmail}`);
+      return res.status(200).json({ message: "Sender not a Signalum user" });
+    }
+
+    const userId = matchedUser.id;
+    const workspace = await storage.getWorkspaceByUserId(userId);
+    if (!workspace) {
+      return res.status(200).json({ message: "No workspace found for user" });
+    }
+
+    await storage.createCapture({
+      userId,
+      type: "email_forward",
+      content,
+      matchedEntity: null,
+      matchedCategory: null,
+      matchReason: `Forwarded email — ${subject}`,
+    });
+
+    console.log(`[email-inbound] ✅ Capture stored for user ${userId} from ${fromEmail}`);
+    return res.status(200).json({ success: true });
+
+  } catch (err) {
+    console.error("[email-inbound] Unhandled error:", err);
+    return res.status(200).json({ message: "Error processing inbound email" });
+    // Always return 200 — Resend will retry on non-2xx responses indefinitely
+  }
+});
+
+client/src/pages/capture.tsx — CHANGE: Find the email forwarding section (likely showing a "Coming Soon" badge). Replace that entire section with this. First add these state variables near the top of the component:
+typescriptconst [captureEmail, setCaptureEmail] = React.useState<string>("capture@iialdoucla.resend.app");
+const [emailCopied, setEmailCopied] = React.useState(false);
+
+React.useEffect(() => {
+  fetch("/api/config/capture-email")
+    .then(r => r.json())
+    .then(d => { if (d.captureEmail) setCaptureEmail(d.captureEmail); })
+    .catch(() => {});
+}, []);
+
+const handleCopyEmail = () => {
+  navigator.clipboard.writeText(captureEmail);
+  setEmailCopied(true);
+  setTimeout(() => setEmailCopied(false), 2000);
+};
