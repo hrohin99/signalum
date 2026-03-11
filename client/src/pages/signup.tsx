@@ -3,37 +3,15 @@ import { useAuth } from "@/lib/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { SiGoogle } from "react-icons/si";
-import { Shield, Briefcase, BarChart3, Handshake, Crown, ArrowRight, Eye, EyeOff, Loader2, Target, Lightbulb, Search, MoreHorizontal, Mail } from "lucide-react";
-import { Link, useSearch } from "wouter";
-
-type SignupStep = 1 | 2 | 3 | 4;
-
-const ROLES = [
-  { id: "product_manager", label: "Product Manager", icon: Briefcase },
-  { id: "analyst", label: "Analyst", icon: BarChart3 },
-  { id: "sales_bd", label: "Sales & BD", icon: Handshake },
-  { id: "executive", label: "Executive", icon: Crown },
-  { id: "strategy_planning", label: "Strategy & Planning", icon: Target },
-  { id: "consultant_advisor", label: "Consultant / Advisor", icon: Lightbulb },
-  { id: "researcher", label: "Researcher", icon: Search },
-  { id: "other", label: "Other", icon: MoreHorizontal },
-] as const;
+import { Shield, Eye, EyeOff, Loader2, Mail } from "lucide-react";
+import { Link } from "wouter";
 
 export default function SignupPage() {
   const { user, session, signUp, signInWithGoogle } = useAuth();
-  const searchString = useSearch();
   const { toast } = useToast();
-  const fromHero = searchString.includes("from=hero");
-  const heroIntent = typeof window !== "undefined" ? localStorage.getItem("watchloom_tracking_intent") : null;
-  const skipToStep4 = fromHero && !!heroIntent;
 
-  const [step, setStep] = useState<SignupStep>(skipToStep4 ? 4 : 1);
-  const [selectedRole, setSelectedRole] = useState<string>(skipToStep4 ? "other" : "");
-  const [otherRoleText, setOtherRoleText] = useState(skipToStep4 ? "General" : "");
-  const [trackingText, setTrackingText] = useState(skipToStep4 ? heroIntent! : "");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,11 +19,10 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [accountCreated, setAccountCreated] = useState(false);
   const [resendingEmail, setResendingEmail] = useState(false);
-  const [companyWebsite, setCompanyWebsite] = useState("");
 
   useEffect(() => {
     if (user && session) {
-      window.location.href = "/workspace";
+      window.location.href = "/";
     }
   }, [user, session]);
 
@@ -53,33 +30,20 @@ export default function SignupPage() {
     return null;
   }
 
-  const effectiveRole = selectedRole === "other" ? otherRoleText.trim() : selectedRole;
-  const canContinueStep1 = selectedRole !== "" && (selectedRole !== "other" || otherRoleText.trim().length > 0);
-
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      localStorage.setItem(
-        "pendingOnboarding",
-        JSON.stringify({
-          role: effectiveRole,
-          trackingText,
-          fullName,
-          websiteUrl: companyWebsite.trim() || undefined,
-        })
-      );
       localStorage.removeItem("watchloom_tracking_intent");
 
       const { error, emailSent } = await signUp(email, password, {
-        role: effectiveRole,
-        trackingText,
+        role: "pending",
+        trackingText: "",
       });
       setIsLoading(false);
 
       if (error) {
-        localStorage.removeItem("pendingOnboarding");
         toast({
           title: "Signup Error",
           description: error.message,
@@ -97,7 +61,6 @@ export default function SignupPage() {
       }
     } catch {
       setIsLoading(false);
-      localStorage.removeItem("pendingOnboarding");
       toast({
         title: "Signup Error",
         description: "Something went wrong. Please try again.",
@@ -137,19 +100,9 @@ export default function SignupPage() {
   };
 
   const handleGoogleSignIn = async () => {
-    localStorage.setItem(
-      "pendingOnboarding",
-      JSON.stringify({
-        role: effectiveRole,
-        trackingText,
-        fullName,
-        websiteUrl: companyWebsite.trim() || undefined,
-      })
-    );
     localStorage.removeItem("watchloom_tracking_intent");
     const { error } = await signInWithGoogle();
     if (error) {
-      localStorage.removeItem("pendingOnboarding");
       toast({
         title: "Authentication Error",
         description: error.message,
@@ -185,226 +138,16 @@ export default function SignupPage() {
         )}
 
         {!accountCreated && (
-          <>
-            {skipToStep4 ? (
-              <div
-                className="text-xs rounded-lg px-3 py-2 mb-8"
-                style={{ backgroundColor: "rgba(30,58,95,0.06)", color: "#1e3a5f" }}
-                data-testid="text-hero-skip-notice"
-              >
-                Your workspace is being prepared based on what you told us.
-              </div>
-            ) : (
-              <>
-                <p className="text-sm mb-8" style={{ color: "#94a3b8" }} data-testid="text-step-indicator">
-                  Step {step} of 4
-                </p>
-                <div className="flex gap-1 mb-8">
-                  {[1, 2, 3, 4].map((s) => (
-                    <div
-                      key={s}
-                      className="h-1 flex-1 rounded-full transition-colors"
-                      style={{
-                        backgroundColor: s <= step ? "#1e3a5f" : "#e2e8f0",
-                      }}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {step === 1 && (
-          <div>
-            <h2
-              className="text-2xl font-bold mb-8"
-              style={{ color: "#1e3a5f" }}
-              data-testid="text-step1-headline"
-            >
-              What's your role?
-            </h2>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {ROLES.map((role) => {
-                const Icon = role.icon;
-                const isSelected = selectedRole === role.id;
-                return (
-                  <button
-                    key={role.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedRole(role.id);
-                      if (role.id !== "other") {
-                        setOtherRoleText("");
-                      }
-                    }}
-                    className="flex flex-col items-center justify-center gap-2 rounded-lg border-2 p-4 transition-all cursor-pointer"
-                    style={{
-                      borderColor: isSelected ? "#1e3a5f" : "#e2e8f0",
-                      backgroundColor: isSelected ? "rgba(30,58,95,0.04)" : "#ffffff",
-                    }}
-                    data-testid={`button-role-${role.id}`}
-                  >
-                    <Icon
-                      className="w-5 h-5"
-                      style={{ color: isSelected ? "#1e3a5f" : "#94a3b8" }}
-                    />
-                    <span
-                      className="text-sm font-medium"
-                      style={{ color: isSelected ? "#1e3a5f" : "#64748b" }}
-                    >
-                      {role.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-            {selectedRole === "other" && (
-              <div className="mb-4">
-                <Input
-                  value={otherRoleText}
-                  onChange={(e) => setOtherRoleText(e.target.value)}
-                  placeholder="What's your title?"
-                  className="h-11"
-                  data-testid="input-other-role"
-                />
-              </div>
-            )}
-            <Button
-              onClick={() => setStep(2)}
-              disabled={!canContinueStep1}
-              className="w-full h-11 text-white font-semibold"
-              style={{ backgroundColor: "#1e3a5f" }}
-              data-testid="button-continue-step1"
-            >
-              Continue
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </Button>
-          </div>
-        )}
-
-        {step === 2 && (
           <div>
             <h2
               className="text-2xl font-bold mb-2"
               style={{ color: "#1e3a5f" }}
-              data-testid="text-step2-headline"
-            >
-              What do you most need to stay on top of?
-            </h2>
-            <p className="text-sm mb-6" style={{ color: "#64748b" }}>
-              Just write naturally. Our AI will figure out the rest.
-            </p>
-            <Textarea
-              value={trackingText}
-              onChange={(e) => setTrackingText(e.target.value)}
-              placeholder="e.g. I need to keep track of what our competitors are doing, stay on top of new regulations in our industry, and follow any news or policy changes that could affect our business."
-              className="min-h-[120px] mb-8 text-sm resize-none"
-              data-testid="input-tracking-text"
-            />
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setStep(1)}
-                className="h-11"
-                data-testid="button-back-step2"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={() => setStep(3)}
-                disabled={trackingText.trim().length < 10}
-                className="flex-1 h-11 text-white font-semibold"
-                style={{ backgroundColor: "#1e3a5f" }}
-                data-testid="button-continue-step2"
-              >
-                Continue <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div>
-            <h2
-              className="text-2xl font-bold mb-2"
-              style={{ color: "#1e3a5f" }}
-              data-testid="text-step3-headline"
-            >
-              Add your starting sources
-            </h2>
-            <p className="text-sm mb-6" style={{ color: "#64748b" }}>
-              Paste in any websites you want Watchloom to read immediately — competitors, regulators, industry bodies, news sources, anything. You can add more later.
-            </p>
-
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="companyWebsite" className="text-sm font-medium">
-                  Your company website
-                </Label>
-                <Input
-                  id="companyWebsite"
-                  type="url"
-                  placeholder="https://yourcompany.com"
-                  value={companyWebsite}
-                  onChange={(e) => setCompanyWebsite(e.target.value)}
-                  className="h-11"
-                  data-testid="input-company-website"
-                />
-                <p className="text-xs" style={{ color: "#94a3b8" }}>
-                  Used to personalise your daily brief and battlecards.
-                </p>
-              </div>
-
-            </div>
-
-            <div className="flex gap-3 mt-8">
-              <Button
-                variant="outline"
-                onClick={() => setStep(2)}
-                className="h-11"
-                data-testid="button-back-step3"
-              >
-                Back
-              </Button>
-              <Button
-                onClick={() => setStep(4)}
-                className="flex-1 h-11 text-white font-semibold"
-                style={{ backgroundColor: "#1e3a5f" }}
-                data-testid="button-continue-step3"
-              >
-                Continue
-                <ArrowRight className="w-4 h-4 ml-2" />
-              </Button>
-            </div>
-            <div className="text-center mt-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setCompanyWebsite("");
-                  setStep(4);
-                }}
-                className="text-sm hover:underline underline-offset-4"
-                style={{ color: "#64748b" }}
-                data-testid="link-skip-step3"
-              >
-                Skip this step →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 4 && !accountCreated && (
-          <div>
-            <h2
-              className="text-2xl font-bold mb-2"
-              style={{ color: "#1e3a5f" }}
-              data-testid="text-step4-headline"
+              data-testid="text-signup-headline"
             >
               Create your account
             </h2>
             <p className="text-sm mb-6" style={{ color: "#64748b" }}>
-              Your workspace is being prepared based on what you told us.
+              Sign up to get started. We'll personalise your workspace next.
             </p>
             <form onSubmit={handleCreateAccount} className="space-y-4">
               <div className="space-y-2">
@@ -505,7 +248,7 @@ export default function SignupPage() {
               data-testid="button-google-signup"
             >
               <SiGoogle className="w-4 h-4 mr-2" />
-              Or sign in with Google
+              Sign up with Google
             </Button>
 
             <p
@@ -526,7 +269,7 @@ export default function SignupPage() {
           </div>
         )}
 
-        {step === 4 && accountCreated && (
+        {accountCreated && (
           <div className="text-center py-4" data-testid="confirmation-screen">
             <div className="flex items-center justify-center gap-2 mb-8">
               <div
@@ -564,7 +307,7 @@ export default function SignupPage() {
               <span className="font-medium" style={{ color: "#334155" }}>
                 {email}
               </span>
-              . Click the link in the email to activate your account and access your workspace.
+              . Click the link in the email to activate your account and start setting up your workspace.
             </p>
 
             <p className="text-xs" style={{ color: "#94a3b8" }} data-testid="text-resend-hint">

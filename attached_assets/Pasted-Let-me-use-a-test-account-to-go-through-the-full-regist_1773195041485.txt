@@ -1,0 +1,34 @@
+Let me use a test account to go through the full registration flow fresh.I can see the signup flow. This is the **old** signup flow — it's asking "What's your role?" with 8 role options. This is NOT the new onboarding we designed. Let me go through all 4 steps to see what's currently being asked.Now I've seen the full current signup flow. Here's the honest assessment:
+
+---
+
+**What the current signup flow looks like (4 steps):**
+
+1. **"What's your role?"** — 8 role tiles (Product Manager, Analyst, Sales & BD, Executive, Strategy & Planning, Consultant/Advisor, Researcher, Other)
+2. **"What do you most need to stay on top of?"** — free text, one open question
+3. **"Add your starting sources"** — company website URL, skippable
+4. **"Create your account"** — name, email, password
+
+**The problem is clear:**
+
+This is the **old signup flow** — the new onboarding we designed with perspectives, tracking types, org description, competitors, and early warning signal hasn't replaced it. They're two separate flows running in parallel. The new `/onboarding` page exists but the signup flow at `/signup` still uses the old 4-step version.
+
+---
+
+Here's the fix prompt to send to Replit:
+
+---
+
+> The signup flow at `/signup` is still using the old 4-step questions (role, free text, company URL, account creation). The new onboarding flow we built at `/onboarding` exists but is not connected to the signup process.
+>
+> Please make these changes:
+>
+> 1. In the signup flow (`client/src/pages/signup.tsx` or similar), keep only **Step 4 — "Create your account"** (name, email, password). Remove Steps 1, 2, and 3 entirely from the signup flow.
+>
+> 2. After a user successfully creates their account and is authenticated, redirect them to `/onboarding` instead of the workspace.
+>
+> 3. The `/onboarding` flow already saves all profile data and sets `onboardingCompleted: true` when finished — so after completing onboarding the user lands on `/` as normal.
+>
+> This means the signup flow becomes: Create account → Onboarding → Workspace. The old questions (role, free text, company URL) are replaced entirely by the richer onboarding we already built.
+>
+> Do not delete the account creation step. Do not modify the onboarding page. Only change the signup flow redirect.

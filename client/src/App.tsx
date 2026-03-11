@@ -123,7 +123,25 @@ function AppContent() {
           }
         }
 
-        if (!profileRes || !profileRes.ok) {
+        if (!profileRes) {
+          checkedUserId.current = user.id;
+          onboardingInProgress.current = false;
+          setHasCompletedOnboarding(true);
+          setCheckingOnboarding(false);
+          initialLoadComplete.current = true;
+          return;
+        }
+
+        if (profileRes.status === 404) {
+          checkedUserId.current = user.id;
+          onboardingInProgress.current = false;
+          setHasCompletedOnboarding(false);
+          setCheckingOnboarding(false);
+          initialLoadComplete.current = true;
+          return;
+        }
+
+        if (!profileRes.ok) {
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
           setHasCompletedOnboarding(true);
