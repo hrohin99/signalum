@@ -4056,5 +4056,77 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/workspace/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const result = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+      return res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[workspace/profile] GET error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/workspace/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+
+      const fieldMap: Record<string, string> = {
+        trackingIntent: "tracking_intent",
+        userPerspective: "user_perspective",
+        trackingTypes: "tracking_types",
+        orgDescription: "org_description",
+        orgMarket: "org_market",
+        orgGeographies: "org_geographies",
+        orgSize: "org_size",
+        userRole: "user_role",
+        competitors: "competitors",
+        winFactors: "win_factors",
+        vulnerability: "vulnerability",
+        earlyWarningSignal: "early_warning_signal",
+        regulationsMonitored: "regulations_monitored",
+        regulatoryBodies: "regulatory_bodies",
+        compliancePurpose: "compliance_purpose",
+        standardsBodies: "standards_bodies",
+        standardsCertified: "standards_certified",
+        standardsPurpose: "standards_purpose",
+        briefingAudience: "briefing_audience",
+        onboardingCompleted: "onboarding_completed",
+      };
+
+      const setClauses: string[] = [];
+      const values: any[] = [];
+      let paramIndex = 1;
+
+      for (const [camelKey, snakeCol] of Object.entries(fieldMap)) {
+        if (req.body[camelKey] !== undefined) {
+          setClauses.push(`${snakeCol} = $${paramIndex}`);
+          values.push(req.body[camelKey]);
+          paramIndex++;
+        }
+      }
+
+      if (setClauses.length === 0) {
+        return res.status(400).json({ message: "No valid fields provided" });
+      }
+
+      values.push(userId);
+      const query = `UPDATE workspaces SET ${setClauses.join(", ")} WHERE user_id = $${paramIndex} RETURNING *`;
+      const result = await pool.query(query, values);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ message: "Workspace not found" });
+      }
+
+      return res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("[workspace/profile] PUT error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

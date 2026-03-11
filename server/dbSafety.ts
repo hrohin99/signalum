@@ -112,5 +112,15 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring briefing columns:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS user_perspective TEXT;
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS tracking_types TEXT[];
+    `);
+    console.log("[DBSafety] user_perspective and tracking_types columns verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring user_perspective/tracking_types columns:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
