@@ -1,0 +1,46 @@
+PART 2 — Server: profile context helper server/profileContext.ts
+Create this new file:
+tsexport function buildProfileContext(workspace: any): string {
+  if (!workspace) return '';
+  const intent = workspace.trackingIntent;
+  const org = workspace.orgDescription || '';
+  const geos = (workspace.orgGeographies || []).join(', ') || 'their target geographies';
+
+  if (intent === 'competitive') {
+    return `
+CUSTOMER CONTEXT (use this to personalise all analysis):
+Organisation: ${org}
+Geographies: ${geos}
+Top competitors: ${(workspace.competitors || []).join(', ')}
+They win on: ${workspace.winFactors || 'not specified'}
+Their vulnerabilities: ${workspace.vulnerability || 'not specified'}
+High priority signal: ${workspace.earlyWarningSignal || 'not specified'}
+IMPORTANT: Only surface insights relevant to their stated market and competitive context. Do not suggest use cases outside their focus.
+    `.trim();
+  }
+
+  if (intent === 'regulatory') {
+    return `
+CUSTOMER CONTEXT (use this to personalise all analysis):
+Organisation: ${org}
+Geographies: ${geos}
+Regulations monitored: ${(workspace.regulationsMonitored || []).join(', ')}
+Regulatory bodies: ${(workspace.regulatoryBodies || []).join(', ')}
+Monitoring purpose: ${workspace.compliancePurpose || 'not specified'}
+High priority signal: ${workspace.earlyWarningSignal || 'not specified'}
+IMPORTANT: Frame all insights in terms of compliance impact, enforcement risk, and regulatory timeline. Do not use competitive framing unless directly relevant.
+    `.trim();
+  }
+
+  if (intent === 'standards') {
+    return `
+CUSTOMER CONTEXT (use this to personalise all analysis):
+Organisation: ${org}
+Geographies: ${geos}
+Standards bodies: ${(workspace.standardsBodies || []).join(', ')}
+Currently certified against: ${(workspace.standardsCertified || []).join(', ')}
+Monitoring purpose: ${workspace.standardsPurpose || 'not specified'}
+High priority signal: ${workspace.earlyWarningSignal || 'not specified'}
+IMPORTANT: Focus all insights on certification impact, gap analysis, and upcoming changes to tracked standards.
+    `.trim();
+  }

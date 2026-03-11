@@ -1,0 +1,38 @@
+The database migration has already been run — all new columns exist on the workspaces table. Do not run any ALTER TABLE statements.
+Build the following in full. Do not break any existing functionality.
+
+PART 1 — Server: new profile endpoints in server/routes.ts
+Add two endpoints:
+GET /api/workspace/profile
+Returns all profile fields for the current user's workspace. Query the workspaces table by userId. Return all columns.
+PUT /api/workspace/profile
+Accepts a JSON body and updates the workspace row. Accept these fields:
+trackingIntent, orgDescription, orgMarket, orgGeographies, orgSize, competitors, winFactors, vulnerability, earlyWarningSignal, regulationsMonitored, regulatoryBodies, compliancePurpose, standardsBodies, standardsCertified, standardsPurpose, userRole, briefingAudience, onboardingCompleted, userPerspective, trackingTypes
+Use snake_case for DB columns, camelCase in the API.
+Also run this migration to add the two new columns:
+sqlALTER TABLE workspaces ADD COLUMN IF NOT EXISTS user_perspective TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS tracking_types TEXT[];
+
+PART 2 — Server: profile context helper server/profileContext.ts
+Create this new file:
+tsexport function buildProfileContext(workspace: any): string {
+  if (!workspace) return '';
+
+  const perspective = workspace.userPerspective || '';
+  const trackingTypes = workspace.trackingTypes || [];
+  const org = workspace.orgDescription || '';
+  const geos = (workspace.orgGeographies || []).join(', ') || 'their target geographies';
+  const earlyWarning = workspace.earlyWarningSignal || '';
+
+  let context = `CUSTOMER CONTEXT — use this to personalise all analysis and never make generic statements:\n`;
+  context += `Organisation: ${org}\n`;
+  context += `Perspective: ${perspective}\n`;
+  context += `Geographies: ${geos}\n`;
+  context += `Tracking: ${trackingTypes.join(', ')}\n`;
+
+  if (perspective === 'vendor') {
+    context += `Top competitors: ${(workspace.competitors || []).join(', ')}\n`;
+    context += `They win on: ${workspace.winFactors || 'not specified'}\n`;
+    context += `Vulnerabilities: ${workspace.vulnerability || 'not specified'}\n`;
+    context += `FRAMING: Surface competitive and commercial implications. Flag anything that threatens market position, deal flow, or product differentiation.\n`;
+  }
