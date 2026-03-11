@@ -36,7 +36,6 @@ import {
   Loader2,
   Shield,
   Check,
-  RefreshCw,
   BarChart3,
   Download,
   X,
@@ -283,44 +282,6 @@ function WorkspaceInitialLoading() {
   );
 }
 
-function WorkspaceLoadingState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-loading-state">
-      <div className="w-12 h-12 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-4">
-        <Shield className="w-6 h-6 text-white" />
-      </div>
-      <div className="flex gap-1.5 mb-4">
-        <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "0ms" }} />
-        <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "300ms" }} />
-        <span className="w-2 h-2 rounded-full bg-[#1e3a5f] animate-pulse" style={{ animationDelay: "600ms" }} />
-      </div>
-      <h3 className="font-medium text-foreground mb-1" data-testid="text-loading-headline">Setting up your workspace…</h3>
-      <p className="text-sm text-muted-foreground">This only takes a moment.</p>
-    </div>
-  );
-}
-
-function WorkspaceTimeoutState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-32 text-center" data-testid="workspace-timeout-state">
-      <div className="w-12 h-12 rounded-md bg-[#1e3a5f] flex items-center justify-center mb-4">
-        <Shield className="w-6 h-6 text-white" />
-      </div>
-      <h3 className="text-lg font-semibold text-foreground mb-2" data-testid="text-timeout-headline">Your workspace is almost ready</h3>
-      <p className="text-sm text-muted-foreground max-w-sm mb-4" data-testid="text-timeout-body">
-        This is taking longer than usual. Your data is safe.
-      </p>
-      <Button
-        className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-6"
-        onClick={() => window.location.reload()}
-        data-testid="button-timeout-refresh"
-      >
-        <RefreshCw className="w-4 h-4 mr-2" />
-        Refresh
-      </Button>
-    </div>
-  );
-}
 
 function WorkspaceErrorFallback() {
   return (
@@ -381,10 +342,7 @@ function MapPageInner() {
   const { user, session, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
-  const [wsPhase, setWsPhase] = useState<"loading" | "polling" | "timeout" | "ready" | "error">("loading");
-  const pollCountRef = useRef(0);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const refetchRef = useRef<(() => Promise<any>) | null>(null);
+  const [wsPhase, setWsPhase] = useState<"loading" | "ready" | "error">("loading");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showWelcome, setShowWelcome] = useState(false);
   const [seedingActive, setSeedingActive] = useState(false);
@@ -424,13 +382,13 @@ function MapPageInner() {
     }
   }, [user?.id]);
 
-  const { data: wsData, isLoading: wsLoading, error: wsError, refetch: refetchWorkspace, fetchStatus } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
+  const { data: wsData, isLoading: wsLoading, error: wsError, fetchStatus } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
     enabled: queryEnabled,
     retry: false,
     refetchOnMount: "always",
   });
-  refetchRef.current = refetchWorkspace;
+
 
   console.log("WS: fetch started", { userId: user?.id, wsLoading, wsError: wsError?.message, wsDataExists: !!wsData });
 
@@ -471,16 +429,6 @@ function MapPageInner() {
     try {
       if (wsPhase === "ready" || wsPhase === "error") return;
 
-      const cats = wsData?.workspace?.categories;
-      if (Array.isArray(cats) && cats.length > 0) {
-        setWsPhase("ready");
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-        return;
-      }
-
       if (wsPhase !== "loading") return;
       if (!queryEnabled) return;
       if (wsLoading || fetchStatus === "fetching") return;
@@ -488,52 +436,19 @@ function MapPageInner() {
         setWsPhase("error");
         return;
       }
-      setWsPhase("polling");
+
+      if (wsData?.exists || wsData?.workspace) {
+        setWsPhase("ready");
+        return;
+      }
+
+      setWsPhase("ready");
     } catch (err) {
       console.error("[MyWorkspace] Phase transition error:", err);
       setWsPhase("error");
     }
   }, [wsPhase, wsLoading, wsError, wsData, queryEnabled, fetchStatus]);
 
-  useEffect(() => {
-    if (wsPhase !== "polling") return;
-    pollCountRef.current = 0;
-    const interval = setInterval(async () => {
-      pollCountRef.current += 1;
-      try {
-        if (!refetchRef.current) return;
-        const result = await refetchRef.current();
-        const cats = result?.data?.workspace?.categories;
-        if (Array.isArray(cats) && cats.length > 0) {
-          setWsPhase("ready");
-          clearInterval(interval);
-          pollIntervalRef.current = null;
-          return;
-        }
-      } catch (err) {
-        console.error("[MyWorkspace] Poll failed:", err);
-      }
-      if (pollCountRef.current >= 12) {
-        clearInterval(interval);
-        pollIntervalRef.current = null;
-        setWsPhase("timeout");
-      }
-    }, 4000);
-    pollIntervalRef.current = interval;
-    return () => {
-      clearInterval(interval);
-      pollIntervalRef.current = null;
-    };
-  }, [wsPhase]);
-
-  useEffect(() => {
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     try {
@@ -890,23 +805,6 @@ function MapPageInner() {
     return <WorkspaceErrorFallback />;
   }
 
-  if (wsPhase === "polling") {
-    console.log("WS: rendering polling state");
-    return (
-      <div className="p-8 max-w-4xl mx-auto">
-        <WorkspaceLoadingState />
-      </div>
-    );
-  }
-
-  if (wsPhase === "timeout") {
-    console.log("WS: rendering timeout state");
-    return (
-      <div className="p-8 max-w-4xl mx-auto">
-        <WorkspaceTimeoutState />
-      </div>
-    );
-  }
 
   console.log("WS: rendering workspace", { categoriesCount: categories.length, capturesCount: captures.length });
 
