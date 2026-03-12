@@ -466,7 +466,7 @@ export default function CapturePage() {
 
   const [captureEmail, setCaptureEmail] = useState<string>(() => {
     const token = localStorage.getItem("ws_capture_token");
-    return token ? `${token}@iialdoucla.resend.app` : "Loading...";
+    return token ? `${token}@postmark.rohin.co` : "Loading...";
   });
   const [emailCopied, setEmailCopied] = useState(false);
 
