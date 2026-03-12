@@ -1399,6 +1399,42 @@ Respond with JSON only, no explanation:
     }
   });
 
+  app.get("/api/captures/suggested-categories", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const result = await pool.query(
+        `SELECT suggested_new_category AS category,
+                COUNT(*)::int AS count,
+                (ARRAY_AGG(suggested_new_category_reason ORDER BY id DESC))[1] AS reason,
+                MAX(id) AS "latestCaptureId"
+         FROM captures
+         WHERE suggested_new_category IS NOT NULL AND user_id = $1
+         GROUP BY suggested_new_category`,
+        [userId]
+      );
+      return res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get suggested categories error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/captures/suggested-categories/:category", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const category = req.params.category;
+      await pool.query(
+        `UPDATE captures SET suggested_new_category = NULL, suggested_new_category_reason = NULL
+         WHERE user_id = $1 AND suggested_new_category = $2`,
+        [userId, category]
+      );
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Dismiss suggested category error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/entity-summary", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;

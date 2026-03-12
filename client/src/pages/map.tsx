@@ -367,6 +367,7 @@ function MapPageInner() {
   const [renameTopicNewName, setRenameTopicNewName] = useState("");
   const [deleteTopicOpen, setDeleteTopicOpen] = useState(false);
   const [deleteTopicName, setDeleteTopicName] = useState("");
+  const [dismissedSuggestions, setDismissedSuggestions] = useState<Set<string>>(new Set());
 
   const queryEnabled = !!user?.id && !!session && !authLoading;
   console.log("WS: component mounted");
@@ -495,6 +496,42 @@ function MapPageInner() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/welcome-status"] });
       setShowWelcome(false);
+    },
+  });
+
+  const { data: suggestedCategories } = useQuery<{ category: string; count: number; reason: string; latestCaptureId: number }[]>({
+    queryKey: ["/api/captures/suggested-categories"],
+    enabled: queryEnabled,
+    refetchOnMount: true,
+  });
+
+  const addSuggestedCategoryMutation = useMutation({
+    mutationFn: async (categoryName: string) => {
+      const res = await apiRequest("POST", "/api/add-category", { categoryName, categoryDescription: "" });
+      return res.json();
+    },
+    onSuccess: (_data, categoryName) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures/suggested-categories"] });
+      setDismissedSuggestions(prev => new Set([...prev, categoryName]));
+      toast({ title: "Category added", description: `"${categoryName}" has been added to your workspace.` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const dismissSuggestedCategoryMutation = useMutation({
+    mutationFn: async (category: string) => {
+      const res = await apiRequest("DELETE", `/api/captures/suggested-categories/${encodeURIComponent(category)}`);
+      return res.json();
+    },
+    onSuccess: (_data, category) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/captures/suggested-categories"] });
+      setDismissedSuggestions(prev => new Set([...prev, category]));
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
 
@@ -812,6 +849,49 @@ function MapPageInner() {
     <div className="p-8 max-w-6xl mx-auto">
       {showWelcome && <WelcomeModal onDismiss={handleDismissWelcome} />}
       {seedingActive && <SeedingBanner />}
+
+      {suggestedCategories && suggestedCategories
+        .filter(s => !dismissedSuggestions.has(s.category))
+        .map(s => (
+          <div
+            key={s.category}
+            className="mb-4 flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3"
+            data-testid={`banner-suggested-category-${s.category.toLowerCase().replace(/\s+/g, "-")}`}
+          >
+            <span className="text-lg leading-none mt-0.5">💡</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-amber-900">
+                &ldquo;{s.category}&rdquo; appears in {s.count} captured email{s.count !== 1 ? "s" : ""} — add it as a tracked category?
+              </p>
+              {s.reason && (
+                <p className="text-xs text-amber-700 mt-0.5">{s.reason}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-amber-400 text-amber-900 hover:bg-amber-100"
+                data-testid={`button-add-suggested-category-${s.category.toLowerCase().replace(/\s+/g, "-")}`}
+                disabled={addSuggestedCategoryMutation.isPending || dismissSuggestedCategoryMutation.isPending}
+                onClick={() => addSuggestedCategoryMutation.mutate(s.category)}
+              >
+                Add Category
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-amber-700 hover:bg-amber-100"
+                data-testid={`button-dismiss-suggested-category-${s.category.toLowerCase().replace(/\s+/g, "-")}`}
+                disabled={addSuggestedCategoryMutation.isPending || dismissSuggestedCategoryMutation.isPending}
+                onClick={() => dismissSuggestedCategoryMutation.mutate(s.category)}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        ))
+      }
 
       <div className="mb-8 flex items-start justify-between">
         <div>
