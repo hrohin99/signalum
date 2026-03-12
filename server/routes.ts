@@ -3047,9 +3047,14 @@ Rules:
             if (existingCategories.length === 0) {
               const newCategories: ExtractedCategory[] = [];
               const trackingTypes: string[] = Array.isArray(savedWorkspace.tracking_types) ? savedWorkspace.tracking_types : [];
-              const competitors: string[] = Array.isArray(savedWorkspace.competitors) ? savedWorkspace.competitors : [];
-              const regulationsMonitored: string[] = Array.isArray(savedWorkspace.regulations_monitored) ? savedWorkspace.regulations_monitored : [];
-              const standardsCertified: string[] = Array.isArray(savedWorkspace.standards_certified) ? savedWorkspace.standards_certified : [];
+              const parseArr = (val: any): string[] => {
+                if (Array.isArray(val)) return val.filter(Boolean);
+                if (typeof val === "string") return val.replace(/^\{|\}$/g, "").split(",").map(s => s.replace(/^"|"$/g, "").trim()).filter(Boolean);
+                return [];
+              };
+              const competitors: string[] = parseArr(savedWorkspace.competitors);
+              const regulationsMonitored: string[] = parseArr(savedWorkspace.regulations_monitored);
+              const standardsCertified: string[] = parseArr(savedWorkspace.standards_certified);
 
               if (trackingTypes.includes("competitors") && competitors.length > 0) {
                 newCategories.push({
@@ -3079,11 +3084,12 @@ Rules:
                 });
               }
 
-              if (trackingTypes.includes("standards") && standardsCertified.length > 0) {
+              const standardsEntities = standardsCertified.length > 0 ? standardsCertified : (Array.isArray(savedWorkspace.standards_bodies) ? savedWorkspace.standards_bodies : parseArr(savedWorkspace.standards_bodies));
+              if (trackingTypes.includes("standards") && standardsEntities.length > 0) {
                 newCategories.push({
                   name: "Standards & Certifications",
                   description: "Industry standards and certifications you track",
-                  entities: standardsCertified.map(name => ({
+                  entities: standardsEntities.map(name => ({
                     name,
                     type: "topic",
                     topic_type: "standard",
