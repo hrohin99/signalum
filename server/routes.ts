@@ -1142,23 +1142,17 @@ If no dates found, return { "extracted_dates": [] }.`
     }
   });
 
-  app.get("/api/config/capture-email", async (req: Request, res: Response) => {
+  app.get("/api/config/capture-email", requireAuth, async (req: Request, res: Response) => {
     try {
       const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
-      const authHeader = req.headers.authorization;
-      if (authHeader?.startsWith("Bearer ")) {
-        const token = authHeader.split(" ")[1];
-        const { data: { user }, error } = await supabase.auth.getUser(token);
-        if (!error && user) {
-          const result = await pool.query(
-            "SELECT capture_token FROM workspaces WHERE user_id = $1 LIMIT 1",
-            [user.id]
-          );
-          const captureToken = result.rows[0]?.capture_token;
-          if (captureToken) {
-            return res.json({ captureEmail: `${captureToken}@${domain}` });
-          }
-        }
+      const userId = (req as any).userId;
+      const result = await pool.query(
+        "SELECT capture_token FROM workspaces WHERE user_id = $1 LIMIT 1",
+        [userId]
+      );
+      const captureToken = result.rows[0]?.capture_token;
+      if (captureToken) {
+        return res.json({ captureEmail: `${captureToken}@${domain}` });
       }
       return res.json({ captureEmail: `capture@${domain}` });
     } catch (err) {
