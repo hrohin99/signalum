@@ -1225,12 +1225,14 @@ If no dates found, return { "extracted_dates": [] }.`
 
       let wtResult;
       if (isPostmarkInbound) {
-        // Look up workspace by the sender's email address via users table
+        const postmarkUserId = process.env.POSTMARK_INBOUND_USER_ID;
+        if (!postmarkUserId) {
+          console.log("[email-inbound] POSTMARK_INBOUND_USER_ID not set");
+          return res.status(200).json({ message: "No postmark user configured" });
+        }
         wtResult = await pool.query(
-          `SELECT w.id, w.user_id FROM workspaces w
-           JOIN auth.users u ON u.id = w.user_id
-           WHERE u.email = $1 LIMIT 1`,
-          [fromEmail]
+          "SELECT id, user_id FROM workspaces WHERE user_id = $1 LIMIT 1",
+          [postmarkUserId]
         );
       } else {
         wtResult = await pool.query(
