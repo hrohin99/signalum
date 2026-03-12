@@ -1151,8 +1151,9 @@ If no dates found, return { "extracted_dates": [] }.`
         const { data: { user }, error } = await supabase.auth.getUser(token);
         if (!error && user) {
           const workspace = await storage.getWorkspaceByUserId(user.id);
-          if (workspace?.captureToken) {
-            return res.json({ captureEmail: `${workspace.captureToken}@${domain}` });
+          const captureToken = workspace?.captureToken || (workspace as any)?.capture_token;
+          if (captureToken) {
+            return res.json({ captureEmail: `${captureToken}@${domain}` });
           }
         }
       }

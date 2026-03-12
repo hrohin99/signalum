@@ -468,10 +468,16 @@ export default function CapturePage() {
   const [emailCopied, setEmailCopied] = useState(false);
 
   useEffect(() => {
-    apiRequest("GET", "/api/config/capture-email")
-      .then(r => r.json())
-      .then(d => { if (d.captureEmail) setCaptureEmail(d.captureEmail); })
-      .catch(() => {});
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      fetch("/api/config/capture-email", {
+        headers: session?.access_token
+          ? { Authorization: `Bearer ${session.access_token}` }
+          : {}
+      })
+        .then(r => r.json())
+        .then(d => { if (d.captureEmail) setCaptureEmail(d.captureEmail); })
+        .catch(() => {});
+    });
   }, []);
 
   const handleCopyEmail = () => {
