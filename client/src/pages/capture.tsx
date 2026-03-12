@@ -468,20 +468,24 @@ export default function CapturePage() {
   const [emailCopied, setEmailCopied] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session?.access_token) return;
-      fetch("/api/workspace/profile", {
-        headers: { Authorization: `Bearer ${session.access_token}` }
-      })
-        .then(r => r.json())
-        .then(d => {
-          const token = d.capture_token;
-          if (token) {
-            setCaptureEmail(`${token}@iialdoucla.resend.app`);
-          }
-        })
-        .catch(() => {});
-    });
+    const fetchCaptureEmail = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Try refreshing the session
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (!refreshed.session) return;
+      }
+      const { data: { session: activeSession } } = await supabase.auth.getSession();
+      if (!activeSession?.access_token) return;
+      try {
+        const res = await fetch("/api/config/capture-email", {
+          headers: { Authorization: `Bearer ${activeSession.access_token}` }
+        });
+        const d = await res.json();
+        if (d.captureEmail) setCaptureEmail(d.captureEmail);
+      } catch {}
+    };
+    fetchCaptureEmail();
   }, []);
 
   const handleCopyEmail = () => {

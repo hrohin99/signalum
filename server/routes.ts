@@ -1151,13 +1151,9 @@ If no dates found, return { "extracted_dates": [] }.`
         [userId]
       );
       const captureToken = result.rows[0]?.capture_token;
-      if (captureToken) {
-        return res.json({ captureEmail: `${captureToken}@${domain}` });
-      }
-      return res.json({ captureEmail: `capture@${domain}` });
+      return res.json({ captureEmail: `${captureToken || "capture"}@${domain}` });
     } catch (err) {
-      const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
-      return res.json({ captureEmail: `capture@${domain}` });
+      return res.json({ captureEmail: `capture@${process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app"}` });
     }
   });
 
