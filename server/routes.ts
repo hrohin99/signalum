@@ -3197,10 +3197,8 @@ Rules:
       const userId = (req as any).userId;
       const wsResult = await pool.query("SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
       const tenantId = wsResult.rows[0]?.id;
-      const result = await pool.query(
-        "SELECT * FROM product_context WHERE tenant_id = $1 OR user_id = $2 LIMIT 1",
-        [tenantId, userId]
-      );
+      if (!tenantId) return res.json({ productContext: null });
+      const result = await pool.query("SELECT * FROM product_context WHERE tenant_id = $1 LIMIT 1", [tenantId]);
       console.log('[product-context GET] tenantId:', tenantId, 'rows:', result.rows.length);
       return res.json({ productContext: result.rows[0] || null });
     } catch (error: any) {
