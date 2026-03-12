@@ -1207,6 +1207,7 @@ If no dates found, return { "extracted_dates": [] }.`
         "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
         [captureToken]
       );
+      console.log(`[email-inbound] DB_URL prefix: ${process.env.DATABASE_URL?.slice(0, 30)}, rows: ${wtResult.rows.length}`);
       const workspace = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id } : null;
       if (!workspace) {
         console.log(`[email-inbound] No workspace matched token: ${captureToken}`);
