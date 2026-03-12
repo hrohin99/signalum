@@ -2912,7 +2912,7 @@ Rules:
   app.get("/api/workspace/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const result = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const result = await pool.query("SELECT *, capture_token as capture_token FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
       if (result.rows.length === 0) {
         const newId = randomUUID();
         const createResult = await pool.query(
