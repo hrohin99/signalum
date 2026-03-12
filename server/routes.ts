@@ -1173,7 +1173,7 @@ If no dates found, return { "extracted_dates": [] }.`
 
   app.post("/api/capture/email-inbound", async (req: Request, res: Response) => {
     try {
-      const payload = req.body;
+      const payload = req.body?.data || req.body;
 
       let toAddress = "";
       if (typeof payload.to === "string") {
