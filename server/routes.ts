@@ -1180,9 +1180,11 @@ If no dates found, return { "extracted_dates": [] }.`
   app.post("/api/capture/email-inbound", async (req: Request, res: Response) => {
     try {
       const raw = req.body;
-      const payload = raw?.data || raw;
-      console.log('[email-inbound] raw payload keys:', JSON.stringify(Object.keys(payload || {})), 'text length:', payload?.text?.length || 0, 'html length:', payload?.html?.length || 0, 'subject:', payload?.subject);
-      const toRaw = payload.to;
+      // Support both Postmark and Resend payload formats
+      const isPostmark = !!(raw.TextBody || raw.HtmlBody || raw.Subject);
+      const payload = isPostmark ? raw : (raw?.data || raw);
+
+      const toRaw = isPostmark ? raw.To : payload.to;
       let toAddress = "";
       if (typeof toRaw === "string") {
         toAddress = toRaw;
@@ -1195,21 +1197,24 @@ If no dates found, return { "extracted_dates": [] }.`
       } else if (toRaw?.address) {
         toAddress = toRaw.address;
       }
+
       const tokenMatch = toAddress.match(/^([a-z0-9]+)@/i);
       const captureToken = tokenMatch?.[1]?.toLowerCase() || null;
-
-      const fromEmail = payload.from?.address || (typeof payload.from === "string" ? payload.from : "") || "unknown";
-      const subject = payload.subject || "(no subject)";
+      const fromEmail = isPostmark
+        ? (raw.From || "unknown")
+        : (payload.from?.address || (typeof payload.from === "string" ? payload.from : "") || "unknown");
+      const subject = isPostmark ? (raw.Subject || "(no subject)") : (payload.subject || "(no subject)");
       const bodyText = (
-        payload.text ||
-        payload.plain_text ||
-        payload.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") ||
-        raw?.data?.text ||
-        raw?.data?.plain_text ||
-        raw?.data?.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") ||
-        ""
+        isPostmark
+          ? (raw.TextBody || raw.HtmlBody?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") || "")
+          : (payload.text || payload.plain_text || payload.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") || raw?.data?.text || raw?.data?.plain_text || raw?.data?.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") || "")
       ).slice(0, 3000);
       const content = `Subject: ${subject}\n\nFrom: ${fromEmail}\n\n${bodyText}`.trim();
+
+      console.log('[email-inbound] isPostmark:', isPostmark, 'raw payload keys:', JSON.stringify(Object.keys(raw || {})));
+      // For Postmark inbound, captureToken will be the long hash — not a workspace token
+      // Look up workspace by capture_token first, then fall back to from email
+      const isPostmarkInbound = toAddress.includes('inbound.postmarkapp.com');
 
       console.log(`[email-inbound] to: ${toAddress}, token: ${captureToken}, from: ${fromEmail}`);
 
@@ -1218,14 +1223,25 @@ If no dates found, return { "extracted_dates": [] }.`
         return res.status(200).json({ message: "No token" });
       }
 
-      const wtResult = await pool.query(
-        "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
-        [captureToken]
-      );
+      let wtResult;
+      if (isPostmarkInbound) {
+        // Look up workspace by the sender's email address via users table
+        wtResult = await pool.query(
+          `SELECT w.id, w.user_id FROM workspaces w
+           JOIN auth.users u ON u.id = w.user_id
+           WHERE u.email = $1 LIMIT 1`,
+          [fromEmail]
+        );
+      } else {
+        wtResult = await pool.query(
+          "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
+          [captureToken]
+        );
+      }
       console.log(`[email-inbound] DB_URL prefix: ${process.env.DATABASE_URL?.slice(0, 30)}, rows: ${wtResult.rows.length}`);
       const workspaceBase = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id } : null;
       if (!workspaceBase) {
-        console.log(`[email-inbound] No workspace matched token: ${captureToken}`);
+        console.log(`[email-inbound] No workspace matched token: ${captureToken}, isPostmarkInbound: ${isPostmarkInbound}, fromEmail: ${fromEmail}`);
         return res.status(200).json({ message: "Token not recognised" });
       }
 
