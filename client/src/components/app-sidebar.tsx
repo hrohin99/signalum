@@ -22,15 +22,13 @@ import {
   Settings,
   LogOut,
   Lock,
-  Zap,
 } from "lucide-react";
 
 const navItems = [
   { title: "My Workspace", url: "/", icon: Network },
   { title: "Capture", url: "/capture", icon: PenLine },
-  { title: "Updates Feed", url: "/inbox", icon: Inbox },
-  { title: "Today's Brief", url: "/brief", icon: Newspaper },
-  { title: "Weekly Email", url: "/settings/briefing", icon: Zap },
+  { title: "Live Feed", url: "/inbox", icon: Inbox },
+  { title: "Briefings", url: "/briefings", icon: Newspaper },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

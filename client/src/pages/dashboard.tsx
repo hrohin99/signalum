@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, Redirect } from "wouter";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { FeedbackWidget } from "@/components/feedback-widget";
@@ -12,11 +12,10 @@ import {
 import CapturePage from "./capture";
 import InboxPage from "./inbox";
 import MapPage from "./map";
-import BriefPage from "./brief";
+import BriefingsPage from "./briefings";
 import SettingsPage from "./settings";
 import TopicViewPage from "./topic-view";
 import AdminPage from "./admin";
-import BriefingSettingsPage from "./briefing-settings";
 
 export default function Dashboard() {
   console.log("WORKSPACE RENDERED");
@@ -57,8 +56,11 @@ export default function Dashboard() {
               <Route path="/capture" component={CapturePage} />
               <Route path="/inbox" component={InboxPage} />
               <Route path="/map" component={MapPage} />
-              <Route path="/brief" component={BriefPage} />
-              <Route path="/settings/briefing" component={BriefingSettingsPage} />
+              <Route path="/briefings" component={BriefingsPage} />
+              <Route path="/brief">{() => <Redirect to="/briefings" />}</Route>
+              <Route path="/settings/briefing">{() => <Redirect to="/briefings" />}</Route>
+              <Route path="/weekly-email">{() => <Redirect to="/briefings" />}</Route>
+              <Route path="/todays-brief">{() => <Redirect to="/briefings" />}</Route>
               <Route path="/settings" component={SettingsPage} />
               <Route path="/admin" component={AdminPage} />
               <Route path="/topic/:category/:entity">{(params) => <TopicViewPage params={params} />}</Route>
