@@ -1210,39 +1210,57 @@ If no dates found, return { "extracted_dates": [] }.`
       }
 
       const wtResult = await pool.query(
-        "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
+        "SELECT id, user_id, competitors, regulations_monitored, regulatory_bodies, standards_certified FROM workspaces WHERE capture_token = $1 LIMIT 1",
         [captureToken]
       );
       console.log(`[email-inbound] DB_URL prefix: ${process.env.DATABASE_URL?.slice(0, 30)}, rows: ${wtResult.rows.length}`);
-      const workspace = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id } : null;
+      const workspace = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id, competitors: wtResult.rows[0].competitors, regulations_monitored: wtResult.rows[0].regulations_monitored, regulatory_bodies: wtResult.rows[0].regulatory_bodies, standards_certified: wtResult.rows[0].standards_certified } : null;
       if (!workspace) {
         console.log(`[email-inbound] No workspace matched token: ${captureToken}`);
         return res.status(200).json({ message: "Token not recognised" });
       }
 
-      let matchedEntity: string | null = null;
-      let matchedCategory: string | null = null;
-      let matchReason = `Forwarded email — ${subject}`;
+      const capture = await storage.createCapture({
+        userId: workspace.userId,
+        type: "email_forward",
+        content,
+        matchedEntity: null,
+        matchedCategory: null,
+        matchReason: null,
+      });
 
       try {
-        const entitiesResult = await pool.query(
-          "SELECT name, entity_type, category FROM entities WHERE user_id = $1 AND is_active = true LIMIT 50",
-          [workspace.userId]
-        );
-        const entities = entitiesResult.rows;
+        const parseArr = (val: any): string[] => {
+          if (Array.isArray(val)) return val.filter(Boolean);
+          if (typeof val === "string") return val.replace(/^\{|\}$/g, "").split(",").map((s: string) => s.replace(/^"|"$/g, "").trim()).filter(Boolean);
+          return [];
+        };
 
-        if (entities.length > 0) {
-          const entityList = entities.map((e: any) => `${e.name} (${e.entity_type})`).join(", ");
-          const matchPrompt = `You are a competitive intelligence assistant. Match this forwarded email to one of the user's tracked entities.
+        const entityList = [
+          ...parseArr(workspace.competitors).map((e: string) => ({ name: e, category: "competitor" })),
+          ...parseArr(workspace.regulations_monitored).map((e: string) => ({ name: e, category: "regulation" })),
+          ...parseArr(workspace.regulatory_bodies).map((e: string) => ({ name: e, category: "regulatory_body" })),
+          ...parseArr(workspace.standards_certified).map((e: string) => ({ name: e, category: "standard" })),
+        ];
 
-Tracked entities: ${entityList}
+        if (entityList.length > 0) {
+          const emailSubject = subject;
+          const matchPrompt = `You are an entity matcher for a competitive intelligence tool.
 
-Email:
-${content.slice(0, 2000)}
+Given an email subject and a list of tracked entities, identify if any entity is mentioned or clearly referenced in the subject.
 
-Respond with JSON only:
-- If email clearly relates to a tracked entity: {"matched": true, "entityName": "<exact name from list>", "category": "<category from list>", "reason": "<one sentence>"}
-- If no clear match: {"matched": false}`;
+Email subject: "${emailSubject}"
+
+Tracked entities:
+${entityList.map((e: { name: string; category: string }) => `- ${e.name} (${e.category})`).join("\n")}
+
+If a match is found, respond with valid JSON only:
+{"matched_entity": "<entity name>", "matched_category": "<category>", "match_reason": "<brief reason>"}
+
+If no match, respond with:
+{"matched_entity": null, "matched_category": null, "match_reason": null}
+
+Respond with JSON only. No explanation.`;
 
           const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -1262,27 +1280,20 @@ Respond with JSON only:
           const rawText = claudeData?.content?.[0]?.text?.trim() || "";
           const parsed = JSON.parse(rawText);
 
-          if (parsed.matched === true && parsed.entityName) {
-            matchedEntity = parsed.entityName;
-            matchedCategory = parsed.category || null;
-            matchReason = parsed.reason || matchReason;
-            console.log(`[email-inbound] ✅ Matched to entity: ${matchedEntity}`);
+          if (parsed.matched_entity) {
+            console.log(`[email-inbound] ✅ Matched to entity: ${parsed.matched_entity}`);
           } else {
             console.log(`[email-inbound] No confident entity match — storing unmatched`);
           }
+
+          await pool.query(
+            "UPDATE captures SET matched_entity = $1, matched_category = $2, match_reason = $3 WHERE id = $4",
+            [parsed.matched_entity ?? null, parsed.matched_category ?? null, parsed.match_reason ?? null, capture.id]
+          );
         }
       } catch (matchErr) {
         console.log("[email-inbound] AI matching failed, storing unmatched:", matchErr);
       }
-
-      await storage.createCapture({
-        userId: workspace.userId,
-        type: "email_forward",
-        content,
-        matchedEntity,
-        matchedCategory,
-        matchReason,
-      });
 
       console.log(`[email-inbound] ✅ Capture stored for workspace ${workspace.id} from ${fromEmail}`);
       return res.status(200).json({ success: true });
