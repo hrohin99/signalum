@@ -464,35 +464,27 @@ export default function CapturePage() {
 
   const [pricingModalEntityName, setPricingModalEntityName] = useState("");
 
-  const [captureEmail, setCaptureEmail] = useState<string>("capture@iialdoucla.resend.app");
+  const [captureEmail, setCaptureEmail] = useState<string>("");
   const [emailCopied, setEmailCopied] = useState(false);
 
   useEffect(() => {
-    const fetchCaptureEmail = async () => {
-      try {
-        // Try authenticated route first
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.access_token) {
-          const res = await fetch("/api/config/capture-email", {
-            headers: { Authorization: `Bearer ${session.access_token}` }
-          });
-          if (res.ok) {
-            const d = await res.json();
-            if (d.captureEmail && d.captureEmail !== "capture@iialdoucla.resend.app") {
-              setCaptureEmail(d.captureEmail);
-              return;
-            }
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session?.access_token) return;
+      // Refresh session first to ensure valid token
+      await supabase.auth.refreshSession();
+      const { data: { session: fresh } } = await supabase.auth.getSession();
+      if (!fresh?.access_token) return;
+      fetch("/api/workspace/profile", {
+        headers: { Authorization: `Bearer ${fresh.access_token}` }
+      })
+        .then(r => r.json())
+        .then(d => {
+          if (d.capture_token) {
+            setCaptureEmail(`${d.capture_token}@iialdoucla.resend.app`);
           }
-        }
-        // Fallback: use public route with user id from session
-        if (session?.user?.id) {
-          const res = await fetch(`/api/public/capture-email/${session.user.id}`);
-          const d = await res.json();
-          if (d.captureEmail) setCaptureEmail(d.captureEmail);
-        }
-      } catch {}
-    };
-    fetchCaptureEmail();
+        })
+        .catch(() => {});
+    });
   }, []);
 
   const handleCopyEmail = () => {
@@ -1049,7 +1041,7 @@ export default function CapturePage() {
           Forward any email to Signalum and it will be automatically captured and classified against your tracked topics. Works with any email client.
         </p>
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-          <span className="text-sm font-mono text-slate-700 flex-1 select-all">{captureEmail}</span>
+          <span className="text-sm font-mono text-slate-700 flex-1 select-all">{captureEmail || "Loading..."}</span>
           <button
             onClick={handleCopyEmail}
             className="text-xs font-semibold text-[#1e3a5f] hover:text-blue-700 transition-colors shrink-0 px-2 py-1 rounded hover:bg-slate-100"
