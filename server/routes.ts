@@ -1210,18 +1210,18 @@ If no dates found, return { "extracted_dates": [] }.`
       }
 
       const wtResult = await pool.query(
-        "SELECT id, user_id, competitors, regulations_monitored, regulatory_bodies, standards_certified FROM workspaces WHERE capture_token = $1 LIMIT 1",
+        "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
         [captureToken]
       );
       console.log(`[email-inbound] DB_URL prefix: ${process.env.DATABASE_URL?.slice(0, 30)}, rows: ${wtResult.rows.length}`);
-      const workspace = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id, competitors: wtResult.rows[0].competitors, regulations_monitored: wtResult.rows[0].regulations_monitored, regulatory_bodies: wtResult.rows[0].regulatory_bodies, standards_certified: wtResult.rows[0].standards_certified } : null;
-      if (!workspace) {
+      const workspaceBase = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id } : null;
+      if (!workspaceBase) {
         console.log(`[email-inbound] No workspace matched token: ${captureToken}`);
         return res.status(200).json({ message: "Token not recognised" });
       }
 
       const capture = await storage.createCapture({
-        userId: workspace.userId,
+        userId: workspaceBase.userId,
         type: "email_forward",
         content,
         matchedEntity: null,
@@ -1230,6 +1230,13 @@ If no dates found, return { "extracted_dates": [] }.`
       });
 
       try {
+        const wsResult = await pool.query(
+          "SELECT id, user_id, competitors, regulations_monitored, regulatory_bodies, standards_certified FROM workspaces WHERE user_id = $1 LIMIT 1",
+          [capture.userId]
+        );
+        const workspace = wsResult.rows[0] ? { id: wsResult.rows[0].id, userId: wsResult.rows[0].user_id, competitors: wsResult.rows[0].competitors, regulations_monitored: wsResult.rows[0].regulations_monitored, regulatory_bodies: wsResult.rows[0].regulatory_bodies, standards_certified: wsResult.rows[0].standards_certified } : null;
+
+        if (workspace) {
         const parseArr = (val: any): string[] => {
           if (Array.isArray(val)) return val.filter(Boolean);
           if (typeof val === "string") return val.replace(/^\{|\}$/g, "").split(",").map((s: string) => s.replace(/^"|"$/g, "").trim()).filter(Boolean);
@@ -1291,11 +1298,12 @@ Respond with JSON only. No explanation.`;
             [parsed.matched_entity ?? null, parsed.matched_category ?? null, parsed.match_reason ?? null, capture.id]
           );
         }
+        }
       } catch (matchErr) {
         console.log("[email-inbound] AI matching failed, storing unmatched:", matchErr);
       }
 
-      console.log(`[email-inbound] ✅ Capture stored for workspace ${workspace.id} from ${fromEmail}`);
+      console.log(`[email-inbound] ✅ Capture stored for workspace ${workspaceBase.id} from ${fromEmail}`);
       return res.status(200).json({ success: true });
 
     } catch (err) {
