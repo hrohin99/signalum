@@ -1,24 +1,288 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { LogOut, User, Pencil, Package, Mail, Search, Bell, GripVertical, X, Plus, Loader2, Crosshair, UserCog, Globe, AlertTriangle, Building2, Shield, Award, TrendingUp } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { ComingSoonCard } from "@/components/coming-soon-card";
-import { useLocation } from "wouter";
+import { LogOut, Mail, X, Plus, Loader2, Copy, Check, GripVertical, Pencil } from "lucide-react";
 import type { WorkspaceCapability } from "@shared/schema";
 
-function CapabilitiesCard() {
+type SettingsSection = "account" | "product" | "capabilities" | "notifications" | "email";
+
+const NAV_ITEMS: { key: SettingsSection; label: string }[] = [
+  { key: "account", label: "Account" },
+  { key: "product", label: "My product" },
+  { key: "capabilities", label: "Capabilities" },
+  { key: "notifications", label: "Notifications" },
+  { key: "email", label: "Email capture" },
+];
+
+const inputStyle: React.CSSProperties = {
+  border: "0.5px solid #d1d5db",
+  borderRadius: "8px",
+  padding: "8px 12px",
+  fontSize: "13px",
+};
+
+const cardStyle: React.CSSProperties = {
+  background: "#fff",
+  border: "0.5px solid #e5e7eb",
+  borderRadius: "12px",
+};
+
+function AccountSection() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [displayName, setDisplayName] = useState("");
+  const [role, setRole] = useState("");
+
+  const { data: profileData } = useQuery<any>({
+    queryKey: ["/api/workspace/profile"],
+  });
+
+  useEffect(() => {
+    if (profileData) {
+      setDisplayName(profileData.display_name || "");
+      setRole(profileData.user_perspective || "");
+    }
+  }, [profileData]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", "/api/workspace/profile", {
+        display_name: displayName,
+        user_perspective: role,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
+      toast({
+        title: "Account updated",
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div style={cardStyle}>
+      <div className="p-6">
+        <h3 className="text-base font-semibold mb-1" data-testid="text-account-header">Account</h3>
+        <p className="text-sm text-gray-500 mb-5">Your personal account details.</p>
+
+        <div className="space-y-4">
+          <div>
+            <Label className="text-xs text-gray-500 uppercase tracking-wide">Email</Label>
+            <p className="text-sm mt-1" style={{ color: "#374151" }} data-testid="text-user-email">{user?.email}</p>
+          </div>
+
+          <div style={{ borderBottom: "0.5px solid #e5e7eb" }} />
+
+          <div>
+            <Label className="text-xs text-gray-500 uppercase tracking-wide">User ID</Label>
+            <p className="text-sm mt-1 font-mono text-gray-600" data-testid="text-user-id">{user?.id}</p>
+          </div>
+
+          <div style={{ borderBottom: "0.5px solid #e5e7eb" }} />
+
+          <div>
+            <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Display name</Label>
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Your display name"
+              style={inputStyle}
+              className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              data-testid="input-display-name"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Role</Label>
+            <input
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              placeholder="e.g. Product Manager"
+              style={inputStyle}
+              className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              data-testid="input-role"
+            />
+          </div>
+        </div>
+
+        <Button
+          onClick={() => saveMutation.mutate()}
+          disabled={saveMutation.isPending}
+          className="w-full mt-6 text-white"
+          style={{ background: "#534AB7", borderRadius: "8px" }}
+          data-testid="button-save-account"
+        >
+          {saveMutation.isPending ? "Saving..." : "Save"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ProductSection() {
+  const { toast } = useToast();
+  const [productName, setProductName] = useState("");
+  const [description, setDescription] = useState("");
+  const [targetCustomer, setTargetCustomer] = useState("");
+  const [strengths, setStrengths] = useState("");
+  const [weaknesses, setWeaknesses] = useState("");
+
+  const { data: productData, isLoading: isLoadingProduct } = useQuery<{ productContext: any }>({
+    queryKey: ["/api/product-context"],
+  });
+
+  useEffect(() => {
+    if (productData?.productContext) {
+      const ctx = productData.productContext;
+      setProductName(ctx.productName || "");
+      setDescription(ctx.description || "");
+      setTargetCustomer(ctx.targetCustomer || "");
+      setStrengths(ctx.strengths || "");
+      setWeaknesses(ctx.weaknesses || "");
+    }
+  }, [productData]);
+
+  const saveProductMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", "/api/product-context", {
+        productName,
+        description,
+        targetCustomer,
+        strengths,
+        weaknesses,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/product-context"] });
+      toast({
+        title: "Product context saved",
+        description: "Signalum will now use this for competitive insights.",
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error saving product context", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSaveProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveProductMutation.mutate();
+  };
+
+  if (isLoadingProduct) {
+    return (
+      <div style={cardStyle} className="p-6 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  return (
+    <div style={cardStyle}>
+      <div className="p-6">
+        <h3 className="text-base font-semibold mb-1" data-testid="text-my-product-header">My Product</h3>
+        <p className="text-sm text-gray-500 mb-5">Help Signalum give you personalised competitive insights by describing what you offer.</p>
+
+        <form onSubmit={handleSaveProduct} className="space-y-4">
+          <div>
+            <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Product name</Label>
+            <input
+              value={productName}
+              onChange={(e) => setProductName(e.target.value)}
+              placeholder="e.g. Signalum, Acme Platform"
+              style={inputStyle}
+              className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              data-testid="input-product-name"
+            />
+          </div>
+
+          <div style={{ borderBottom: "0.5px solid #e5e7eb" }} />
+
+          <div>
+            <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">What it does</Label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Describe your product or service in plain English"
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical" as const }}
+              className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              data-testid="input-product-description"
+            />
+          </div>
+
+          <div>
+            <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Who it is for</Label>
+            <textarea
+              value={targetCustomer}
+              onChange={(e) => setTargetCustomer(e.target.value)}
+              placeholder="Describe your target customer and their main pain point"
+              rows={3}
+              style={{ ...inputStyle, resize: "vertical" as const }}
+              className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+              data-testid="input-target-customer"
+            />
+          </div>
+
+          <div style={{ borderBottom: "0.5px solid #e5e7eb" }} />
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Key strengths</Label>
+              <textarea
+                value={strengths}
+                onChange={(e) => setStrengths(e.target.value)}
+                placeholder="What does your product do better than anyone else?"
+                rows={4}
+                style={{ ...inputStyle, resize: "vertical" as const }}
+                className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                data-testid="input-strengths"
+              />
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Key weaknesses</Label>
+              <textarea
+                value={weaknesses}
+                onChange={(e) => setWeaknesses(e.target.value)}
+                placeholder="Where do you have honest limitations or gaps?"
+                rows={4}
+                style={{ ...inputStyle, resize: "vertical" as const }}
+                className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                data-testid="input-weaknesses"
+              />
+            </div>
+          </div>
+
+          <Button
+            type="submit"
+            className="w-full text-white"
+            style={{ background: "#534AB7", borderRadius: "8px" }}
+            disabled={saveProductMutation.isPending || !productName.trim()}
+            data-testid="button-save-product"
+          >
+            {saveProductMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function CapabilitiesSection() {
   const { toast } = useToast();
   const [newCapName, setNewCapName] = useState("");
-  const [showAddInput, setShowAddInput] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -50,7 +314,6 @@ function CapabilitiesCard() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/capabilities"] });
       setNewCapName("");
-      setShowAddInput(false);
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -98,31 +361,20 @@ function CapabilitiesCard() {
     }
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    addMutation.mutate(suggestion);
-  };
-
   const handleEditSave = () => {
     if (editingId && editingName.trim()) {
       updateMutation.mutate({ id: editingId, name: editingName.trim() });
     }
   };
 
-  const handleDragStart = (index: number) => {
-    setDragIndex(index);
+  const handleSuggestionClick = (suggestion: string) => {
+    addMutation.mutate(suggestion);
   };
 
-  const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault();
-    setDragOverIndex(index);
-  };
-
+  const handleDragStart = (index: number) => { setDragIndex(index); };
+  const handleDragOver = (e: React.DragEvent, index: number) => { e.preventDefault(); setDragOverIndex(index); };
   const handleDrop = (index: number) => {
-    if (dragIndex === null || dragIndex === index) {
-      setDragIndex(null);
-      setDragOverIndex(null);
-      return;
-    }
+    if (dragIndex === null || dragIndex === index) { setDragIndex(null); setDragOverIndex(null); return; }
     const items = [...capabilities];
     const [moved] = items.splice(dragIndex, 1);
     items.splice(index, 0, moved);
@@ -132,61 +384,45 @@ function CapabilitiesCard() {
   };
 
   useEffect(() => {
-    if (showAddInput && addInputRef.current) {
-      addInputRef.current.focus();
-    }
-  }, [showAddInput]);
-
-  useEffect(() => {
-    if (editingId && editInputRef.current) {
-      editInputRef.current.focus();
-    }
+    if (editingId && editInputRef.current) { editInputRef.current.focus(); }
   }, [editingId]);
 
   return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center gap-4 mb-2">
-          <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
-            <Crosshair className="w-5 h-5 text-[#1e3a5f]" />
-          </div>
-          <div>
-            <h3 className="font-medium text-foreground" data-testid="text-capabilities-header">Market Capabilities</h3>
-            <p className="text-sm text-[#1e3a5f]">Define the capabilities that matter in your market. Watchloom will track these across all your competitors.</p>
-          </div>
-        </div>
+    <div style={cardStyle}>
+      <div className="p-6">
+        <h3 className="text-base font-semibold mb-1" data-testid="text-capabilities-header">Capabilities</h3>
+        <p className="text-sm text-gray-500 mb-5">Define the capabilities that matter in your market. Signalum will track these across all your competitors.</p>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
           </div>
         ) : (
-          <div className="mt-4 space-y-1">
-            {capabilities.length === 0 && !showAddInput && (
-              <div className="space-y-3">
-                {suggestionsLoading ? (
-                  <div className="flex items-center gap-2 py-3">
-                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Generating suggestions...</span>
-                  </div>
-                ) : suggestionsData?.suggestions && suggestionsData.suggestions.length > 0 ? (
-                  <div className="py-2">
-                    <p className="text-xs text-muted-foreground mb-2">Suggested for your market:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestionsData.suggestions.map((suggestion, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleSuggestionClick(suggestion)}
-                          disabled={addMutation.isPending}
-                          className="px-3 py-1.5 rounded-full text-sm bg-slate-100 text-slate-500 hover:bg-[#1e3a5f]/10 hover:text-[#1e3a5f] transition-colors cursor-pointer border border-slate-200"
-                          data-testid={`button-suggestion-${i}`}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : null}
+          <div className="space-y-0">
+            {capabilities.length === 0 && suggestionsData?.suggestions && suggestionsData.suggestions.length > 0 && (
+              <div className="mb-4">
+                <p className="text-xs text-gray-400 mb-2">Suggested for your market:</p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestionsData.suggestions.map((suggestion, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      disabled={addMutation.isPending}
+                      className="px-3 py-1.5 rounded-full text-sm bg-gray-50 text-gray-500 hover:bg-[#EEEDFE] hover:text-[#534AB7] transition-colors cursor-pointer"
+                      style={{ border: "0.5px solid #e5e7eb" }}
+                      data-testid={`button-suggestion-${i}`}
+                    >
+                      {suggestion}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {suggestionsLoading && capabilities.length === 0 && (
+              <div className="flex items-center gap-2 py-3 mb-4">
+                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                <span className="text-sm text-gray-400">Generating suggestions...</span>
               </div>
             )}
 
@@ -198,14 +434,15 @@ function CapabilitiesCard() {
                 onDragOver={(e) => handleDragOver(e, index)}
                 onDrop={() => handleDrop(index)}
                 onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
-                className={`flex items-center gap-2 px-2 py-2 rounded-lg group transition-colors ${
-                  dragOverIndex === index ? "bg-[#1e3a5f]/5 border border-[#1e3a5f]/20" : "hover:bg-slate-50 border border-transparent"
+                className={`flex items-center gap-2 py-2.5 group transition-colors ${
+                  dragOverIndex === index ? "bg-[#EEEDFE]/50" : ""
                 }`}
+                style={{ borderBottom: "0.5px solid #f3f4f6" }}
                 data-testid={`row-capability-${cap.id}`}
               >
-                <GripVertical className="w-4 h-4 text-slate-300 cursor-grab flex-shrink-0" />
+                <GripVertical className="w-4 h-4 text-gray-300 cursor-grab flex-shrink-0" />
                 {editingId === cap.id ? (
-                  <Input
+                  <input
                     ref={editInputRef}
                     value={editingName}
                     onChange={(e) => setEditingName(e.target.value)}
@@ -214,22 +451,23 @@ function CapabilitiesCard() {
                       if (e.key === "Escape") setEditingId(null);
                     }}
                     onBlur={handleEditSave}
-                    className="h-7 text-sm flex-1"
+                    style={{ ...inputStyle, height: "28px", fontSize: "13px" }}
+                    className="flex-1 outline-none focus:ring-1 focus:ring-[#534AB7]/30"
                     data-testid="input-edit-capability"
                   />
                 ) : (
-                  <span className="text-sm flex-1" data-testid={`text-capability-name-${cap.id}`}>{cap.name}</span>
+                  <span className="text-sm text-gray-700 flex-1" data-testid={`text-capability-name-${cap.id}`}>{cap.name}</span>
                 )}
                 <button
                   onClick={() => { setEditingId(cap.id); setEditingName(cap.name); }}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-[#1e3a5f] transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#534AB7] transition-opacity"
                   data-testid={`button-edit-capability-${cap.id}`}
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => deleteMutation.mutate(cap.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-red-500 transition-opacity"
+                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
                   data-testid={`button-delete-capability-${cap.id}`}
                 >
                   <X className="w-3.5 h-3.5" />
@@ -237,280 +475,55 @@ function CapabilitiesCard() {
               </div>
             ))}
 
-            {showAddInput ? (
-              <div className="flex items-center gap-2 px-2 py-1">
-                <Input
-                  ref={addInputRef}
-                  value={newCapName}
-                  onChange={(e) => setNewCapName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleAdd();
-                    if (e.key === "Escape") { setShowAddInput(false); setNewCapName(""); }
-                  }}
-                  placeholder="e.g. Passive liveness detection"
-                  className="h-8 text-sm flex-1"
-                  data-testid="input-new-capability"
-                />
-                <Button
-                  size="sm"
-                  onClick={handleAdd}
-                  disabled={!newCapName.trim() || addMutation.isPending}
-                  className="h-8 bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
-                  data-testid="button-save-capability"
-                >
-                  {addMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save"}
-                </Button>
-              </div>
-            ) : (
-              capabilities.length < 15 && (
-                <button
-                  onClick={() => setShowAddInput(true)}
-                  className="flex items-center gap-1.5 text-[#1e3a5f] hover:text-[#1e3a5f]/80 text-sm px-2 py-2 transition-colors"
-                  data-testid="button-add-capability"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add capability
-                </button>
-              )
-            )}
+            <div className="flex items-center gap-2 mt-4">
+              <input
+                ref={addInputRef}
+                value={newCapName}
+                onChange={(e) => setNewCapName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAdd();
+                }}
+                placeholder="Add a capability..."
+                style={inputStyle}
+                className="flex-1 outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                data-testid="input-new-capability"
+              />
+              <Button
+                size="sm"
+                onClick={handleAdd}
+                disabled={!newCapName.trim() || addMutation.isPending}
+                className="text-white h-9 px-4"
+                style={{ background: "#534AB7", borderRadius: "8px" }}
+                data-testid="button-save-capability"
+              >
+                {addMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
+                  <span className="flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add</span>
+                )}
+              </Button>
+            </div>
 
             {capabilities.length >= 15 && (
-              <p className="text-xs text-muted-foreground px-2 pt-1">Maximum of 15 capabilities reached.</p>
+              <p className="text-xs text-gray-400 mt-2">Maximum of 15 capabilities reached.</p>
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
-const PERSPECTIVE_LABELS: Record<string, string> = {
-  vendor: "Product or Technology Vendor",
-  business_owner: "Business Owner or Founder",
-  government: "Government or Public Sector",
-  analyst: "Analyst, Consultant, or Advisor",
-  sales: "Sales or Business Development",
-};
-
-const TRACKING_TYPE_CONFIG: Record<string, { label: string; color: string }> = {
-  competitors: { label: "Competitors", color: "bg-blue-100 text-blue-800" },
-  regulations: { label: "Regulations & Policy", color: "bg-amber-100 text-amber-800" },
-  standards: { label: "Standards & Certifications", color: "bg-green-100 text-green-800" },
-  trends: { label: "Technology Trends", color: "bg-purple-100 text-purple-800" },
-};
-
-function WorkspaceProfileCard() {
-  const [, setLocation] = useLocation();
-  const { data: profile, isLoading } = useQuery<any>({
-    queryKey: ["/api/workspace/profile"],
-  });
-
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const hasProfile = profile?.onboarding_completed;
-
-  if (!hasProfile) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
-              <UserCog className="w-5 h-5 text-[#1e3a5f]" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-medium text-foreground" data-testid="text-workspace-profile-header">Workspace Profile</h3>
-              <p className="text-sm text-muted-foreground">Complete onboarding to set up your workspace profile.</p>
-            </div>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => setLocation("/onboarding?edit=true")}
-            className="w-full"
-            data-testid="button-edit-workspace-profile"
-          >
-            <Pencil className="w-4 h-4 mr-2" />
-            Set up workspace profile
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  const perspective = profile.user_perspective || "";
-  const orgDescription = profile.org_description || "";
-  const geographies: string[] = Array.isArray(profile.org_geographies) ? profile.org_geographies : [];
-  const trackingTypes: string[] = Array.isArray(profile.tracking_types) ? profile.tracking_types : [];
-  const competitors: string[] = Array.isArray(profile.competitors) ? profile.competitors : [];
-  const regulationsMonitored: string[] = Array.isArray(profile.regulations_monitored) ? profile.regulations_monitored : [];
-  const standardsCertified: string[] = Array.isArray(profile.standards_certified) ? profile.standards_certified : [];
-  const earlyWarning = profile.early_warning_signal || "";
-
-  return (
-    <Card>
-      <CardContent className="p-6">
-        <div className="flex items-center gap-4 mb-5">
-          <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
-            <UserCog className="w-5 h-5 text-[#1e3a5f]" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-medium text-foreground" data-testid="text-workspace-profile-header">My Profile</h3>
-            <p className="text-sm text-muted-foreground">Your perspective, tracking preferences, and organisation context.</p>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          {perspective && (
-            <div data-testid="profile-perspective">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Perspective</Label>
-              <p className="text-sm font-medium mt-1">{PERSPECTIVE_LABELS[perspective] || perspective}</p>
-            </div>
-          )}
-
-          {orgDescription && (
-            <div data-testid="profile-org-description">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Organisation</Label>
-              <p className="text-sm mt-1">{orgDescription}</p>
-            </div>
-          )}
-
-          {geographies.length > 0 && (
-            <div data-testid="profile-geographies">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Geographies</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {geographies.map((geo) => (
-                  <span key={geo} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-slate-100 text-slate-700">
-                    <Globe className="w-3 h-3" />
-                    {geo}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {trackingTypes.length > 0 && (
-            <div data-testid="profile-tracking-types">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Tracking</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {trackingTypes.map((tt) => {
-                  const config = TRACKING_TYPE_CONFIG[tt];
-                  return (
-                    <Badge key={tt} variant="secondary" className={`text-xs font-normal ${config?.color || "bg-slate-100 text-slate-700"}`} data-testid={`badge-tracking-${tt}`}>
-                      {config?.label || tt}
-                    </Badge>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {competitors.length > 0 && (
-            <div data-testid="profile-competitors">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Competitors</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {competitors.map((c) => (
-                  <span key={c} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-blue-50 text-blue-700">
-                    <Building2 className="w-3 h-3" />
-                    {c}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {regulationsMonitored.length > 0 && (
-            <div data-testid="profile-regulations">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Regulations Monitored</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {regulationsMonitored.map((r) => (
-                  <span key={r} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-amber-50 text-amber-700">
-                    <Shield className="w-3 h-3" />
-                    {r}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {standardsCertified.length > 0 && (
-            <div data-testid="profile-standards">
-              <Label className="text-xs text-muted-foreground uppercase tracking-wide">Standards & Certifications</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {standardsCertified.map((s) => (
-                  <span key={s} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-green-50 text-green-700">
-                    <Award className="w-3 h-3" />
-                    {s}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {earlyWarning && (
-            <div className="mt-4 p-3 rounded-lg bg-orange-50 border border-orange-200" data-testid="profile-early-warning">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-orange-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <Label className="text-xs text-orange-700 uppercase tracking-wide font-medium">Early Warning Signal</Label>
-                  <p className="text-sm text-orange-800 mt-0.5">{earlyWarning}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        <Button
-          variant="outline"
-          onClick={() => setLocation("/onboarding?edit=true")}
-          className="w-full mt-5"
-          data-testid="button-edit-workspace-profile"
-        >
-          <Pencil className="w-4 h-4 mr-2" />
-          Edit profile
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-export default function SettingsPage() {
-  const { user, signOut } = useAuth();
+function NotificationsSection() {
   const { toast } = useToast();
-  const [, setLocation] = useLocation();
-
-  const [productName, setProductName] = useState("");
-  const [description, setDescription] = useState("");
-  const [targetCustomer, setTargetCustomer] = useState("");
-  const [strengths, setStrengths] = useState("");
-  const [weaknesses, setWeaknesses] = useState("");
-  const { data: productData, isLoading: isLoadingProduct } = useQuery<{ productContext: any }>({
-    queryKey: ["/api/product-context"],
-  });
-
-  useEffect(() => {
-    if (productData?.productContext) {
-      const ctx = productData.productContext;
-      setProductName(ctx.productName || "");
-      setDescription(ctx.description || "");
-      setTargetCustomer(ctx.targetCustomer || "");
-      setStrengths(ctx.strengths || "");
-      setWeaknesses(ctx.weaknesses || "");
-    }
-  }, [productData]);
-
-  const hasSavedProduct = !!productData?.productContext;
 
   const { data: digestData } = useQuery<{ weeklyDigestEnabled: boolean }>({
     queryKey: ["/api/settings/weekly-digest"],
+  });
+
+  const [todaysBrief, setTodaysBrief] = useState(() => {
+    try { return localStorage.getItem("settings_todays_brief") === "true"; } catch { return false; }
+  });
+  const [entitySuggestions, setEntitySuggestions] = useState(() => {
+    try { return localStorage.getItem("settings_entity_suggestions") === "true"; } catch { return false; }
   });
 
   const digestMutation = useMutation({
@@ -522,9 +535,6 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/weekly-digest"] });
       toast({
         title: data.weeklyDigestEnabled ? "Weekly digest enabled" : "Weekly digest disabled",
-        description: data.weeklyDigestEnabled
-          ? "You'll receive a Monday morning summary email."
-          : "You won't receive weekly digest emails.",
         className: "bg-green-50 border-green-200 text-green-800",
       });
     },
@@ -533,230 +543,192 @@ export default function SettingsPage() {
     },
   });
 
-  const saveProductMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("PUT", "/api/product-context", {
-        productName,
-        description,
-        targetCustomer,
-        strengths,
-        weaknesses,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/product-context"] });
-      toast({
-        title: "Product context saved",
-        description: "Watchloom will now use this for competitive insights.",
-        variant: "default",
-        className: "bg-green-50 border-green-200 text-green-800",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error saving product context",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const handleTodaysBrief = (val: boolean) => {
+    setTodaysBrief(val);
+    try { localStorage.setItem("settings_todays_brief", String(val)); } catch {}
+    toast({
+      title: val ? "Today's brief enabled" : "Today's brief disabled",
+      className: "bg-green-50 border-green-200 text-green-800",
+    });
+  };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveProductMutation.mutate();
+  const handleEntitySuggestions = (val: boolean) => {
+    setEntitySuggestions(val);
+    try { localStorage.setItem("settings_entity_suggestions", String(val)); } catch {}
+    toast({
+      title: val ? "Entity suggestions enabled" : "Entity suggestions disabled",
+      className: "bg-green-50 border-green-200 text-green-800",
+    });
   };
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div style={cardStyle}>
+      <div className="p-6">
+        <h3 className="text-base font-semibold mb-1" data-testid="text-notifications-header">Notifications</h3>
+        <p className="text-sm text-gray-500 mb-5">Manage how you receive updates.</p>
+
+        <div>
+          <div className="flex items-center justify-between py-4" style={{ borderBottom: "0.5px solid #e5e7eb" }} data-testid="row-weekly-digest">
+            <div className="flex-1 mr-4">
+              <Label className="text-sm font-medium cursor-pointer">Weekly digest email</Label>
+              <p className="text-xs text-gray-400 mt-0.5">Monday morning summary of your workspace changes.</p>
+            </div>
+            <Switch
+              checked={digestData?.weeklyDigestEnabled ?? false}
+              onCheckedChange={(checked) => digestMutation.mutate(checked)}
+              disabled={digestMutation.isPending}
+              data-testid="switch-weekly-digest"
+            />
+          </div>
+
+          <div className="flex items-center justify-between py-4" style={{ borderBottom: "0.5px solid #e5e7eb" }} data-testid="row-todays-brief">
+            <div className="flex-1 mr-4">
+              <Label className="text-sm font-medium cursor-pointer">Today's brief</Label>
+              <p className="text-xs text-gray-400 mt-0.5">Get a daily brief of the most important updates.</p>
+            </div>
+            <Switch
+              checked={todaysBrief}
+              onCheckedChange={handleTodaysBrief}
+              data-testid="switch-todays-brief"
+            />
+          </div>
+
+          <div className="flex items-center justify-between py-4" data-testid="row-entity-suggestions">
+            <div className="flex-1 mr-4">
+              <Label className="text-sm font-medium cursor-pointer">New entity suggestions</Label>
+              <p className="text-xs text-gray-400 mt-0.5">Get notified when new entities are suggested for tracking.</p>
+            </div>
+            <Switch
+              checked={entitySuggestions}
+              onCheckedChange={handleEntitySuggestions}
+              data-testid="switch-entity-suggestions"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EmailCaptureSection() {
+  const [copied, setCopied] = useState(false);
+
+  const { data: captureData, isLoading } = useQuery<{ captureEmail: string }>({
+    queryKey: ["/api/config/capture-email"],
+  });
+
+  const captureEmail = captureData?.captureEmail || "";
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(captureEmail);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div style={cardStyle}>
+      <div className="p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="text-base font-semibold" data-testid="text-email-capture-header">Email Capture</h3>
+          <span
+            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium text-white"
+            style={{ background: "#16a34a", fontSize: "11px" }}
+            data-testid="badge-email-live"
+          >
+            Live
+          </span>
+        </div>
+        <p className="text-sm text-gray-500 mb-5">Forward any competitor newsletter or announcement to your personal capture address and it files automatically.</p>
+
+        {isLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div
+              className="flex-1 flex items-center px-3 py-2.5 bg-gray-50 rounded-lg font-mono text-sm text-gray-700 select-all"
+              style={{ border: "0.5px solid #e5e7eb", borderRadius: "8px", fontSize: "13px" }}
+              data-testid="text-capture-email"
+            >
+              <Mail className="w-4 h-4 text-gray-400 mr-2 flex-shrink-0" />
+              <span className="truncate">{captureEmail}</span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCopy}
+              className="h-10 px-3 flex-shrink-0"
+              style={{ borderRadius: "8px", border: "0.5px solid #e5e7eb" }}
+              data-testid="button-copy-capture-email"
+            >
+              {copied ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-gray-500" />}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function SettingsPage() {
+  const { signOut } = useAuth();
+  const [activeSection, setActiveSection] = useState<SettingsSection>("account");
+
+  const renderSection = () => {
+    switch (activeSection) {
+      case "account": return <AccountSection />;
+      case "product": return <ProductSection />;
+      case "capabilities": return <CapabilitiesSection />;
+      case "notifications": return <NotificationsSection />;
+      case "email": return <EmailCaptureSection />;
+    }
+  };
+
+  return (
+    <div className="p-8 max-w-4xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Settings</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage your account and workspace preferences.
-        </p>
+        <p className="text-gray-500 mt-1">Manage your account and workspace preferences.</p>
       </div>
 
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
-                <User className="w-5 h-5 text-[#1e3a5f]" />
-              </div>
-              <div>
-                <h3 className="font-medium text-foreground">Account</h3>
-                <p className="text-sm text-muted-foreground">{user?.email}</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm text-muted-foreground">User ID</Label>
-                <p className="text-sm font-mono mt-1" data-testid="text-user-id">{user?.id}</p>
-              </div>
-              <div>
-                <Label className="text-sm text-muted-foreground">Email</Label>
-                <p className="text-sm mt-1" data-testid="text-user-email">{user?.email}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <WorkspaceProfileCard />
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
-                <Bell className="w-5 h-5 text-[#1e3a5f]" />
-              </div>
-              <div>
-                <h3 className="font-medium text-foreground" data-testid="text-notifications-header">Notifications</h3>
-                <p className="text-sm text-muted-foreground">Manage how you receive updates.</p>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between py-3 border-t border-border" data-testid="row-weekly-digest">
-              <div className="flex-1 mr-4">
-                <Label htmlFor="weekly-digest" className="text-sm font-medium cursor-pointer">Weekly digest email</Label>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Get a weekly Monday morning summary of everything that changed across your workspace.
-                </p>
-              </div>
-              <Switch
-                id="weekly-digest"
-                checked={digestData?.weeklyDigestEnabled ?? false}
-                onCheckedChange={(checked) => digestMutation.mutate(checked)}
-                disabled={digestMutation.isPending}
-                data-testid="switch-weekly-digest"
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-4 mb-2">
-              <div className="w-12 h-12 rounded-full bg-[#1e3a5f]/10 flex items-center justify-center">
-                <Package className="w-5 h-5 text-[#1e3a5f]" />
-              </div>
-              <div>
-                <h3 className="font-medium text-foreground" data-testid="text-my-product-header">My Product</h3>
-                <p className="text-sm text-[#1e3a5f]">Help Watchloom give you personalised competitive insights by describing what you offer.</p>
-              </div>
-            </div>
-
-            {!isLoadingProduct && !hasSavedProduct && (
-              <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg p-3 my-4" data-testid="banner-product-context">
-                <Pencil className="w-4 h-4 text-amber-600 flex-shrink-0" />
-                <p className="text-sm text-amber-800">
-                  Add your product details so Watchloom can generate personalised competitive intelligence.
-                </p>
-              </div>
-            )}
-
-            <form onSubmit={handleSaveProduct} className="space-y-4 mt-4">
-              <div>
-                <Label htmlFor="productName" className="text-sm font-medium">Product name</Label>
-                <Input
-                  id="productName"
-                  value={productName}
-                  onChange={(e) => setProductName(e.target.value)}
-                  placeholder="e.g. Watchloom, Acme Platform"
-                  className="mt-1"
-                  data-testid="input-product-name"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description" className="text-sm font-medium">What it does</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Describe your product or service in plain English"
-                  rows={3}
-                  className="mt-1"
-                  data-testid="input-product-description"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="targetCustomer" className="text-sm font-medium">Who it is for</Label>
-                <Textarea
-                  id="targetCustomer"
-                  value={targetCustomer}
-                  onChange={(e) => setTargetCustomer(e.target.value)}
-                  placeholder="Describe your target customer and their main pain point"
-                  rows={3}
-                  className="mt-1"
-                  data-testid="input-target-customer"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="strengths" className="text-sm font-medium">Key strengths</Label>
-                <Textarea
-                  id="strengths"
-                  value={strengths}
-                  onChange={(e) => setStrengths(e.target.value)}
-                  placeholder="What does your product do better than anyone else?"
-                  rows={3}
-                  className="mt-1"
-                  data-testid="input-strengths"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="weaknesses" className="text-sm font-medium">Key weaknesses or gaps</Label>
-                <Textarea
-                  id="weaknesses"
-                  value={weaknesses}
-                  onChange={(e) => setWeaknesses(e.target.value)}
-                  placeholder="Where do you have honest limitations or gaps?"
-                  rows={3}
-                  className="mt-1"
-                  data-testid="input-weaknesses"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
-                disabled={saveProductMutation.isPending || !productName.trim()}
-                data-testid="button-save-product"
+      <div className="flex gap-8">
+        <nav className="flex-shrink-0" style={{ width: "180px" }}>
+          <div className="space-y-1">
+            {NAV_ITEMS.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setActiveSection(item.key)}
+                className="w-full text-left px-3 py-2 text-sm transition-colors"
+                style={{
+                  borderRadius: "8px",
+                  background: activeSection === item.key ? "#EEEDFE" : "transparent",
+                  color: activeSection === item.key ? "#534AB7" : "#6b7280",
+                  fontWeight: activeSection === item.key ? 500 : 400,
+                }}
+                data-testid={`nav-${item.key}`}
               >
-                {saveProductMutation.isPending ? "Saving..." : "Save"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+                {item.label}
+              </button>
+            ))}
+          </div>
 
-        <CapabilitiesCard />
+          <div className="mt-8 pt-4" style={{ borderTop: "0.5px solid #e5e7eb" }}>
+            <button
+              onClick={signOut}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-red-500 hover:text-red-600 transition-colors w-full text-left"
+              style={{ borderRadius: "8px" }}
+              data-testid="button-settings-sign-out"
+            >
+              <LogOut className="w-4 h-4" />
+              Sign out
+            </button>
+          </div>
+        </nav>
 
-        <ComingSoonCard
-          featureName="email_capture"
-          title="Email Capture"
-          description="Forward any competitor newsletter or announcement to your personal Watchloom address and it files automatically."
-          icon={<Mail className="w-5 h-5 text-[#1e3a5f]" />}
-        />
-
-        <ComingSoonCard
-          featureName="search"
-          title="Search Your Intelligence"
-          description="Ask questions across all your captured intelligence. Find anything across every topic, category, and update instantly."
-          icon={<Search className="w-5 h-5 text-[#1e3a5f]" />}
-        />
-
-        <Button
-          variant="outline"
-          onClick={signOut}
-          className="text-destructive"
-          data-testid="button-settings-sign-out"
-        >
-          <LogOut className="w-4 h-4 mr-2" />
-          Sign out
-        </Button>
+        <div className="flex-1 min-w-0">
+          {renderSection()}
+        </div>
       </div>
     </div>
   );
