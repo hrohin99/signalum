@@ -464,27 +464,31 @@ export default function CapturePage() {
 
   const [pricingModalEntityName, setPricingModalEntityName] = useState("");
 
-  const [captureEmail, setCaptureEmail] = useState<string>("");
+  const [captureEmail, setCaptureEmail] = useState<string>("loading...");
   const [emailCopied, setEmailCopied] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session?.access_token) return;
-      // Refresh session first to ensure valid token
-      await supabase.auth.refreshSession();
-      const { data: { session: fresh } } = await supabase.auth.getSession();
-      if (!fresh?.access_token) return;
-      fetch("/api/workspace/profile", {
-        headers: { Authorization: `Bearer ${fresh.access_token}` }
-      })
-        .then(r => r.json())
-        .then(d => {
-          if (d.capture_token) {
-            setCaptureEmail(`${d.capture_token}@iialdoucla.resend.app`);
-          }
-        })
-        .catch(() => {});
-    });
+    let cancelled = false;
+    const load = async () => {
+      try {
+        let session = (await supabase.auth.getSession()).data.session;
+        if (!session) {
+          const refreshed = await supabase.auth.refreshSession();
+          session = refreshed.data.session;
+        }
+        if (!session?.access_token || cancelled) return;
+        const res = await fetch("/api/workspace/profile", {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        });
+        if (!res.ok || cancelled) return;
+        const d = await res.json();
+        if (d.capture_token && !cancelled) {
+          setCaptureEmail(`${d.capture_token}@iialdoucla.resend.app`);
+        }
+      } catch {}
+    };
+    load();
+    return () => { cancelled = true; };
   }, []);
 
   const handleCopyEmail = () => {
