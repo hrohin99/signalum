@@ -1200,7 +1200,15 @@ If no dates found, return { "extracted_dates": [] }.`
 
       const fromEmail = payload.from?.address || (typeof payload.from === "string" ? payload.from : "") || "unknown";
       const subject = payload.subject || "(no subject)";
-      const bodyText = (payload.text || payload.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") || "").slice(0, 3000);
+      const bodyText = (
+        payload.text ||
+        payload.plain_text ||
+        payload.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") ||
+        raw?.data?.text ||
+        raw?.data?.plain_text ||
+        raw?.data?.html?.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ") ||
+        ""
+      ).slice(0, 3000);
       const content = `Subject: ${subject}\n\nFrom: ${fromEmail}\n\n${bodyText}`.trim();
 
       console.log(`[email-inbound] to: ${toAddress}, token: ${captureToken}, from: ${fromEmail}`);
