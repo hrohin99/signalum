@@ -3205,7 +3205,9 @@ Rules:
 
   app.put("/api/product-context", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).tenantId;
+      const userId = (req as any).userId;
+      const wsResult = await pool.query("SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const tenantId = wsResult.rows[0]?.id;
       const { productName, description, targetCustomer, strengths, weaknesses } = req.body;
 
       if (!productName || typeof productName !== "string" || productName.trim().length === 0) {
