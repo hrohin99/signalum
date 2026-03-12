@@ -1034,7 +1034,7 @@ export default function CapturePage() {
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-3">
-          Signalum recognises you by your registered email address — just forward from the same email you signed up with.
+          Share this address with anyone — colleagues, contacts, or yourself. Any email sent here lands directly in your workspace.
         </p>
       </div>
 
