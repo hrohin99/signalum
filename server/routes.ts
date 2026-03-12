@@ -1278,7 +1278,6 @@ If no dates found, return { "extracted_dates": [] }.`
         }
       } catch (matchErr: any) {
         console.error("[email-inbound] AI matching failed:", matchErr?.message || matchErr);
-        throw matchErr;
       }
 
       console.log(`[email-inbound] ✅ Capture stored for workspace ${workspaceBase.id} from ${fromEmail}`);
