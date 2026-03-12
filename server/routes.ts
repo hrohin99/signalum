@@ -3194,10 +3194,15 @@ Rules:
 
   app.get("/api/product-context", requireAuth, async (req: Request, res: Response) => {
     try {
-      const tenantId = (req as any).tenantId;
-      const context = await storage.getProductContext(tenantId);
-      console.log('[product-context GET] result:', JSON.stringify(context));
-      return res.json({ productContext: context || null });
+      const userId = (req as any).userId;
+      const wsResult = await pool.query("SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const tenantId = wsResult.rows[0]?.id;
+      const result = await pool.query(
+        "SELECT * FROM product_context WHERE tenant_id = $1 OR user_id = $2 LIMIT 1",
+        [tenantId, userId]
+      );
+      console.log('[product-context GET] tenantId:', tenantId, 'rows:', result.rows.length);
+      return res.json({ productContext: result.rows[0] || null });
     } catch (error: any) {
       console.error("Get product context error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
