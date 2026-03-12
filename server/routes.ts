@@ -1181,6 +1181,7 @@ If no dates found, return { "extracted_dates": [] }.`
     try {
       const raw = req.body;
       const payload = raw?.data || raw;
+      console.log('[email-inbound] raw payload keys:', JSON.stringify(Object.keys(payload || {})), 'text length:', payload?.text?.length || 0, 'html length:', payload?.html?.length || 0, 'subject:', payload?.subject);
       const toRaw = payload.to;
       let toAddress = "";
       if (typeof toRaw === "string") {
