@@ -1173,17 +1173,20 @@ If no dates found, return { "extracted_dates": [] }.`
 
   app.post("/api/capture/email-inbound", async (req: Request, res: Response) => {
     try {
-      const payload = req.body?.data || req.body;
-
+      const raw = req.body;
+      const payload = raw?.data || raw;
+      const toRaw = payload.to;
       let toAddress = "";
-      if (typeof payload.to === "string") {
-        toAddress = payload.to;
-      } else if (payload.to?.address) {
-        toAddress = payload.to.address;
-      } else if (Array.isArray(payload.to) && payload.to[0]?.email) {
-        toAddress = payload.to[0].email;
-      } else if (Array.isArray(payload.to) && payload.to[0]?.address) {
-        toAddress = payload.to[0].address;
+      if (typeof toRaw === "string") {
+        toAddress = toRaw;
+      } else if (Array.isArray(toRaw) && typeof toRaw[0] === "string") {
+        toAddress = toRaw[0];
+      } else if (Array.isArray(toRaw) && toRaw[0]?.email) {
+        toAddress = toRaw[0].email;
+      } else if (Array.isArray(toRaw) && toRaw[0]?.address) {
+        toAddress = toRaw[0].address;
+      } else if (toRaw?.address) {
+        toAddress = toRaw.address;
       }
       const tokenMatch = toAddress.match(/^([a-z0-9]+)@/i);
       const captureToken = tokenMatch?.[1]?.toLowerCase() || null;
