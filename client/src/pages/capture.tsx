@@ -464,32 +464,11 @@ export default function CapturePage() {
 
   const [pricingModalEntityName, setPricingModalEntityName] = useState("");
 
-  const [captureEmail, setCaptureEmail] = useState<string>("loading...");
+  const [captureEmail, setCaptureEmail] = useState<string>(() => {
+    const token = localStorage.getItem("ws_capture_token");
+    return token ? `${token}@iialdoucla.resend.app` : "Loading...";
+  });
   const [emailCopied, setEmailCopied] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        let session = (await supabase.auth.getSession()).data.session;
-        if (!session) {
-          const refreshed = await supabase.auth.refreshSession();
-          session = refreshed.data.session;
-        }
-        if (!session?.access_token || cancelled) return;
-        const res = await fetch("/api/workspace/profile", {
-          headers: { Authorization: `Bearer ${session.access_token}` }
-        });
-        if (!res.ok || cancelled) return;
-        const d = await res.json();
-        if (d.capture_token && !cancelled) {
-          setCaptureEmail(`${d.capture_token}@iialdoucla.resend.app`);
-        }
-      } catch {}
-    };
-    load();
-    return () => { cancelled = true; };
-  }, []);
 
   const handleCopyEmail = () => {
     navigator.clipboard.writeText(captureEmail);

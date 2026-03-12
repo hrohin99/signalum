@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, createContext, useContext } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,6 +14,8 @@ import Dashboard from "@/pages/dashboard";
 import { Loader2, Shield } from "lucide-react";
 import { Switch, Route, useLocation } from "wouter";
 import CompetitorWebsiteModal from "@/components/CompetitorWebsiteModal";
+
+export const WorkspaceContext = createContext<{ captureToken: string | null }>({ captureToken: null });
 
 function AppContent() {
   const { user, session, loading } = useAuth();
@@ -97,6 +99,9 @@ function AppContent() {
         if (profileData.onboarding_completed === true || profileData.onboarding_completed === "true" || profileData.onboardingCompleted === true) {
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
+          if (profileData?.capture_token) {
+            localStorage.setItem("ws_capture_token", profileData.capture_token);
+          }
           setHasCompletedOnboarding(true);
           localStorage.removeItem("pendingOnboarding");
           setCheckingOnboarding(false);
