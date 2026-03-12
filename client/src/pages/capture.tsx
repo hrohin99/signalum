@@ -310,9 +310,33 @@ export default function CapturePage() {
       setActiveType(null);
       resetState();
     } else {
-      setActiveType(type);
       resetState();
+      setActiveType(type);
     }
+  };
+
+  const handleComposerSubmit = () => {
+    if (activeType === "text" || activeType === null) {
+      if (textContent.trim().length < 3) return;
+      classifyContent(textContent.trim(), "text");
+    } else if (activeType === "url") {
+      if (!urlContent.trim()) return;
+      const content = urlContent.trim();
+      setUrlContent(content);
+      classifyContent(content, "url");
+    } else if (activeType === "document") {
+      handleDocumentSubmit();
+    } else if (activeType === "voice") {
+      handleVoiceSubmit();
+    }
+  };
+
+  const isComposerSubmitDisabled = () => {
+    if (isClassifying) return true;
+    if (activeType === "voice") return !transcribedText.trim();
+    if (activeType === "document") return !selectedFile;
+    if (activeType === "url") return !urlContent.trim();
+    return textContent.trim().length < 3;
   };
 
   const handleTypeChangeAccept = async (entityName: string, categoryName: string, newType: string) => {
@@ -798,7 +822,7 @@ export default function CapturePage() {
 
       toast({
         title: "Topic created",
-        description: `Watchloom will start tracking ${intentTopicName.trim()}.`,
+        description: `Signalum will start tracking ${intentTopicName.trim()}.`,
       });
 
       const datePromptTypes = ["regulation", "risk", "event"];
@@ -983,137 +1007,23 @@ export default function CapturePage() {
 
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-foreground" data-testid="text-page-title">Capture</h1>
-        <p className="text-muted-foreground mt-1">
-          Capture anything — our AI will route it to the right place in your workspace.
+      <div className="mb-6">
+        <h1 className="text-xl font-medium text-foreground" data-testid="text-page-title">Capture</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Paste text, drop a URL, or forward an email — Signalum routes it automatically.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {captureTypes.map((type) => (
-          <Card
-            key={type.key}
-            className={`cursor-pointer hover-elevate active-elevate-2 transition-colors ${
-              activeType === type.key ? "ring-2 ring-[#1e3a5f]" : ""
-            }`}
-            onClick={() => handleSelectType(type.key)}
-            data-testid={`card-capture-${type.key}`}
-          >
-            <CardContent className="p-6 flex items-start gap-4">
-              <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 ${
-                activeType === type.key ? "bg-[#1e3a5f] text-white" : "bg-[#1e3a5f]/10"
-              }`}>
-                <type.icon className={`w-5 h-5 ${activeType === type.key ? "text-white" : "text-[#1e3a5f]"}`} />
-              </div>
-              <div>
-                <h3 className="font-medium text-foreground">{type.title}</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">{type.description}</p>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Mail className="w-4 h-4 text-slate-500" />
-          <span className="font-semibold text-sm">Email forwarding</span>
-        </div>
-        <p className="text-sm text-muted-foreground mb-4">
-          Forward any email to Signalum and it will be automatically captured and classified against your tracked topics. Works with any email client.
-        </p>
-        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3">
-          <span className="text-sm font-mono text-slate-700 flex-1 select-all">{captureEmail || "Loading..."}</span>
-          <button
-            onClick={handleCopyEmail}
-            className="text-xs font-semibold text-[#1e3a5f] hover:text-blue-700 transition-colors shrink-0 px-2 py-1 rounded hover:bg-slate-100"
-            data-testid="button-copy-capture-email"
-          >
-            {emailCopied ? "✓ Copied" : "Copy"}
-          </button>
-        </div>
-        <p className="text-xs text-muted-foreground mt-3">
-          Share this address with anyone — colleagues, contacts, or yourself. Any email sent here lands directly in your workspace.
-        </p>
-      </div>
-
-      {!activeType && recentCaptures.length > 0 && (
-        <div className="mt-8" data-testid="recent-captures-section">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">Recent Captures</p>
-          <div className="space-y-2">
-            {recentCaptures.map((cap: any) => {
-              const sourceEmojis: Record<string, string> = { web_search: "🔍", document: "📄", url: "🔗", text: "✍️", voice: "✍️" };
-              const emoji = sourceEmojis[cap.type] || "✍️";
-              const categoryColors: Record<string, string> = {
-                "Competitors": "#dc2626",
-                "Competitor Landscape": "#dc2626",
-                "Standards & Regulations": "#1d4ed8",
-                "Industry Topics": "#16a34a",
-                "Threat Intelligence": "#ea580c",
-              };
-              const pillColor = (cap.matchedCategory && categoryColors[cap.matchedCategory]) || "#6b7280";
-              const truncated = cap.content.length > 80 ? cap.content.slice(0, 80).trimEnd() + "…" : cap.content;
-              const dateStr = new Date(cap.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-              return (
-                <div
-                  key={cap.id}
-                  className="flex items-start gap-3 p-3 rounded-lg border border-border/50 bg-card"
-                  data-testid={`recent-capture-${cap.id}`}
-                >
-                  <span className="text-base shrink-0 mt-0.5">{emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      {cap.matchedEntity && (
-                        <span
-                          className="text-[11px] font-medium px-2 py-0.5 rounded-full text-white"
-                          style={{ backgroundColor: pillColor }}
-                          data-testid={`badge-entity-${cap.id}`}
-                        >
-                          {cap.matchedEntity}
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-foreground leading-relaxed">{truncated}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground shrink-0 mt-0.5">{dateStr}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {activeType && !classification && !isClassifying && (
-        <div className="mt-6 border border-border rounded-md p-6 space-y-4">
-          {activeType === "text" && (
-            <>
-              <Textarea
-                placeholder="Type or paste your text here..."
-                value={textContent}
-                onChange={(e) => setTextContent(e.target.value)}
-                className="min-h-[140px] text-base resize-none"
-                data-testid="input-capture-text"
-                autoFocus
-              />
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleTextSubmit}
-                  disabled={textContent.trim().length < 3}
-                  className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                  data-testid="button-submit-text"
-                >
-                  Submit
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </>
-          )}
-
-          {activeType === "voice" && (
-            <>
+      {!classification && !isClassifying && (
+        <div
+          className="bg-white rounded-xl overflow-hidden"
+          style={{ border: "0.5px solid #e2e2e2" }}
+          data-testid="card-composer"
+        >
+          {activeType === "voice" ? (
+            <div className="px-5 pt-5 pb-3">
               {!transcribedText && !isTranscribing && (
-                <div className="flex flex-col items-center py-8 space-y-4">
+                <div className="flex flex-col items-center py-6 space-y-4">
                   {isRecording && (
                     <div className="text-2xl font-mono text-foreground" data-testid="text-recording-time">
                       {formatTime(recordingTime)}
@@ -1124,7 +1034,7 @@ export default function CapturePage() {
                     size="lg"
                     className={isRecording
                       ? "bg-destructive text-destructive-foreground border-destructive"
-                      : "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                      : "bg-[#534AB7] text-white border-[#534AB7] hover:bg-[#534AB7]/90"
                     }
                     data-testid="button-record"
                   >
@@ -1148,71 +1058,30 @@ export default function CapturePage() {
                   )}
                 </div>
               )}
-
               {isTranscribing && (
-                <div className="flex flex-col items-center py-8 space-y-3">
-                  <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin" />
+                <div className="flex flex-col items-center py-6 space-y-3">
+                  <Loader2 className="w-6 h-6 text-[#534AB7] animate-spin" />
                   <p className="text-sm text-muted-foreground">Transcribing your audio...</p>
                 </div>
               )}
-
               {transcribedText && !isTranscribing && (
-                <>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground mb-2">Transcription:</p>
-                    <div className="bg-muted/50 rounded-md p-4 text-foreground" data-testid="text-transcription">
-                      {transcribedText}
-                    </div>
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground">Transcription:</p>
+                  <div className="bg-muted/50 rounded-md p-3 text-sm text-foreground" data-testid="text-transcription">
+                    {transcribedText}
                   </div>
-                  <div className="flex justify-end gap-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => { setTranscribedText(""); setRecordingTime(0); }}
-                      data-testid="button-re-record"
-                    >
-                      Re-record
-                    </Button>
-                    <Button
-                      onClick={handleVoiceSubmit}
-                      className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                      data-testid="button-submit-voice"
-                    >
-                      Submit
-                      <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </div>
-                </>
+                  <button
+                    onClick={() => { setTranscribedText(""); setRecordingTime(0); }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    data-testid="button-re-record"
+                  >
+                    Re-record
+                  </button>
+                </div>
               )}
-            </>
-          )}
-
-          {activeType === "url" && (
-            <>
-              <Input
-                type="url"
-                placeholder="https://example.com/article"
-                value={urlContent}
-                onChange={(e) => setUrlContent(e.target.value)}
-                className="h-11"
-                data-testid="input-capture-url"
-                autoFocus
-              />
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleUrlSubmit}
-                  disabled={!urlContent.trim()}
-                  className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                  data-testid="button-submit-url"
-                >
-                  Submit
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </>
-          )}
-
-          {activeType === "document" && (
-            <>
+            </div>
+          ) : activeType === "document" ? (
+            <div className="px-5 pt-5 pb-3">
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1222,39 +1091,146 @@ export default function CapturePage() {
                 data-testid="input-capture-file"
               />
               <div
-                className="border-2 border-dashed border-border rounded-md p-8 text-center cursor-pointer transition-colors"
+                className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center cursor-pointer transition-colors hover:border-slate-300"
                 onClick={() => fileInputRef.current?.click()}
                 data-testid="area-file-upload"
               >
                 {selectedFile ? (
-                  <div className="space-y-2">
-                    <FileText className="w-8 h-8 text-[#1e3a5f] mx-auto" />
-                    <p className="font-medium text-foreground">{selectedFile.name}</p>
-                    <p className="text-sm text-muted-foreground">
+                  <div className="space-y-1.5">
+                    <FileText className="w-6 h-6 text-[#534AB7] mx-auto" />
+                    <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
                       {(selectedFile.size / 1024).toFixed(1)} KB
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    <Upload className="w-8 h-8 text-muted-foreground/50 mx-auto" />
-                    <p className="text-muted-foreground">Click to select a file</p>
+                  <div className="space-y-1.5">
+                    <Upload className="w-6 h-6 text-muted-foreground/50 mx-auto" />
+                    <p className="text-sm text-muted-foreground">Click to select a file</p>
                     <p className="text-xs text-muted-foreground">.txt, .md, .csv, .json, .pdf, .doc, .docx</p>
                   </div>
                 )}
               </div>
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleDocumentSubmit}
-                  disabled={!selectedFile}
-                  className="bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                  data-testid="button-submit-document"
-                >
-                  Submit
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
-            </>
+            </div>
+          ) : (
+            <div className="px-5 pt-5 pb-3">
+              <textarea
+                placeholder={activeType === "url"
+                  ? "https://example.com/article"
+                  : "Paste an article, type a note, or drop a URL\u2026"
+                }
+                value={activeType === "url" ? urlContent : textContent}
+                onChange={(e) => {
+                  if (activeType === "url") {
+                    setUrlContent(e.target.value);
+                  } else {
+                    setTextContent(e.target.value);
+                  }
+                }}
+                rows={4}
+                className="w-full resize-none text-sm text-foreground placeholder:text-muted-foreground bg-transparent outline-none"
+                data-testid={activeType === "url" ? "input-capture-url" : "input-capture-text"}
+                autoFocus
+              />
+            </div>
           )}
+
+          <div className="px-5 pb-4 flex items-center justify-between">
+            <div className="flex items-center gap-1.5" data-testid="pills-capture-type">
+              {([
+                { key: "text" as CaptureType, label: "Note", icon: PenLine },
+                { key: "url" as CaptureType, label: "URL", icon: Link2 },
+                { key: "document" as CaptureType, label: "Document", icon: FileText },
+                { key: "voice" as CaptureType, label: "Voice", icon: Mic },
+              ]).map((pill) => {
+                const isActive = activeType === pill.key || (activeType === null && pill.key === "text");
+                return (
+                  <button
+                    key={pill.key}
+                    type="button"
+                    onClick={() => handleSelectType(pill.key)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                      isActive
+                        ? "bg-[#EEEDFE] text-[#534AB7] border-[#AFA9EC]"
+                        : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                    }`}
+                    data-testid={`pill-capture-type-${pill.key}`}
+                  >
+                    <pill.icon className="w-3.5 h-3.5" />
+                    {pill.label}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              onClick={handleComposerSubmit}
+              disabled={isComposerSubmitDisabled()}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-[13px] font-medium text-white bg-[#534AB7] hover:bg-[#534AB7]/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              data-testid="button-capture-submit"
+            >
+              Capture
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div
+        className="mt-4 bg-white rounded-xl overflow-hidden flex items-center gap-3 px-4 py-3"
+        style={{ border: "0.5px solid #e2e2e2" }}
+        data-testid="card-email-forwarding"
+      >
+        <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+        <span className="text-sm text-slate-600">Your capture address</span>
+        <span className="text-sm font-mono text-slate-800 flex-1 select-all truncate" data-testid="text-capture-email">{captureEmail || "Loading..."}</span>
+        <button
+          onClick={handleCopyEmail}
+          className="text-xs font-medium text-[#534AB7] hover:text-[#534AB7]/80 transition-colors shrink-0 px-2 py-1 rounded hover:bg-[#EEEDFE]"
+          data-testid="button-copy-capture-email"
+        >
+          {emailCopied ? "Copied" : "Copy"}
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1.5 px-1">
+        Forward any newsletter or announcement here — Signalum routes it automatically.
+      </p>
+
+      {recentCaptures.length > 0 && !classification && !isClassifying && (
+        <div className="mt-8" data-testid="recent-captures-section">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">Recent Captures</p>
+          <div className="divide-y divide-slate-100">
+            {recentCaptures.map((cap: any) => {
+              const categoryColors: Record<string, { bg: string; text: string }> = {
+                "Competitors": { bg: "#FFF1EE", text: "#C4320A" },
+                "Competitor Landscape": { bg: "#FFF1EE", text: "#C4320A" },
+                "Standards & Regulations": { bg: "#EFF6FF", text: "#1D4ED8" },
+                "Industry Topics": { bg: "#F0FDF4", text: "#15803D" },
+                "Threat Intelligence": { bg: "#FFF7ED", text: "#C2410C" },
+              };
+              const colors = (cap.matchedCategory && categoryColors[cap.matchedCategory]) || { bg: "#F3F4F6", text: "#4B5563" };
+              const truncated = cap.content.length > 100 ? cap.content.slice(0, 100).trimEnd() + "\u2026" : cap.content;
+              const dateStr = new Date(cap.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+              return (
+                <div
+                  key={cap.id}
+                  className="flex items-center gap-3 py-3"
+                  data-testid={`recent-capture-${cap.id}`}
+                >
+                  {cap.matchedEntity && (
+                    <span
+                      className="text-[11px] font-medium px-2.5 py-0.5 rounded-full shrink-0"
+                      style={{ backgroundColor: colors.bg, color: colors.text }}
+                      data-testid={`badge-entity-${cap.id}`}
+                    >
+                      {cap.matchedEntity}
+                    </span>
+                  )}
+                  <p className="text-sm text-foreground flex-1 min-w-0 truncate">{truncated}</p>
+                  <span className="text-xs text-muted-foreground shrink-0">{dateStr}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
@@ -1962,15 +1938,6 @@ export default function CapturePage() {
               </div>
             );
           })}
-        </div>
-      )}
-
-      {!activeType && (
-        <div className="mt-8 border border-dashed border-border rounded-md p-12 text-center">
-          <PenLine className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-muted-foreground">
-            Select a capture type above to get started.
-          </p>
         </div>
       )}
 
