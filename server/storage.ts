@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 import { eq, desc, and, lt, gte, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -123,12 +123,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWorkspace(workspace: InsertWorkspace): Promise<Workspace> {
-    if (!workspace.captureToken) {
-      workspace = { ...workspace, captureToken: randomUUID().replace(/-/g, '').slice(0, 12) };
-    }
+    const captureToken = randomBytes(6).toString('hex'); // generates 12-char hex token
     const [created] = await db
       .insert(workspaces)
-      .values(workspace)
+      .values({ ...workspace, captureToken })
       .returning();
     return created;
   }
