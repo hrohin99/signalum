@@ -1175,7 +1175,16 @@ If no dates found, return { "extracted_dates": [] }.`
     try {
       const payload = req.body;
 
-      const toAddress = payload.to?.address || (typeof payload.to === "string" ? payload.to : "") || "";
+      let toAddress = "";
+      if (typeof payload.to === "string") {
+        toAddress = payload.to;
+      } else if (payload.to?.address) {
+        toAddress = payload.to.address;
+      } else if (Array.isArray(payload.to) && payload.to[0]?.email) {
+        toAddress = payload.to[0].email;
+      } else if (Array.isArray(payload.to) && payload.to[0]?.address) {
+        toAddress = payload.to[0].address;
+      }
       const tokenMatch = toAddress.match(/^([a-z0-9]+)@/i);
       const captureToken = tokenMatch?.[1]?.toLowerCase() || null;
 
