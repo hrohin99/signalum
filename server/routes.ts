@@ -2929,7 +2929,13 @@ Rules:
   app.get("/api/workspace/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const result = await pool.query("SELECT *, capture_token as capture_token FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      let result = await pool.query("SELECT *, capture_token FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      if (result.rows[0] && !result.rows[0].capture_token) {
+        const { randomBytes } = await import('crypto');
+        const newToken = randomBytes(6).toString('hex');
+        await pool.query("UPDATE workspaces SET capture_token = $1 WHERE user_id = $2", [newToken, userId]);
+        result.rows[0].capture_token = newToken;
+      }
       if (result.rows.length === 0) {
         const newId = randomUUID();
         const createResult = await pool.query(

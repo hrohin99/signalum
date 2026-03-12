@@ -96,7 +96,9 @@ function AppContent() {
           return;
         }
 
-        if (profileData.onboarding_completed === true || profileData.onboarding_completed === "true" || profileData.onboardingCompleted === true) {
+        const completed = profileData?.onboarding_completed !== false;
+        setHasCompletedOnboarding(completed);
+        if (completed) {
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
           if (profileData?.capture_token) {
