@@ -1150,7 +1150,7 @@ If no dates found, return { "extracted_dates": [] }.`
 
   app.get("/api/config/capture-email", requireAuth, async (req: Request, res: Response) => {
     try {
-      const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
+      const domain = process.env.CAPTURE_EMAIL_DOMAIN || "postmark.rohin.co";
       const userId = (req as any).userId;
       const result = await pool.query(
         "SELECT capture_token FROM workspaces WHERE user_id = $1 LIMIT 1",
@@ -1159,13 +1159,13 @@ If no dates found, return { "extracted_dates": [] }.`
       const captureToken = result.rows[0]?.capture_token;
       return res.json({ captureEmail: `${captureToken || "capture"}@${domain}` });
     } catch (err) {
-      return res.json({ captureEmail: `capture@${process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app"}` });
+      return res.json({ captureEmail: `capture@${process.env.CAPTURE_EMAIL_DOMAIN || "postmark.rohin.co"}` });
     }
   });
 
   app.get("/api/public/capture-email/:userId", async (req: Request, res: Response) => {
     try {
-      const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
+      const domain = process.env.CAPTURE_EMAIL_DOMAIN || "postmark.rohin.co";
       const result = await pool.query(
         "SELECT capture_token FROM workspaces WHERE user_id = $1 LIMIT 1",
         [req.params.userId]
@@ -1173,7 +1173,7 @@ If no dates found, return { "extracted_dates": [] }.`
       const captureToken = result.rows[0]?.capture_token;
       return res.json({ captureEmail: `${captureToken || "capture"}@${domain}` });
     } catch (err) {
-      return res.json({ captureEmail: `capture@${process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app"}` });
+      return res.json({ captureEmail: `capture@${process.env.CAPTURE_EMAIL_DOMAIN || "postmark.rohin.co"}` });
     }
   });
 
@@ -1224,22 +1224,10 @@ If no dates found, return { "extracted_dates": [] }.`
       }
 
       let wtResult;
-      if (isPostmarkInbound) {
-        const postmarkUserId = process.env.POSTMARK_INBOUND_USER_ID;
-        if (!postmarkUserId) {
-          console.log("[email-inbound] POSTMARK_INBOUND_USER_ID not set");
-          return res.status(200).json({ message: "No postmark user configured" });
-        }
-        wtResult = await pool.query(
-          "SELECT id, user_id FROM workspaces WHERE user_id = $1 LIMIT 1",
-          [postmarkUserId]
-        );
-      } else {
-        wtResult = await pool.query(
-          "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
-          [captureToken]
-        );
-      }
+      wtResult = await pool.query(
+        "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
+        [captureToken]
+      );
       console.log(`[email-inbound] DB_URL prefix: ${process.env.DATABASE_URL?.slice(0, 30)}, rows: ${wtResult.rows.length}`);
       const workspaceBase = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id } : null;
       if (!workspaceBase) {
