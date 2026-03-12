@@ -1310,7 +1310,8 @@ Respond with JSON only, no explanation:
             messages: [{ role: 'user', content: prompt }]
           });
           const matchText = matchResponse.content[0].type === 'text' ? matchResponse.content[0].text : '';
-          const matchResult = JSON.parse(matchText);
+          const cleanMatchText = matchText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const matchResult = JSON.parse(cleanMatchText);
 
           if (matchResult.matched_entity) {
             console.log(`[email-inbound] ✅ Matched to entity: ${matchResult.matched_entity}`);
