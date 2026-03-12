@@ -468,7 +468,7 @@ export default function CapturePage() {
   const [emailCopied, setEmailCopied] = useState(false);
 
   useEffect(() => {
-    fetch("/api/config/capture-email")
+    apiRequest("GET", "/api/config/capture-email")
       .then(r => r.json())
       .then(d => { if (d.captureEmail) setCaptureEmail(d.captureEmail); })
       .catch(() => {});

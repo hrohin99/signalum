@@ -1142,12 +1142,25 @@ If no dates found, return { "extracted_dates": [] }.`
     }
   });
 
-  app.get("/api/config/capture-email", requireAuth, async (req: Request, res: Response) => {
-    const userId = (req as any).userId;
-    const workspace = await storage.getWorkspaceByUserId(userId);
-    const token = workspace?.captureToken || "capture";
-    const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
-    res.json({ captureEmail: `${token}@${domain}` });
+  app.get("/api/config/capture-email", async (req: Request, res: Response) => {
+    try {
+      const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
+      const authHeader = req.headers.authorization;
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.split(" ")[1];
+        const { data: { user }, error } = await supabase.auth.getUser(token);
+        if (!error && user) {
+          const workspace = await storage.getWorkspaceByUserId(user.id);
+          if (workspace?.captureToken) {
+            return res.json({ captureEmail: `${workspace.captureToken}@${domain}` });
+          }
+        }
+      }
+      return res.json({ captureEmail: `capture@${domain}` });
+    } catch (err) {
+      const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
+      return res.json({ captureEmail: `capture@${domain}` });
+    }
   });
 
   app.post("/api/capture/email-inbound", async (req: Request, res: Response) => {
