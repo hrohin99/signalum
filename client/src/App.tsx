@@ -88,13 +88,13 @@ function AppContent() {
         if (!profileRes || !profileRes.ok || !profileData) {
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
-          setHasCompletedOnboarding(false);
+          setHasCompletedOnboarding(true);
           setCheckingOnboarding(false);
           initialLoadComplete.current = true;
           return;
         }
 
-        if (profileData.onboarding_completed === true || profileData.onboarding_completed === "true") {
+        if (profileData.onboarding_completed === true || profileData.onboarding_completed === "true" || profileData.onboardingCompleted === true) {
           checkedUserId.current = user.id;
           onboardingInProgress.current = false;
           setHasCompletedOnboarding(true);
