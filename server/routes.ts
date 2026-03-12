@@ -1252,55 +1252,33 @@ If no dates found, return { "extracted_dates": [] }.`
 
         if (entityList.length > 0) {
           const emailSubject = subject;
-          const matchPrompt = `You are an entity matcher for a competitive intelligence tool.
-
-Given an email subject and a list of tracked entities, identify if any entity is mentioned or clearly referenced in the subject.
-
-Email subject: "${emailSubject}"
-
-Tracked entities:
-${entityList.map((e: { name: string; category: string }) => `- ${e.name} (${e.category})`).join("\n")}
-
-If a match is found, respond with valid JSON only:
-{"matched_entity": "<entity name>", "matched_category": "<category>", "match_reason": "<brief reason>"}
-
-If no match, respond with:
-{"matched_entity": null, "matched_category": null, "match_reason": null}
-
-Respond with JSON only. No explanation.`;
-
-          const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": process.env.ANTHROPIC_API_KEY || "",
-              "anthropic-version": "2023-06-01"
-            },
-            body: JSON.stringify({
-              model: "claude-haiku-4-5-20251001",
-              max_tokens: 200,
-              messages: [{ role: "user", content: matchPrompt }]
-            })
+          const client = getAnthropicClient();
+          const matchResponse = await client.messages.create({
+            model: 'claude-opus-4-5',
+            max_tokens: 200,
+            messages: [{
+              role: 'user',
+              content: `You are an entity matcher.\n\nEmail subject: "${emailSubject}"\n\nTracked entities:\n${entityList.map((e: { name: string; category: string }) => `- ${e.name} (${e.category})`).join('\n')}\n\nIf match found respond with JSON only: {"matched_entity":"<name>","matched_category":"<category>","match_reason":"<reason>"}\nIf no match: {"matched_entity":null,"matched_category":null,"match_reason":null}\nJSON only.`
+            }]
           });
+          const matchText = matchResponse.content[0].type === 'text' ? matchResponse.content[0].text : '';
+          const matchResult = JSON.parse(matchText);
 
-          const claudeData = await claudeRes.json() as any;
-          const rawText = claudeData?.content?.[0]?.text?.trim() || "";
-          const parsed = JSON.parse(rawText);
-
-          if (parsed.matched_entity) {
-            console.log(`[email-inbound] ✅ Matched to entity: ${parsed.matched_entity}`);
+          if (matchResult.matched_entity) {
+            console.log(`[email-inbound] ✅ Matched to entity: ${matchResult.matched_entity}`);
           } else {
             console.log(`[email-inbound] No confident entity match — storing unmatched`);
           }
 
           await pool.query(
             "UPDATE captures SET matched_entity = $1, matched_category = $2, match_reason = $3 WHERE id = $4",
-            [parsed.matched_entity ?? null, parsed.matched_category ?? null, parsed.match_reason ?? null, capture.id]
+            [matchResult.matched_entity ?? null, matchResult.matched_category ?? null, matchResult.match_reason ?? null, capture.id]
           );
         }
         }
-      } catch (matchErr) {
-        console.log("[email-inbound] AI matching failed, storing unmatched:", matchErr);
+      } catch (matchErr: any) {
+        console.error("[email-inbound] AI matching failed:", matchErr?.message || matchErr);
+        throw matchErr;
       }
 
       console.log(`[email-inbound] ✅ Capture stored for workspace ${workspaceBase.id} from ${fromEmail}`);
