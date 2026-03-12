@@ -469,13 +469,17 @@ export default function CapturePage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      fetch("/api/config/capture-email", {
-        headers: session?.access_token
-          ? { Authorization: `Bearer ${session.access_token}` }
-          : {}
+      if (!session?.access_token) return;
+      fetch("/api/workspace/profile", {
+        headers: { Authorization: `Bearer ${session.access_token}` }
       })
         .then(r => r.json())
-        .then(d => { if (d.captureEmail) setCaptureEmail(d.captureEmail); })
+        .then(d => {
+          const token = d.capture_token;
+          if (token) {
+            setCaptureEmail(`${token}@iialdoucla.resend.app`);
+          }
+        })
         .catch(() => {});
     });
   }, []);
