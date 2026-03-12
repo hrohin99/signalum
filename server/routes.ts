@@ -1220,30 +1220,29 @@ If no dates found, return { "extracted_dates": [] }.`
         return res.status(200).json({ message: "Token not recognised" });
       }
 
-      const entitiesResult = await pool.query(
-        "SELECT name, entity_type, category FROM entities WHERE user_id = $1 AND is_active = true LIMIT 50",
-        [workspace.userId]
-      );
-      const entities = entitiesResult.rows;
-
       let matchedEntity: string | null = null;
       let matchedCategory: string | null = null;
       let matchReason = `Forwarded email — ${subject}`;
 
-      if (entities.length > 0) {
-        try {
+      try {
+        const entitiesResult = await pool.query(
+          "SELECT name, entity_type, category FROM entities WHERE user_id = $1 AND is_active = true LIMIT 50",
+          [workspace.userId]
+        );
+        const entities = entitiesResult.rows;
+
+        if (entities.length > 0) {
           const entityList = entities.map((e: any) => `${e.name} (${e.entity_type})`).join(", ");
-          const matchPrompt = `You are a competitive intelligence assistant. A user has forwarded an email and you must match it to one of their tracked entities.
+          const matchPrompt = `You are a competitive intelligence assistant. Match this forwarded email to one of the user's tracked entities.
 
 Tracked entities: ${entityList}
 
-Email content:
+Email:
 ${content.slice(0, 2000)}
 
-Instructions:
-- If the email clearly relates to one of the tracked entities, respond with JSON: {"matched": true, "entityName": "<exact entity name from list>", "reason": "<one sentence why>"}
-- If confidence is low or no entity matches, respond with JSON: {"matched": false}
-- Respond with JSON only, no other text.`;
+Respond with JSON only:
+- If email clearly relates to a tracked entity: {"matched": true, "entityName": "<exact name from list>", "category": "<category from list>", "reason": "<one sentence>"}
+- If no clear match: {"matched": false}`;
 
           const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -1253,7 +1252,7 @@ Instructions:
               "anthropic-version": "2023-06-01"
             },
             body: JSON.stringify({
-              model: "claude-3-5-haiku-20241022",
+              model: "claude-haiku-4-5-20251001",
               max_tokens: 200,
               messages: [{ role: "user", content: matchPrompt }]
             })
@@ -1264,14 +1263,16 @@ Instructions:
           const parsed = JSON.parse(rawText);
 
           if (parsed.matched === true && parsed.entityName) {
-            const matchedEnt = entities.find((e: any) => e.name === parsed.entityName);
             matchedEntity = parsed.entityName;
-            matchedCategory = matchedEnt?.category || null;
+            matchedCategory = parsed.category || null;
             matchReason = parsed.reason || matchReason;
+            console.log(`[email-inbound] ✅ Matched to entity: ${matchedEntity}`);
+          } else {
+            console.log(`[email-inbound] No confident entity match — storing unmatched`);
           }
-        } catch (matchErr) {
-          console.log("[email-inbound] AI matching failed, storing unmatched:", matchErr);
         }
+      } catch (matchErr) {
+        console.log("[email-inbound] AI matching failed, storing unmatched:", matchErr);
       }
 
       await storage.createCapture({
