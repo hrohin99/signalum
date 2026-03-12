@@ -1191,7 +1191,11 @@ If no dates found, return { "extracted_dates": [] }.`
         return res.status(200).json({ message: "No token" });
       }
 
-      const workspace = await storage.getWorkspaceByCaptureToken(captureToken);
+      const wtResult = await pool.query(
+        "SELECT id, user_id FROM workspaces WHERE capture_token = $1 LIMIT 1",
+        [captureToken]
+      );
+      const workspace = wtResult.rows[0] ? { id: wtResult.rows[0].id, userId: wtResult.rows[0].user_id } : null;
       if (!workspace) {
         console.log(`[email-inbound] No workspace matched token: ${captureToken}`);
         return res.status(200).json({ message: "Token not recognised" });
