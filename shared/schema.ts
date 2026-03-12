@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, jsonb, timestamp, serial, integer, uuid, unique, date, index, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, jsonb, timestamp, serial, integer, uuid, unique, date, index, numeric, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -30,6 +30,7 @@ export const workspaces = pgTable("workspaces", {
   websiteUrl: text("website_url"),
   pendingSeedUrls: jsonb("pending_seed_urls").$type<string[]>(),
   captureToken: varchar("capture_token", { length: 32 }).unique(),
+  onboardingCompleted: boolean("onboarding_completed").default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
