@@ -469,20 +469,27 @@ export default function CapturePage() {
 
   useEffect(() => {
     const fetchCaptureEmail = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        // Try refreshing the session
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        if (!refreshed.session) return;
-      }
-      const { data: { session: activeSession } } = await supabase.auth.getSession();
-      if (!activeSession?.access_token) return;
       try {
-        const res = await fetch("/api/config/capture-email", {
-          headers: { Authorization: `Bearer ${activeSession.access_token}` }
-        });
-        const d = await res.json();
-        if (d.captureEmail) setCaptureEmail(d.captureEmail);
+        // Try authenticated route first
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.access_token) {
+          const res = await fetch("/api/config/capture-email", {
+            headers: { Authorization: `Bearer ${session.access_token}` }
+          });
+          if (res.ok) {
+            const d = await res.json();
+            if (d.captureEmail && d.captureEmail !== "capture@iialdoucla.resend.app") {
+              setCaptureEmail(d.captureEmail);
+              return;
+            }
+          }
+        }
+        // Fallback: use public route with user id from session
+        if (session?.user?.id) {
+          const res = await fetch(`/api/public/capture-email/${session.user.id}`);
+          const d = await res.json();
+          if (d.captureEmail) setCaptureEmail(d.captureEmail);
+        }
       } catch {}
     };
     fetchCaptureEmail();

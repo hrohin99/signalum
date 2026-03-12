@@ -1157,6 +1157,20 @@ If no dates found, return { "extracted_dates": [] }.`
     }
   });
 
+  app.get("/api/public/capture-email/:userId", async (req: Request, res: Response) => {
+    try {
+      const domain = process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app";
+      const result = await pool.query(
+        "SELECT capture_token FROM workspaces WHERE user_id = $1 LIMIT 1",
+        [req.params.userId]
+      );
+      const captureToken = result.rows[0]?.capture_token;
+      return res.json({ captureEmail: `${captureToken || "capture"}@${domain}` });
+    } catch (err) {
+      return res.json({ captureEmail: `capture@${process.env.RESEND_INBOUND_DOMAIN || "iialdoucla.resend.app"}` });
+    }
+  });
+
   app.post("/api/capture/email-inbound", async (req: Request, res: Response) => {
     try {
       const payload = req.body;
