@@ -3200,7 +3200,15 @@ Rules:
       if (!tenantId) return res.json({ productContext: null });
       const result = await pool.query("SELECT * FROM product_context WHERE tenant_id = $1 LIMIT 1", [tenantId]);
       console.log('[product-context GET] tenantId:', tenantId, 'rows:', result.rows.length);
-      return res.json({ productContext: result.rows[0] || null });
+      const row = result.rows[0];
+      return res.json({ productContext: row ? {
+        id: row.id,
+        productName: row.product_name,
+        description: row.description,
+        targetCustomer: row.target_customer,
+        strengths: row.strengths,
+        weaknesses: row.weaknesses,
+      } : null });
     } catch (error: any) {
       console.error("Get product context error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
@@ -3219,16 +3227,35 @@ Rules:
         return res.status(400).json({ message: "Product name is required" });
       }
 
-      const context = await storage.upsertProductContext({
-        tenantId,
-        productName: productName.trim(),
-        description: description?.trim() || null,
-        targetCustomer: targetCustomer?.trim() || null,
-        strengths: strengths?.trim() || null,
-        weaknesses: weaknesses?.trim() || null,
-      });
+      const upsertResult = await pool.query(
+        `INSERT INTO product_context (tenant_id, product_name, description, target_customer, strengths, weaknesses)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (tenant_id) DO UPDATE SET
+           product_name = EXCLUDED.product_name,
+           description = EXCLUDED.description,
+           target_customer = EXCLUDED.target_customer,
+           strengths = EXCLUDED.strengths,
+           weaknesses = EXCLUDED.weaknesses
+         RETURNING *`,
+        [
+          tenantId,
+          productName.trim(),
+          description?.trim() || null,
+          targetCustomer?.trim() || null,
+          strengths?.trim() || null,
+          weaknesses?.trim() || null,
+        ]
+      );
 
-      return res.json({ productContext: context });
+      const saved = upsertResult.rows[0];
+      return res.json({ productContext: saved ? {
+        id: saved.id,
+        productName: saved.product_name,
+        description: saved.description,
+        targetCustomer: saved.target_customer,
+        strengths: saved.strengths,
+        weaknesses: saved.weaknesses,
+      } : null });
     } catch (error: any) {
       console.error("Upsert product context error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
