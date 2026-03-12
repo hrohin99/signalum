@@ -49,6 +49,9 @@ export const captures = pgTable("captures", {
   matchedEntity: text("matched_entity"),
   matchedCategory: text("matched_category"),
   matchReason: text("match_reason"),
+  extractedExcerpt: text("extracted_excerpt"),
+  suggestedNewCategory: text("suggested_new_category"),
+  suggestedNewCategoryReason: text("suggested_new_category_reason"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
