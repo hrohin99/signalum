@@ -2940,7 +2940,7 @@ Rules:
         const newId = randomUUID();
         const createResult = await pool.query(
           "INSERT INTO workspaces (id, user_id, categories, onboarding_completed) VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO UPDATE SET user_id = EXCLUDED.user_id RETURNING *",
-          [newId, userId, JSON.stringify([]), true]
+          [newId, userId, JSON.stringify([]), false]
         );
         return res.json(createResult.rows[0]);
       }
