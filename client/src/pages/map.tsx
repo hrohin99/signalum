@@ -31,6 +31,7 @@ import {
   FolderOpen,
   Tag,
   ChevronRight,
+  ChevronDown,
   Network,
   Plus,
   Loader2,
@@ -535,6 +536,27 @@ function MapPageInner() {
     },
   });
 
+  const addToExistingCategoryMutation = useMutation({
+    mutationFn: async ({ suggestedCategory, targetCategory }: { suggestedCategory: string; targetCategory: string }) => {
+      const res = await apiRequest("POST", "/api/add-entity", {
+        categoryName: targetCategory,
+        entityName: suggestedCategory,
+        entityType: "other",
+      });
+      await apiRequest("DELETE", `/api/captures/suggested-categories/${encodeURIComponent(suggestedCategory)}`);
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/captures/suggested-categories"] });
+      setDismissedSuggestions(prev => new Set([...prev, variables.suggestedCategory]));
+      toast({ title: "Topic added", description: `"${variables.suggestedCategory}" has been added to "${variables.targetCategory}".` });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     const localSeen = localStorage.getItem("onboarding_welcome_seen") === "true";
     if (welcomeStatus && !welcomeStatus.dismissed && !localSeen && categories.length > 0) {
@@ -872,18 +894,42 @@ function MapPageInner() {
                 size="sm"
                 variant="outline"
                 className="h-7 text-xs border-amber-400 text-amber-900 hover:bg-amber-100"
-                data-testid={`button-add-suggested-category-${s.category.toLowerCase().replace(/\s+/g, "-")}`}
-                disabled={addSuggestedCategoryMutation.isPending || dismissSuggestedCategoryMutation.isPending}
+                data-testid={`button-add-new-suggested-category-${s.category.toLowerCase().replace(/\s+/g, "-")}`}
+                disabled={addSuggestedCategoryMutation.isPending || dismissSuggestedCategoryMutation.isPending || addToExistingCategoryMutation.isPending}
                 onClick={() => addSuggestedCategoryMutation.mutate(s.category)}
               >
-                Add Category
+                Add as New Category
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs border-amber-400 text-amber-900 hover:bg-amber-100"
+                    data-testid={`button-add-to-existing-category-${s.category.toLowerCase().replace(/\s+/g, "-")}`}
+                    disabled={addSuggestedCategoryMutation.isPending || dismissSuggestedCategoryMutation.isPending || addToExistingCategoryMutation.isPending}
+                  >
+                    Add to Existing Category <ChevronDown className="ml-1 w-3 h-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {categories.map(cat => (
+                    <DropdownMenuItem
+                      key={cat.name}
+                      data-testid={`dropdown-item-existing-category-${cat.name.toLowerCase().replace(/\s+/g, "-")}`}
+                      onClick={() => addToExistingCategoryMutation.mutate({ suggestedCategory: s.category, targetCategory: cat.name })}
+                    >
+                      {cat.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 size="sm"
                 variant="ghost"
                 className="h-7 text-xs text-amber-700 hover:bg-amber-100"
                 data-testid={`button-dismiss-suggested-category-${s.category.toLowerCase().replace(/\s+/g, "-")}`}
-                disabled={addSuggestedCategoryMutation.isPending || dismissSuggestedCategoryMutation.isPending}
+                disabled={addSuggestedCategoryMutation.isPending || dismissSuggestedCategoryMutation.isPending || addToExistingCategoryMutation.isPending}
                 onClick={() => dismissSuggestedCategoryMutation.mutate(s.category)}
               >
                 Dismiss
