@@ -1214,7 +1214,7 @@ If no dates found, return { "extracted_dates": [] }.`
       console.log('[email-inbound] isPostmark:', isPostmark, 'raw payload keys:', JSON.stringify(Object.keys(raw || {})));
       // For Postmark inbound, captureToken will be the long hash — not a workspace token
       // Look up workspace by capture_token first, then fall back to from email
-      const isPostmarkInbound = toAddress.includes('inbound.postmarkapp.com');
+      const isPostmarkInbound = !!(raw.TextBody || raw.HtmlBody || raw.FromFull);
 
       console.log(`[email-inbound] to: ${toAddress}, token: ${captureToken}, from: ${fromEmail}`);
 
