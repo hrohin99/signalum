@@ -1251,15 +1251,36 @@ If no dates found, return { "extracted_dates": [] }.`
         ];
 
         if (entityList.length > 0) {
-          const emailSubject = subject;
+          const emailContent = content;
+          const prompt = `You are an entity matcher for a competitive intelligence tool.
+
+Analyze this email content and do two things:
+
+1. Check if any tracked entity is mentioned or clearly referenced.
+2. If content mentions topics NOT covered by any tracked entity, suggest a new category name and the relevant excerpt.
+
+Email content:
+"""
+${emailContent}
+"""
+
+Tracked entities:
+${entityList.map((e: { name: string; category: string }) => `- ${e.name} (${e.category})`).join('\n')}
+
+Respond with JSON only, no explanation:
+{
+  "matched_entity": "<entity name or null>",
+  "matched_category": "<category or null>",
+  "match_reason": "<brief reason or null>",
+  "extracted_excerpt": "<1-2 sentence relevant excerpt from the email or null>",
+  "suggested_new_category": "<suggested category name if unmatched topic found, or null>",
+  "suggested_new_category_reason": "<why this new category would be useful, or null>"
+}`;
           const client = getAnthropicClient();
           const matchResponse = await client.messages.create({
             model: 'claude-opus-4-5',
-            max_tokens: 200,
-            messages: [{
-              role: 'user',
-              content: `You are an entity matcher.\n\nEmail subject: "${emailSubject}"\n\nTracked entities:\n${entityList.map((e: { name: string; category: string }) => `- ${e.name} (${e.category})`).join('\n')}\n\nIf match found respond with JSON only: {"matched_entity":"<name>","matched_category":"<category>","match_reason":"<reason>"}\nIf no match: {"matched_entity":null,"matched_category":null,"match_reason":null}\nJSON only.`
-            }]
+            max_tokens: 500,
+            messages: [{ role: 'user', content: prompt }]
           });
           const matchText = matchResponse.content[0].type === 'text' ? matchResponse.content[0].text : '';
           const matchResult = JSON.parse(matchText);
@@ -1271,8 +1292,16 @@ If no dates found, return { "extracted_dates": [] }.`
           }
 
           await pool.query(
-            "UPDATE captures SET matched_entity = $1, matched_category = $2, match_reason = $3 WHERE id = $4",
-            [matchResult.matched_entity ?? null, matchResult.matched_category ?? null, matchResult.match_reason ?? null, capture.id]
+            "UPDATE captures SET matched_entity = $1, matched_category = $2, match_reason = $3, extracted_excerpt = $4, suggested_new_category = $5, suggested_new_category_reason = $6 WHERE id = $7",
+            [
+              matchResult.matched_entity ?? null,
+              matchResult.matched_category ?? null,
+              matchResult.match_reason ?? null,
+              matchResult.extracted_excerpt ?? null,
+              matchResult.suggested_new_category ?? null,
+              matchResult.suggested_new_category_reason ?? null,
+              capture.id
+            ]
           );
         }
         }

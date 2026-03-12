@@ -1,0 +1,34 @@
+In server/routes.ts, find the AI entity matching block inside the POST /api/capture/email-inbound handler. We need to expand it significantly. Do not touch any other files or routes.
+Change 1 — Pass full email body to the AI, not just subject.
+The email body is already being parsed and saved to the content field of the capture row. Use that same body text (or however the raw email content is stored in this handler before insert) as the input to the AI matching call instead of just the subject.
+Change 2 — Replace the current AI prompt with this expanded one:
+typescriptconst prompt = `You are an entity matcher for a competitive intelligence tool.
+
+Analyze this email content and do two things:
+
+1. Check if any tracked entity is mentioned or clearly referenced.
+2. If content mentions topics NOT covered by any tracked entity, suggest a new category name and the relevant excerpt.
+
+Email content:
+"""
+${emailContent}
+"""
+
+Tracked entities:
+${entityList.map(e => `- ${e.name} (${e.category})`).join('\n')}
+
+Respond with JSON only, no explanation:
+{
+  "matched_entity": "<entity name or null>",
+  "matched_category": "<category or null>",
+  "match_reason": "<brief reason or null>",
+  "extracted_excerpt": "<1-2 sentence relevant excerpt from the email or null>",
+  "suggested_new_category": "<suggested category name if unmatched topic found, or null>",
+  "suggested_new_category_reason": "<why this new category would be useful, or null>"
+}`;
+Change 3 — Update the capture UPDATE query to also save extracted_excerpt and suggested_new_category and suggested_new_category_reason. First check if these columns exist on the captures table — if they do not exist, add them using a raw SQL query at the start of the server (in the db init section or wherever other schema patches are done), like:
+sqlALTER TABLE captures ADD COLUMN IF NOT EXISTS extracted_excerpt TEXT;
+ALTER TABLE captures ADD COLUMN IF NOT EXISTS suggested_new_category TEXT;
+ALTER TABLE captures ADD COLUMN IF NOT EXISTS suggested_new_category_reason TEXT;
+Change 4 — Parse the expanded JSON response and save all 5 fields (matched_entity, matched_category, match_reason, extracted_excerpt, suggested_new_category, suggested_new_category_reason) in the UPDATE.
+After making all changes run npm run build and confirm no errors, then Republish.

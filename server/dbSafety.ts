@@ -140,5 +140,16 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring workspace profile columns:", error?.message || error);
   }
 
+  try {
+    await pool.query(`
+      ALTER TABLE captures ADD COLUMN IF NOT EXISTS extracted_excerpt TEXT;
+      ALTER TABLE captures ADD COLUMN IF NOT EXISTS suggested_new_category TEXT;
+      ALTER TABLE captures ADD COLUMN IF NOT EXISTS suggested_new_category_reason TEXT;
+    `);
+    console.log("[DBSafety] captures AI columns verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring workspace profile columns:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
