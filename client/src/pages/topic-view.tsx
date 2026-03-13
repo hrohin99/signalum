@@ -78,6 +78,7 @@ import { PartnershipsCard } from "@/components/PartnershipsCard";
 import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
 import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
+import { ProductsCard } from "@/components/ProductsCard";
 import { CoachMarks } from "@/components/coach-marks";
 import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
 import { topicTourSteps } from "@/lib/tourConfig";
@@ -626,10 +627,7 @@ function TopicViewContent({
           <CompetitorCapabilitiesCard entityName={entity.name} />
 
           {/* Products & Solutions */}
-          <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>Products & solutions</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Product and solution data coming soon.</div>
-          </div>
+          <ProductsCard entityId={entity.name} userRole={userRole} />
 
           {/* Geographic Presence */}
           <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>

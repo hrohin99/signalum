@@ -248,5 +248,24 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring entity_certifications table:", error?.message || error);
   }
 
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS entity_products (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        description TEXT,
+        status TEXT DEFAULT 'ga',
+        tags TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[DBSafety] entity_products table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_products table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

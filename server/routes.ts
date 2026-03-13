@@ -5020,6 +5020,101 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/entities/:entityId/products", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const result = await pool.query(
+        `SELECT * FROM entity_products WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
+        [req.params.entityId, workspaceId]
+      );
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get products error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/products", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { product_name, description, status, tags } = req.body;
+      if (!product_name) return res.status(400).json({ error: 'product_name is required' });
+      const allowedStatuses = ['ga', 'beta', 'deprecated'];
+      const safeStatus = allowedStatuses.includes(status) ? status : 'ga';
+      const result = await pool.query(
+        `INSERT INTO entity_products (workspace_id, entity_id, product_name, description, status, tags)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [workspaceId, req.params.entityId, product_name, description, safeStatus, tags]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Create product error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entities/:entityId/products/:productId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      const { product_name, description, status, tags } = req.body;
+      if (!product_name) return res.status(400).json({ error: 'product_name is required' });
+      const allowedStatuses = ['ga', 'beta', 'deprecated'];
+      const safeStatus = allowedStatuses.includes(status) ? status : 'ga';
+      const result = await pool.query(
+        `UPDATE entity_products SET product_name=$1, description=$2, status=$3, tags=$4
+         WHERE id=$5 AND workspace_id=$6 AND entity_id=$7 RETURNING *`,
+        [product_name, description, safeStatus, tags, req.params.productId, workspaceId, req.params.entityId]
+      );
+      if (result.rowCount === 0) return res.status(404).json({ error: 'Product not found' });
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update product error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entities/:entityId/products/:productId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      await pool.query(`DELETE FROM entity_products WHERE id=$1 AND workspace_id=$2 AND entity_id=$3`, [req.params.productId, workspaceId, req.params.entityId]);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete product error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/entities/:entityId/intelligence/:field", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
