@@ -280,6 +280,17 @@ function TopicViewContent({
 
   const isExtractionRunning = extractionStatus?.extraction?.status === "running";
 
+  const entityId = entity.name;
+  const { data: products = [] } = useQuery<any[]>({
+    queryKey: ['/api/entities', entityId, 'products'],
+    queryFn: async () => {
+      const res = await fetch(`/api/entities/${entityId}/products`);
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: !!entityId
+  });
+
   useEffect(() => {
     if (extractionStatus?.extraction?.status === "completed" && extractionStatus?.extraction?.noDataFound) {
       setExtractionNoData(true);
@@ -592,13 +603,24 @@ function TopicViewContent({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-            <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Products & solutions</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Profile tab to manage</div>
+            <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Products & solutions</div>
+                <button onClick={() => setActiveTab('profile')} style={{ fontSize: 11, color: '#534AB7', background: 'none', border: 'none', cursor: 'pointer' }}>Manage →</button>
+              </div>
+              {products.length === 0
+                ? <div style={{ fontSize: 13, color: '#94a3b8' }}>No products logged yet.</div>
+                : products.slice(0, 3).map((p: any) => (
+                    <div key={p.id} style={{ fontSize: 13, color: '#1e293b', padding: '3px 0', borderBottom: '0.5px solid #f1f5f9' }}>{p.product_name}</div>
+                  ))
+              }
             </div>
-            <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Markets & geography</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Profile tab to manage</div>
+            <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Markets & geography</div>
+                <button onClick={() => setActiveTab('profile')} style={{ fontSize: 11, color: '#534AB7', background: 'none', border: 'none', cursor: 'pointer' }}>Manage →</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#94a3b8' }}>No geographic data logged yet.</div>
             </div>
             <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Funding</div>
