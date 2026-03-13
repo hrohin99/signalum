@@ -630,9 +630,9 @@ function TopicViewContent({
           <ProductsCard entityId={entity.name} userRole={userRole} />
 
           {/* Geographic Presence */}
-          <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>Geographic presence</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Geographic presence data coming soon.</div>
+          <div style={{ background: '#ffffff', border: '1px solid #e8e8e8', borderRadius: 12, padding: '14px 18px' }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a2e', marginBottom: 4 }}>Geographic presence</div>
+            <div style={{ fontSize: 13, color: '#888', textAlign: 'center', padding: '16px 0' }}>No geographic data logged yet. Build coming soon.</div>
           </div>
         </div>
       )}

@@ -27,6 +27,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
+  console.log('showForm:', showForm);
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['/api/entities', entityId, 'products'],
@@ -94,7 +95,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
   );
 
   return (
-    <div data-testid="card-products-solutions" style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, overflow: 'hidden' }}>
+    <div data-testid="card-products-solutions" style={{ background: '#ffffff', border: '1px solid #e8e8e8', borderRadius: 12, overflow: 'hidden', marginBottom: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>Products & solutions</span>
