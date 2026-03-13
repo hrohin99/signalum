@@ -267,5 +267,25 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring entity_products table:", error?.message || error);
   }
 
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS entity_geo_presence (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        region_name TEXT NOT NULL,
+        iso_code TEXT,
+        presence_type TEXT DEFAULT 'active',
+        channels TEXT,
+        notes TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[DBSafety] entity_geo_presence table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_geo_presence table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

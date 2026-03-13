@@ -79,6 +79,7 @@ import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
 import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ProductsCard } from "@/components/ProductsCard";
+import { GeoPresenceCard, getRegionFlag } from "@/components/GeoPresenceCard";
 import { CoachMarks } from "@/components/coach-marks";
 import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
 import { topicTourSteps } from "@/lib/tourConfig";
@@ -285,6 +286,18 @@ function TopicViewContent({
     queryKey: [`/api/entities/${entityId}/products`],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/products`);
+      return res.json();
+    },
+    enabled: !!entityId,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true
+  });
+
+  const { data: geoPresence = [] } = useQuery<any[]>({
+    queryKey: [`/api/entities/${entityId}/geo-presence`],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`);
       return res.json();
     },
     enabled: !!entityId,
@@ -624,10 +637,36 @@ function TopicViewContent({
             </div>
             <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Markets & geography</div>
-                <button onClick={() => setActiveTab('profile')} style={{ fontSize: 11, color: '#534AB7', background: 'none', border: 'none', cursor: 'pointer' }}>Manage →</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Markets & geography</div>
+                  {geoPresence.length > 0 && (
+                    <span data-testid="text-geo-overview-count" style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, background: '#f8fafc', color: '#64748b', border: '0.5px solid #e2e8f0' }}>
+                      {geoPresence.length} {geoPresence.length === 1 ? 'market' : 'markets'}
+                    </span>
+                  )}
+                </div>
+                <button data-testid="button-manage-geo" onClick={() => setActiveTab('profile')} style={{ fontSize: 11, color: '#534AB7', background: 'none', border: 'none', cursor: 'pointer' }}>Manage →</button>
               </div>
-              <div style={{ fontSize: 13, color: '#94a3b8' }}>No geographic data logged yet.</div>
+              {geoPresence.length === 0
+                ? <div style={{ fontSize: 13, color: '#94a3b8' }}>No geographic data logged yet.</div>
+                : geoPresence.slice(0, 3).map((g: any) => {
+                    const flag = getRegionFlag(g.region_name);
+                    const presenceStyles: Record<string, { bg: string; color: string; label: string }> = {
+                      active: { bg: '#EAF3DE', color: '#27500A', label: 'Active' },
+                      expanding: { bg: '#E0EDFF', color: '#1A3F6F', label: 'Expanding' },
+                      limited: { bg: '#FAEEDA', color: '#633806', label: 'Limited' },
+                      exited: { bg: '#F1EFE8', color: '#444441', label: 'Exited' },
+                    };
+                    const s = presenceStyles[g.presence_type] || presenceStyles.active;
+                    return (
+                      <div key={g.id} style={{ padding: '6px 0', borderBottom: '0.5px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 14 }}>{flag}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{g.region_name}</span>
+                        <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, fontWeight: 500, background: s.bg, color: s.color }}>{s.label}</span>
+                      </div>
+                    );
+                  })
+              }
             </div>
             <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Funding</div>
@@ -659,10 +698,7 @@ function TopicViewContent({
           <ProductsCard entityId={entity.name} userRole={userRole} />
 
           {/* Geographic Presence */}
-          <div style={{ background: '#ffffff', border: '1px solid #e8e8e8', borderRadius: 12, padding: '14px 18px' }}>
-            <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a2e', marginBottom: 4 }}>Geographic presence</div>
-            <div style={{ fontSize: 13, color: '#888', textAlign: 'center', padding: '16px 0' }}>No geographic data logged yet. Build coming soon.</div>
-          </div>
+          <GeoPresenceCard entityId={entity.name} userRole={userRole} />
         </div>
       )}
 

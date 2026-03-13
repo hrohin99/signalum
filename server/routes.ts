@@ -5118,6 +5118,104 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/entities/:entityId/geo-presence", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const result = await pool.query(
+        `SELECT * FROM entity_geo_presence WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
+        [req.params.entityId, workspaceId]
+      );
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get geo-presence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/geo-presence", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { region_name, iso_code, presence_type, channels, notes } = req.body;
+      if (!region_name) return res.status(400).json({ error: 'region_name is required' });
+      const allowedTypes = ['active', 'expanding', 'limited', 'exited'];
+      const safeType = allowedTypes.includes(presence_type) ? presence_type : 'active';
+      const result = await pool.query(
+        `INSERT INTO entity_geo_presence (workspace_id, entity_id, region_name, iso_code, presence_type, channels, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [workspaceId, req.params.entityId, region_name, iso_code || null, safeType, channels || null, notes || null]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Create geo-presence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entities/:entityId/geo-presence/:geoId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { region_name, iso_code, presence_type, channels, notes } = req.body;
+      if (!region_name) return res.status(400).json({ error: 'region_name is required' });
+      const allowedTypes = ['active', 'expanding', 'limited', 'exited'];
+      const safeType = allowedTypes.includes(presence_type) ? presence_type : 'active';
+      const result = await pool.query(
+        `UPDATE entity_geo_presence SET region_name=$1, iso_code=$2, presence_type=$3, channels=$4, notes=$5
+         WHERE id=$6 AND workspace_id=$7 AND entity_id=$8 RETURNING *`,
+        [region_name, iso_code || null, safeType, channels || null, notes || null, req.params.geoId, workspaceId, req.params.entityId]
+      );
+      if (result.rowCount === 0) return res.status(404).json({ error: 'Geo presence entry not found' });
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update geo-presence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entities/:entityId/geo-presence/:geoId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const deleted = await pool.query(`DELETE FROM entity_geo_presence WHERE id=$1 AND workspace_id=$2 AND entity_id=$3 RETURNING id`, [req.params.geoId, workspaceId, req.params.entityId]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Geo presence entry not found' });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete geo-presence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/entities/:entityId/intelligence/:field", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
