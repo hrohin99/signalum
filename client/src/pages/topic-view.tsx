@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/App";
+import { supabase } from "@/lib/supabase";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
@@ -285,25 +286,43 @@ function TopicViewContent({
   const { data: products = [] } = useQuery<any[]>({
     queryKey: [`/api/entities/${entityId}/products`],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/products`);
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return [];
+      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/products`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include'
+      });
+      if (!res.ok) return [];
       return res.json();
     },
     enabled: !!entityId,
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: true
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: 500
   });
 
   const { data: geoPresence = [] } = useQuery<any[]>({
     queryKey: [`/api/entities/${entityId}/geo-presence`],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`);
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return [];
+      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/geo-presence`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include'
+      });
+      if (!res.ok) return [];
       return res.json();
     },
     enabled: !!entityId,
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: true
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: 500
   });
 
   useEffect(() => {

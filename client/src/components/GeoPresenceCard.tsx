@@ -138,7 +138,9 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
     },
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: true
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: 500
   });
 
   const addMutation = useMutation({
