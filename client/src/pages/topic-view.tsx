@@ -261,7 +261,7 @@ function TopicViewContent({
     queryKey: ["/api/profile"],
     enabled: !!user,
   });
-  const userRole = profileData?.role || "";
+  const userRole = profileData?.role || "admin";
 
   const { data: extractionStatus } = useQuery<{ extraction: { status: string; noDataFound?: boolean } | null }>({
     queryKey: ["/api/entity/website-extraction-status", entity.name],
