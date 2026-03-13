@@ -2476,7 +2476,7 @@ function ManualSearchButton({
       </div>
       {limitReached ? (
         <p className="text-[11px] text-slate-400 italic" data-testid="text-search-limit">
-          Search limit reached for today. Watchloom will automatically search again tomorrow.
+          Search limit reached for today. Signalum will automatically search again tomorrow.
         </p>
       ) : (
         <Button
@@ -3632,10 +3632,10 @@ function DatesAndDeadlinesCard({
             <div className="bg-blue-50 border border-blue-100 rounded-lg p-3" data-testid="text-dates-prompt">
               <p className="text-sm text-blue-700">
                 {topicType === "regulation"
-                  ? "Regulations and deadlines go hand in hand. Add the key compliance dates for this topic so Watchloom can keep you on track."
+                  ? "Regulations and deadlines go hand in hand. Add the key compliance dates for this topic so Signalum can keep you on track."
                   : topicType === "risk"
-                  ? "Tracking risk means staying ahead of key dates. Add the important deadlines for this risk so Watchloom can keep you on track."
-                  : "Events revolve around dates. Add the key dates for this event so Watchloom can keep you on track."}
+                  ? "Tracking risk means staying ahead of key dates. Add the important deadlines for this risk so Signalum can keep you on track."
+                  : "Events revolve around dates. Add the key dates for this event so Signalum can keep you on track."}
               </p>
               <button
                 onClick={openAddModal}
@@ -4173,7 +4173,7 @@ function AIInsightsCard({
 
         {!hasUpdates ? (
           <p className="text-sm text-slate-400 leading-relaxed" data-testid="text-insights-empty">
-            Add some updates and Watchloom will generate insights here.
+            Add some updates and Signalum will generate insights here.
           </p>
         ) : isLoading || regenerateMutation.isPending ? (
           <div className="space-y-2">
@@ -4271,7 +4271,7 @@ function AspectSelectionModal({
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
       toast({
-        title: `Watchloom will now track ${entityName} for ${aspect}.`,
+        title: `Signalum will now track ${entityName} for ${aspect}.`,
         className: "bg-green-50 border-green-200 text-green-800",
       });
       onOpenChange(false);
@@ -4556,7 +4556,7 @@ function DisambiguationCard({
       queryClient.invalidateQueries({ queryKey: ["/api/workspace", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
       toast({
-        title: `Watchloom will now track ${entity.name} for ${aspect}.`,
+        title: `Signalum will now track ${entity.name} for ${aspect}.`,
         className: "bg-green-50 border-green-200 text-green-800",
       });
       setModalOpen(false);
@@ -4594,7 +4594,7 @@ function DisambiguationCard({
           <>
             <DialogHeader>
               <DialogTitle>Confirm: {entity.name}</DialogTitle>
-              <p className="text-sm text-muted-foreground pt-1">Help Watchloom find the right organisation.</p>
+              <p className="text-sm text-muted-foreground pt-1">Help Signalum find the right organisation.</p>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div>

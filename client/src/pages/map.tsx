@@ -167,7 +167,7 @@ function EmptyCategoryNudge({
         <h3 className="font-semibold text-[#1e3a5f]" data-testid="text-nudge-headline">Nothing here yet</h3>
       </div>
       <p className="text-sm text-slate-500 mb-4">
-        Name a few specific ones and Watchloom will start tracking them for you.
+        Name a few specific ones and Signalum will start tracking them for you.
       </p>
       <div className="flex gap-2">
         <Input
@@ -194,7 +194,7 @@ function EmptyCategoryNudge({
       {justAdded && (
         <div className="flex items-center gap-1.5 mt-3 text-sm text-emerald-600" data-testid="text-nudge-confirmation">
           <Check className="w-4 h-4" />
-          Added. Watchloom is now tracking this.
+          Added. Signalum is now tracking this.
         </div>
       )}
     </div>
@@ -248,7 +248,7 @@ function InlineAddTopic({
       {justAdded && (
         <div className="flex items-center gap-1.5 mt-2 text-sm text-emerald-600" data-testid="text-inline-add-confirmation">
           <Check className="w-4 h-4" />
-          Added. Watchloom is now tracking this.
+          Added. Signalum is now tracking this.
         </div>
       )}
     </div>
@@ -266,7 +266,7 @@ function SeedingBanner() {
         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white" />
       </span>
       <p className="text-sm">
-        Watchloom is searching the web for recent intelligence on your tracked topics. This takes about 30 seconds.
+        Signalum is searching the web for recent intelligence on your tracked topics. This takes about 30 seconds.
       </p>
     </div>
   );
@@ -292,7 +292,7 @@ function WorkspaceErrorFallback() {
           <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ backgroundColor: "#1e3a5f" }}>
             <Shield className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-semibold" style={{ color: "#1e3a5f" }}>Watchloom</span>
+          <span className="text-xl font-semibold" style={{ color: "#1e3a5f" }}>Signalum</span>
         </div>
         <p className="text-lg font-medium text-foreground mb-2" data-testid="text-error-message">Something went wrong loading your workspace</p>
         <Button

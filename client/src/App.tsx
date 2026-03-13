@@ -315,7 +315,7 @@ function AppContent() {
               <Shield className="w-4 h-4 text-white" />
             </div>
             <span className="text-lg font-semibold" style={{ color: "#1e3a5f" }}>
-              Watchloom
+              Signalum
             </span>
           </div>
           <Loader2 className="w-6 h-6 text-[#1e3a5f] animate-spin mx-auto" />

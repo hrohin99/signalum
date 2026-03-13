@@ -4267,9 +4267,9 @@ Return only the bullet points, no JSON, no headers.`
       await resendClient.emails.send({
         from: fromAddress,
         to: email,
-        subject: "You've been invited to Watchloom",
-        html: `<p>You've been invited to join Watchloom as a <strong>${role.replace("_", " ")}</strong>.</p><p>Sign in at <a href="${loginUrl}">${loginUrl}</a> with:<br/><strong>Email:</strong> ${email}<br/><strong>Temporary password:</strong> <code>${tempPassword}</code></p><p>Please change your password after first login.</p>`,
-        text: `You've been invited to join Watchloom as a ${role.replace("_", " ")}. Sign in at ${loginUrl} with email: ${email} and temporary password: ${tempPassword}`,
+        subject: "You've been invited to Signalum",
+        html: `<p>You've been invited to join Signalum as a <strong>${role.replace("_", " ")}</strong>.</p><p>Sign in at <a href="${loginUrl}">${loginUrl}</a> with:<br/><strong>Email:</strong> ${email}<br/><strong>Temporary password:</strong> <code>${tempPassword}</code></p><p>Please change your password after first login.</p>`,
+        text: `You've been invited to join Signalum as a ${role.replace("_", " ")}. Sign in at ${loginUrl} with email: ${email} and temporary password: ${tempPassword}`,
       });
 
       return res.json({ success: true, email, tempPassword });

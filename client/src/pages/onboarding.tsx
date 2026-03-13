@@ -824,7 +824,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
                 How would you describe yourself?
               </h1>
               <p className="text-gray-500 text-sm" data-testid="text-step-subtitle">
-                This shapes how Watchloom frames every insight for you.
+                This shapes how Signalum frames every insight for you.
               </p>
             </div>
             <div className="grid grid-cols-1 gap-3">
@@ -931,7 +931,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
                 What's the one competitive move you'd most want advance warning of?
               </h1>
               <p className="text-gray-500 text-sm" data-testid="text-step-subtitle">
-                Be specific — Watchloom will flag this as highest priority for you.
+                Be specific — Signalum will flag this as highest priority for you.
               </p>
             </div>
             <Textarea
@@ -949,7 +949,7 @@ export default function OnboardingPage({ onComplete }: { onComplete: () => void 
             <div>
               <h1 className="text-2xl font-semibold text-gray-900 mb-2" data-testid="text-step-title">You're all set</h1>
               <p className="text-gray-500 text-sm" data-testid="text-step-subtitle">
-                Watchloom will use this to tailor every insight and briefing to your situation.
+                Signalum will use this to tailor every insight and briefing to your situation.
               </p>
             </div>
 
