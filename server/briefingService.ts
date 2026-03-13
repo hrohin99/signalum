@@ -199,137 +199,154 @@ export async function sendBriefingEmail(
 ): Promise<{ success: boolean; error?: string }> {
   const resend = new Resend(process.env.RESEND_API_KEY);
 
-  const now = new Date();
-  const weekAgo = new Date();
-  weekAgo.setDate(weekAgo.getDate() - 7);
+  const COLOR_PALETTES = [
+    { bg: "#FAECE7", border: "#D85A30", label: "#993C1D" },
+    { bg: "#E6F1FB", border: "#378ADD", label: "#185FA5" },
+    { bg: "#EAF3DE", border: "#639922", label: "#3B6D11" },
+    { bg: "#EEEDFE", border: "#7F77DD", label: "#3C3489" },
+    { bg: "#FAEEDA", border: "#EF9F27", label: "#854F0B" },
+    { bg: "#FBEAF0", border: "#D4537E", label: "#72243E" },
+    { bg: "#E1F5EE", border: "#1D9E75", label: "#085041" },
+    { bg: "#F1EFE8", border: "#888780", label: "#5F5E5A" },
+  ];
 
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  const dateRange = `${formatDate(weekAgo)} to ${formatDate(now)}`;
-  const totalSignals = briefingData.entities.reduce((sum, e) => sum + e.captureCount, 0);
-
-  const workspace = await storage.getWorkspaceByUserId(userId);
-  const allEntities = workspace?.categories?.flatMap((c) => c.entities.map((e) => e.name)) || [];
-  const activeEntities = new Set(briefingData.entities.map((e) => e.name));
-  const quietEntities = allEntities.filter((name) => !activeEntities.has(name));
-
-  const categoryBadge = (category: string) => {
-    const colors: Record<string, { bg: string; text: string }> = {
-      "Competitors": { bg: "#fee2e2", text: "#dc2626" },
-      "Standards & Regulations": { bg: "#dbeafe", text: "#1d4ed8" },
-      "Industry Topics": { bg: "#dcfce7", text: "#16a34a" },
-      "Threat Intelligence": { bg: "#ffedd5", text: "#ea580c" },
-    };
-    const c = colors[category] || { bg: "#f1f5f9", text: "#475569" };
-    return `<span style="display:inline-block;padding:4px 10px;font-size:11px;border-radius:999px;background:${c.bg};color:${c.text};font-weight:500;">${category}</span>`;
-  };
-
-  const sourceEmoji = (type: string) => {
-    const map: Record<string, string> = {
-      web_search: "🔍",
-      document: "📄",
-      url: "🔗",
-      text: "✍️",
-    };
-    return map[type] || "📌";
-  };
-
-  const entityCardsHtml = briefingData.entities
-    .sort((a, b) => b.captureCount - a.captureCount)
-    .map((entity) => {
-      const whatHappenedHtml = (entity.whatHappened || [])
-        .map(
-          (b) =>
-            `<div style="font-size:14px;color:#374151;margin-bottom:6px;">${sourceEmoji("web_search")} ${escapeHtml(b)}</div>`
-        )
-        .join("");
-      const whyItMattersHtml = (entity.whyItMatters || [])
-        .map(
-          (b) =>
-            `<div style="font-size:13px;color:#4b5563;margin-bottom:4px;">• ${escapeHtml(b)}</div>`
-        )
-        .join("");
-      const watchForHtml = entity.watchFor
-        ? `<div style="font-size:13px;color:#6b7280;margin-top:8px;">Watch for: ${escapeHtml(entity.watchFor)}</div>`
-        : "";
-      return `
-      <div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:12px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <span style="font-weight:bold;font-size:16px;color:#1e293b;">${escapeHtml(entity.name)}</span>
-          ${categoryBadge(entity.category)}
-        </div>
-        <div style="font-weight:600;font-size:13px;color:#1e293b;margin-bottom:6px;">What happened</div>
-        ${whatHappenedHtml}
-        <div style="font-weight:600;font-size:13px;color:#1e293b;margin-top:10px;margin-bottom:6px;">Why it matters</div>
-        ${whyItMattersHtml}
-        ${watchForHtml}
-        <div style="text-align:right;margin-top:8px;">
-          <a href="https://watchloom.rohin.co/topic/${encodeURIComponent(entity.name)}" style="font-size:12px;color:#3b82f6;text-decoration:none;">View full profile</a>
-        </div>
-      </div>`;
-    })
-    .join("");
-
-  let flaggedHtml = "";
-  if (briefingData.flaggedCaptures.length > 0) {
-    const flaggedBullets = briefingData.flaggedCaptures
-      .map(
-        (c) =>
-          `<div style="font-size:14px;color:#92400e;margin-bottom:6px;">• ${escapeHtml(c.content.substring(0, 200))}</div>`
-      )
-      .join("");
-    flaggedHtml = `
-    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:16px;margin-bottom:12px;">
-      <div style="font-weight:bold;font-size:16px;color:#92400e;margin-bottom:8px;">⚠️ Worth Your Attention</div>
-      ${flaggedBullets}
-    </div>`;
+  function getCategoryColor(categoryName: string): { bg: string; border: string; label: string } {
+    let hash = 0;
+    for (let i = 0; i < categoryName.length; i++) {
+      hash = categoryName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const index = Math.abs(hash) % COLOR_PALETTES.length;
+    return COLOR_PALETTES[index];
   }
 
-  let quietHtml = "";
-  if (quietEntities.length > 0) {
-    quietHtml = `<div style="font-size:13px;color:#9ca3af;margin:12px 0;">No updates this week: ${quietEntities.map(escapeHtml).join(", ")}</div>`;
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const recentCaptures = await db
+    .select()
+    .from(captures)
+    .where(and(eq(captures.userId, userId), gte(captures.createdAt, sevenDaysAgo)));
+
+  const allUpdates = recentCaptures.map((cap) => ({
+    created_at: cap.createdAt,
+    category: cap.matchedCategory || "General",
+    content: cap.content,
+    title: null as string | null,
+    entity_name: cap.matchedEntity || null,
+  }));
+
+  const MAX_TOTAL = 40;
+  const MAX_PER_CATEGORY = 7;
+
+  const topUpdates = allUpdates
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .slice(0, MAX_TOTAL);
+
+  const grouped: Record<string, any[]> = {};
+  for (const update of topUpdates) {
+    const cat = update.category || "General";
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push(update);
   }
 
-  const html = `
-  <!DOCTYPE html>
-  <html>
-  <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-  <body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-    <div style="max-width:600px;margin:0 auto;background:#ffffff;">
-      <div style="background:#1e293b;padding:20px;display:flex;justify-content:space-between;align-items:center;">
-        <span style="color:#ffffff;font-size:20px;font-weight:bold;">Signalum</span>
-        <span style="color:#94a3b8;font-size:13px;">${dateRange}</span>
-      </div>
+  const subject = `Your Weekly Signalum Intelligence Brief — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
-      <div style="padding:20px;">
-        <div style="background:#f1f5f9;border-radius:8px;padding:12px;margin-bottom:20px;">
-          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:6px;font-weight:600;">This Week</div>
-          <div style="font-size:14px;color:#1e293b;line-height:1.5;">${briefingData.executiveSummary}</div>
-        </div>
+  const categorySections = Object.entries(grouped).map(([category, items]) => {
+    const colors = getCategoryColor(category);
+    const visibleItems = items.slice(0, MAX_PER_CATEGORY);
+    const overflow = items.length - visibleItems.length;
 
-        ${entityCardsHtml}
-        ${flaggedHtml}
-        ${quietHtml}
-      </div>
+    const itemRows = visibleItems.map(item => `
+    <tr>
+      <td style="padding: 10px 0; border-bottom: 1px solid #F1EFE8;">
+        <p style="margin: 0 0 4px 0; font-size: 14px; color: #1a1a2e; line-height: 1.5;">
+          ${item.content || item.title || ""}
+        </p>
+        <p style="margin: 0; font-size: 11px; color: #888780;">
+          ${item.entity_name ? `<strong>${item.entity_name}</strong> · ` : ""}${new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </p>
+      </td>
+    </tr>
+  `).join("");
 
-      <div style="background:#f8fafc;padding:20px;text-align:center;">
-        <div style="font-size:12px;color:#6b7280;">
-          <a href="https://watchloom.rohin.co/settings/briefing" style="color:#3b82f6;text-decoration:none;">Manage briefing preferences</a>
-        </div>
-        <div style="font-size:12px;color:#6b7280;margin-top:8px;">
-          Sent by Signalum · <a href="https://watchloom.rohin.co/settings/briefing" style="color:#6b7280;text-decoration:none;">Unsubscribe</a>
-        </div>
-      </div>
-    </div>
-  </body>
-  </html>`;
+    const overflowRow = overflow > 0 ? `
+    <tr>
+      <td style="padding: 8px 0;">
+        <p style="margin: 0; font-size: 12px; color: #888780;">+ ${overflow} more signals this week</p>
+      </td>
+    </tr>
+  ` : "";
+
+    return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; border-radius: 8px; overflow: hidden; border: 1px solid ${colors.border};">
+      <tr>
+        <td style="background: ${colors.bg}; padding: 10px 16px;">
+          <span style="font-size: 11px; font-weight: 700; color: ${colors.label}; text-transform: uppercase; letter-spacing: 0.06em;">${category}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background: #ffffff; padding: 0 16px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${itemRows}
+            ${overflowRow}
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+  }).join("");
+
+  let emailHtml = `
+<!DOCTYPE html>
+<html>
+<body style="margin: 0; padding: 0; background: #f8f8f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8f8f6; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+          <tr>
+            <td style="background: #1a1a2e; border-radius: 10px 10px 0 0; padding: 24px 32px;">
+              <p style="margin: 0; font-size: 20px; font-weight: 600; color: #ffffff;">Signalum</p>
+              <p style="margin: 4px 0 0 0; font-size: 13px; color: rgba(255,255,255,0.6);">Your weekly intelligence brief</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background: #534AB7; padding: 12px 32px;">
+              <p style="margin: 0; font-size: 13px; color: #ffffff;">
+                <strong>${topUpdates.length} signals</strong> across <strong>${Object.keys(grouped).length} categories</strong> · Week of ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background: #ffffff; padding: 32px; border-radius: 0 0 10px 10px;">
+              ${categorySections}
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 32px; border-top: 1px solid #F1EFE8; padding-top: 16px;">
+                <tr>
+                  <td>
+                    <p style="margin: 0; font-size: 12px; color: #888780;">You're receiving this because you're a Signalum user. Log in to see the full picture.</p>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; color: #888780;">— The Signalum team</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
+
+  emailHtml = emailHtml.replace(/https?:\/\/youtu\.be\/[^\s"'<>]*/g, '[video link removed]');
+  emailHtml = emailHtml.replace(/https?:\/\/(www\.)?youtube\.com\/shorts\/[^\s"'<>]*/g, '[video link removed]');
 
   try {
     await resend.emails.send({
       from: "rohin@rohin.co",
       to: toEmail,
-      subject: `Your Signalum Brief, ${totalSignals} signals this week`,
-      html,
+      subject,
+      html: emailHtml,
     });
     return { success: true };
   } catch (err: any) {
