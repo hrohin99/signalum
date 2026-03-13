@@ -1,0 +1,122 @@
+Good — I can see what's in Profile: AI Summary, So What for Us, Battlecard, and Capabilities (15). Now I have the full picture. Here's the Products & Solutions build prompt:
+
+Prompt for Replit AI:
+We are building a Products & Solutions card for the competitor profile page. This is a full build — DB table, API routes, and frontend component. Do not touch anything outside what is specified.
+
+STEP 1 — Create table at server startup
+In server/routes.ts, in the startup pool.query() block where other CREATE TABLE IF NOT EXISTS statements run, add:
+sqlCREATE TABLE IF NOT EXISTS entity_products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  product_name TEXT NOT NULL,
+  description TEXT,
+  status TEXT DEFAULT 'ga',
+  tags TEXT,
+  sort_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+status values: ga (Generally Available), beta, deprecated.
+Do NOT use drizzle-kit push. Do NOT touch shared/schema.ts.
+
+STEP 2 — Add API routes in server/routes.ts
+Use the same requireAuth and workspace lookup pattern as existing routes (/api/entities/:entityId/partnerships). Add:
+typescript// GET
+app.get("/api/entities/:entityId/products", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const wsResult = await pool.query(
+    `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+    [userId]
+  );
+  const workspaceId = wsResult.rows[0]?.id;
+  if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+  const result = await pool.query(
+    `SELECT * FROM entity_products WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
+    [req.params.entityId, workspaceId]
+  );
+  res.json(result.rows);
+});
+
+// POST
+app.post("/api/entities/:entityId/products", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+  const role = profileResult.rows[0]?.role || 'admin';
+  if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+  const wsResult = await pool.query(
+    `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+    [userId]
+  );
+  const workspaceId = wsResult.rows[0]?.id;
+  if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+  const { product_name, description, status, tags } = req.body;
+  const result = await pool.query(
+    `INSERT INTO entity_products (workspace_id, entity_id, product_name, description, status, tags)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [workspaceId, req.params.entityId, product_name, description, status || 'ga', tags]
+  );
+  res.json(result.rows[0]);
+});
+
+// PUT
+app.put("/api/entities/:entityId/products/:productId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+  const role = profileResult.rows[0]?.role || 'admin';
+  if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+  const wsResult = await pool.query(
+    `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+    [userId]
+  );
+  const workspaceId = wsResult.rows[0]?.id;
+  const { product_name, description, status, tags } = req.body;
+  const result = await pool.query(
+    `UPDATE entity_products SET product_name=$1, description=$2, status=$3, tags=$4
+     WHERE id=$5 AND workspace_id=$6 RETURNING *`,
+    [product_name, description, status, tags, req.params.productId, workspaceId]
+  );
+  res.json(result.rows[0]);
+});
+
+// DELETE
+app.delete("/api/entities/:entityId/products/:productId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+  const role = profileResult.rows[0]?.role || 'admin';
+  if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+  const wsResult = await pool.query(
+    `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+    [userId]
+  );
+  const workspaceId = wsResult.rows[0]?.id;
+  await pool.query(`DELETE FROM entity_products WHERE id=$1 AND workspace_id=$2`, [req.params.productId, workspaceId]);
+  res.json({ success: true });
+});
+
+STEP 3 — Create client/src/components/ProductsCard.tsx
+typescriptimport { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  ga:         { bg: '#EAF3DE', color: '#27500A', label: 'GA' },
+  beta:       { bg: '#FAEEDA', color: '#633806', label: 'Beta' },
+  deprecated: { bg: '#F1EFE8', color: '#444441', label: 'Deprecated' },
+};
+
+const EMPTY_FORM = { product_name: '', description: '', status: 'ga', tags: '' };
+
+export function ProductsCard({ entityId, userRole }: { entityId: string; userRole: string }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const canEdit = userRole === 'admin' || userRole === 'sub_admin';
+  const queryClient = useQueryClient();
+
+  const { data: products = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/entities', entityId, 'products'],
+    queryFn: async () => {
+      const res = await fetch(`/api/entities/${entityId}/products`);
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    }
+  });
