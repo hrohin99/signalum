@@ -289,7 +289,9 @@ function TopicViewContent({
       return res.json();
     },
     enabled: !!entityId,
-    staleTime: 0
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true
   });
 
   useEffect(() => {
