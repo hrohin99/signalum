@@ -52,7 +52,7 @@ export function SoWhatCard({ entityId, userRole }: { entityId: string; userRole:
     <div style={{ background: 'var(--color-background-primary, #fff)', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 12, overflow: 'hidden' }} data-testid="card-so-what-intel">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary, #1e293b)' }}>So what</span>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary, #1e293b)' }}>What Does It Mean For Us</span>
           {intel && !intel.is_custom && (
             <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #AFA9EC', fontWeight: 500 }}>AI drafted</span>
           )}

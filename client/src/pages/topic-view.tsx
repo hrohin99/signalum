@@ -731,7 +731,7 @@ function TopicViewContent({
       {isCompetitor && activeTab === 'competitive' && (
         <div className="space-y-6">
           <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
-          <CapabilityMatrixCard entityId={entity.name} userRole={userRole} previewMode={false} />
+          <CapabilityMatrixCard entityId={entity.name} userRole={userRole} previewMode={false} onSwitchToProfile={() => setActiveTab('profile')} />
           <div className="space-y-4">
             <BattlecardCollapsedHeader
               entity={entity}
@@ -1115,13 +1115,10 @@ function SoWhatCard({ entity, categoryName, captureCount }: { entity: ExtractedE
           </div>
         ) : entity.soWhatText ? (
           <ReactMarkdown className="prose prose-sm max-w-none text-sm leading-relaxed" data-testid="text-so-what-content">{entity.soWhatText}</ReactMarkdown>
-        ) : captureCount < 3 ? (
-          <p className="text-sm text-muted-foreground" data-testid="text-so-what-empty">
-            Add at least 3 captures to generate strategic implications.
-          </p>
         ) : (
           <p className="text-sm text-muted-foreground" data-testid="text-so-what-empty">
-            No analysis generated yet. Click the refresh button to generate.
+            No analysis generated yet.{' '}
+            <button onClick={() => soWhatMutation.mutate(false)} style={{ color: '#534AB7', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'inherit', padding: 0, textDecoration: 'underline' }} data-testid="button-generate-now-so-what">Generate now</button>
           </p>
         )}
       </CardContent>
