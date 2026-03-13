@@ -4753,5 +4753,85 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/entities/:entityId/partnerships", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityId = req.params.entityId;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.json({ partnerships: [] });
+      const result = await pool.query(
+        `SELECT * FROM entity_partnerships WHERE entity_id = $1 AND workspace_id = $2 ORDER BY relationship_type, created_at DESC`,
+        [entityId, workspaceId]
+      );
+      return res.json({ partnerships: result.rows });
+    } catch (error: any) {
+      console.error("Get partnerships error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/partnerships", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityId = req.params.entityId;
+      const roleResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1 LIMIT 1`, [userId]);
+      if (roleResult.rows[0]?.role === "read_only") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const { partnerName, partnerIndustry, partnerCountry, relationshipType, programDescription, activeSince, contextNote } = req.body;
+      if (!partnerName || !relationshipType) {
+        return res.status(400).json({ message: "partnerName and relationshipType are required" });
+      }
+      const inserted = await pool.query(
+        `INSERT INTO entity_partnerships (workspace_id, entity_id, partner_name, partner_industry, partner_country, relationship_type, program_description, active_since, context_note)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING *`,
+        [workspaceId, entityId, partnerName, partnerIndustry || null, partnerCountry || null, relationshipType, programDescription || null, activeSince || null, contextNote || null]
+      );
+      return res.status(201).json({ partnership: inserted.rows[0] });
+    } catch (error: any) {
+      console.error("Create partnership error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entities/:entityId/partnerships/:partnershipId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { partnershipId } = req.params;
+      const roleResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1 LIMIT 1`, [userId]);
+      if (roleResult.rows[0]?.role === "read_only") {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const deleted = await pool.query(
+        `DELETE FROM entity_partnerships WHERE id = $1 AND workspace_id = $2 RETURNING id`,
+        [partnershipId, workspaceId]
+      );
+      if (deleted.rowCount === 0) {
+        return res.status(404).json({ message: "Partnership not found" });
+      }
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete partnership error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

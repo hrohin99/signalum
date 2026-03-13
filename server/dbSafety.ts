@@ -160,5 +160,26 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring parent_workspace_id column:", error?.message || error);
   }
 
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS entity_partnerships (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        partner_name TEXT NOT NULL,
+        partner_industry TEXT,
+        partner_country TEXT,
+        relationship_type TEXT NOT NULL,
+        program_description TEXT,
+        active_since TEXT,
+        context_note TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[DBSafety] entity_partnerships table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_partnerships table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
