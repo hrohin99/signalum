@@ -6,7 +6,7 @@ interface GeoPresence {
   id: string;
   workspace_id: string;
   entity_id: string;
-  region_name: string;
+  region: string;
   iso_code: string | null;
   presence_type: string;
   channels: string | null;
@@ -117,7 +117,7 @@ export function getRegionISOCode(name: string): string {
   return ISO_CODES[lower] || name.substring(0, 2).toUpperCase();
 }
 
-const EMPTY_FORM = { region_name: '', presence_type: 'active', channels: '', notes: '' };
+const EMPTY_FORM = { region: '', presence_type: 'active', channels: '', notes: '' };
 
 const formRowStyle = { padding: '14px 18px', background: 'var(--color-background-secondary, #f8fafc)', borderTop: '0.5px solid var(--color-border-tertiary, #e2e8f0)', display: 'flex', flexDirection: 'column' as const, gap: 8 };
 const inputStyle = { fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary, #cbd5e1)', borderRadius: 6, background: 'var(--color-background-primary, #fff)', color: 'var(--color-text-primary, #1e293b)' };
@@ -177,7 +177,7 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
   const renderForm = (isEdit: boolean, itemId?: string) => (
     <div style={formRowStyle}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <input data-testid="input-geo-region-name" placeholder="Country / region name *" value={form.region_name} onChange={e => setForm(f => ({ ...f, region_name: e.target.value }))} style={inputStyle} />
+        <input data-testid="input-geo-region-name" placeholder="Country / region name *" value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
         <select data-testid="select-geo-presence-type" value={form.presence_type} onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
           <option value="active">Active</option>
           <option value="expanding">Expanding</option>
@@ -192,7 +192,7 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
         <button data-testid="button-cancel-geo" onClick={() => { if (isEdit) setEditingId(null); else setShowForm(false); setForm(EMPTY_FORM); }}
           style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
         <button data-testid="button-save-geo" onClick={() => { if (isEdit && itemId) editMutation.mutate({ id: itemId, data: formRef.current }); else addMutation.mutate(formRef.current); }}
-          disabled={!formRef.current.region_name || (isEdit ? editMutation.isPending : addMutation.isPending)}
+          disabled={!formRef.current.region || (isEdit ? editMutation.isPending : addMutation.isPending)}
           style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
           {(isEdit ? editMutation.isPending : addMutation.isPending) ? 'Saving...' : 'Save'}
         </button>
@@ -229,22 +229,22 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0 }}>
             {geoPresence.filter(g => g.id !== editingId).map((g) => {
               const s = PRESENCE_STYLES[g.presence_type] || PRESENCE_STYLES.active;
-              const flag = getRegionFlag(g.region_name);
-              const isoCode = g.iso_code || getRegionISOCode(g.region_name);
+              const flag = getRegionFlag(g.region);
+              const isoCode = g.iso_code || getRegionISOCode(g.region);
               return (
                 <div key={g.id} data-testid={`card-geo-${g.id}`} style={{ padding: '13px 18px', borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRight: '0.5px solid var(--color-border-tertiary, #e2e8f0)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 16 }}>{flag}</span>
-                    <span data-testid={`text-geo-name-${g.id}`} style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary, #1e293b)' }}>{g.region_name}</span>
+                    <span data-testid={`text-geo-name-${g.id}`} style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary, #1e293b)' }}>{g.region}</span>
                     <span style={{ fontSize: 11, color: 'var(--color-text-tertiary, #94a3b8)', fontFamily: 'monospace' }}>{isoCode}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
                     <span data-testid={`text-geo-type-${g.id}`} style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, fontWeight: 500, background: s.bg, color: s.color }}>{s.label}</span>
                     {canEdit && (
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button data-testid={`button-edit-geo-${g.id}`} onClick={() => { setEditingId(g.id); setShowForm(false); setForm({ region_name: g.region_name, presence_type: g.presence_type || 'active', channels: g.channels || '', notes: g.notes || '' }); }}
+                        <button data-testid={`button-edit-geo-${g.id}`} onClick={() => { setEditingId(g.id); setShowForm(false); setForm({ region: g.region, presence_type: g.presence_type || 'active', channels: g.channels || '', notes: g.notes || '' }); }}
                           style={{ fontSize: 11, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', background: 'transparent' }}>Edit</button>
-                        <button data-testid={`button-remove-geo-${g.id}`} onClick={() => { if (confirm(`Remove ${g.region_name}?`)) deleteMutation.mutate(g.id); }}
+                        <button data-testid={`button-remove-geo-${g.id}`} onClick={() => { if (confirm(`Remove ${g.region}?`)) deleteMutation.mutate(g.id); }}
                           style={{ fontSize: 11, color: 'var(--color-text-tertiary, #94a3b8)', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', background: 'transparent' }}
                           onMouseEnter={e => { (e.target as HTMLElement).style.color = '#A32D2D'; (e.target as HTMLElement).style.borderColor = '#F7C1C1'; (e.target as HTMLElement).style.background = '#FCEBEB'; }}
                           onMouseLeave={e => { (e.target as HTMLElement).style.color = 'var(--color-text-tertiary, #94a3b8)'; (e.target as HTMLElement).style.borderColor = 'var(--color-border-tertiary, #e2e8f0)'; (e.target as HTMLElement).style.background = 'transparent'; }}>Remove</button>
