@@ -38,7 +38,8 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/products`);
       return res.json();
-    }
+    },
+    staleTime: 0
   });
 
   const addMutation = useMutation({

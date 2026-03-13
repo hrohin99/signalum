@@ -288,7 +288,8 @@ function TopicViewContent({
       if (!res.ok) return [];
       return res.json();
     },
-    enabled: !!entityId
+    enabled: !!entityId,
+    staleTime: 0
   });
 
   useEffect(() => {
