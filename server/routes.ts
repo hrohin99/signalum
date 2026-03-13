@@ -3333,8 +3333,8 @@ Rules:
     try {
       const userId = (req as any).userId;
       const result = await pool.query(
-        `SELECT digest_recipients FROM workspaces WHERE user_id = $1
-         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1 LIMIT 1)
+        `SELECT digest_recipients FROM workspaces WHERE user_id = $1::varchar
+         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1::varchar LIMIT 1)
          LIMIT 1`,
         [userId]
       );
@@ -3349,7 +3349,7 @@ Rules:
   app.post("/api/workspace/digest-recipients", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1::varchar`, [userId]);
       const role = profileResult.rows[0]?.role;
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
@@ -3359,8 +3359,8 @@ Rules:
         return res.status(400).json({ message: "recipients must be an array" });
       }
       const wsResult = await pool.query(
-        `SELECT id FROM workspaces WHERE user_id = $1
-         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1 LIMIT 1)
+        `SELECT id FROM workspaces WHERE user_id = $1::varchar
+         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1::varchar LIMIT 1)
          LIMIT 1`,
         [userId]
       );
@@ -3382,7 +3382,7 @@ Rules:
   app.patch("/api/workspace/settings", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1::varchar`, [userId]);
       const role = profileResult.rows[0]?.role;
       if (role === "read_only") {
         return res.status(403).json({ error: "Forbidden" });
@@ -3392,7 +3392,7 @@ Rules:
         return res.status(400).json({ message: "briefing_enabled must be a boolean" });
       }
       await pool.query(
-        `UPDATE workspaces SET briefing_enabled = $1 WHERE user_id = $2`,
+        `UPDATE workspaces SET briefing_enabled = $1 WHERE user_id = $2::varchar`,
         [briefing_enabled, userId]
       );
       return res.json({ success: true });
