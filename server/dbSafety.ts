@@ -162,6 +162,15 @@ export async function ensureDatabaseSchema(): Promise<void> {
 
   try {
     await pool.query(`
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS digest_recipients JSONB DEFAULT '[]'
+    `);
+    console.log("[DBSafety] digest_recipients column verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring digest_recipients column:", error?.message || error);
+  }
+
+  try {
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS entity_partnerships (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,

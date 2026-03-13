@@ -4765,6 +4765,79 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/workspace/digest-recipients", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const result = await pool.query(
+        `SELECT digest_recipients FROM workspaces WHERE user_id = $1
+         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1 LIMIT 1)
+         LIMIT 1`,
+        [userId]
+      );
+      const recipients = result.rows[0]?.digest_recipients || [];
+      return res.json({ recipients });
+    } catch (error: any) {
+      console.error("[digest-recipients] Get error:", error);
+      return res.status(500).json({ message: error?.message || "Failed to get recipients" });
+    }
+  });
+
+  app.post("/api/workspace/digest-recipients", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const { recipients } = req.body;
+      if (!Array.isArray(recipients)) {
+        return res.status(400).json({ message: "recipients must be an array" });
+      }
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1
+         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1 LIMIT 1)
+         LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) {
+        return res.status(404).json({ message: "No workspace found" });
+      }
+      await pool.query(
+        `UPDATE workspaces SET digest_recipients = $1 WHERE id = $2`,
+        [JSON.stringify(recipients), workspaceId]
+      );
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("[digest-recipients] Save error:", error);
+      return res.status(500).json({ message: error?.message || "Failed to save recipients" });
+    }
+  });
+
+  app.patch("/api/workspace/settings", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role;
+      if (role === "read_only") {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const { briefing_enabled } = req.body;
+      if (typeof briefing_enabled !== "boolean") {
+        return res.status(400).json({ message: "briefing_enabled must be a boolean" });
+      }
+      await pool.query(
+        `UPDATE workspaces SET briefing_enabled = $1 WHERE user_id = $2`,
+        [briefing_enabled, userId]
+      );
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("[workspace settings] Patch error:", error);
+      return res.status(500).json({ message: error?.message || "Failed to update settings" });
+    }
+  });
+
   app.get("/api/briefing/settings", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;

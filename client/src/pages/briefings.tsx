@@ -356,6 +356,10 @@ function WeeklyDigestTab() {
     queryKey: ["/api/briefing/settings"],
   });
 
+  const { data: recipientsData } = useQuery<{ recipients: Array<{ email: string; name: string }> }>({
+    queryKey: ["/api/workspace/digest-recipients"],
+  });
+
   useEffect(() => {
     if (settings) {
       setEnabled(settings.briefingEnabled);
@@ -368,7 +372,24 @@ function WeeklyDigestTab() {
   }, [settings, user]);
 
   useEffect(() => {
-    if (user?.email && recipients.length === 0) {
+    if (recipientsData !== undefined && user?.email) {
+      const serverList = recipientsData.recipients || [];
+      const ownerEntry: Recipient = {
+        id: "owner",
+        name: user.email.split("@")[0],
+        email: user.email,
+        isOwner: true,
+      };
+      const others = serverList
+        .filter((r) => r.email !== user.email)
+        .map((r) => ({
+          id: r.email,
+          name: r.name,
+          email: r.email,
+          isOwner: false,
+        }));
+      setRecipients([ownerEntry, ...others]);
+    } else if (recipientsData === undefined && user?.email && recipients.length === 0) {
       setRecipients([{
         id: "owner",
         name: user.email.split("@")[0],
@@ -376,7 +397,39 @@ function WeeklyDigestTab() {
         isOwner: true,
       }]);
     }
-  }, [user]);
+  }, [recipientsData, user]);
+
+  const saveRecipientsMutation = useMutation({
+    mutationFn: async (newRecipients: Recipient[]) => {
+      const res = await apiRequest("POST", "/api/workspace/digest-recipients", {
+        recipients: newRecipients.map((r) => ({ email: r.email, name: r.name })),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/digest-recipients"] });
+      toast({ title: "Saved", description: "Recipients updated." });
+    },
+    onError: (err: Error) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/digest-recipients"] });
+      toast({ title: "Error saving recipients", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const toggleMutation = useMutation({
+    mutationFn: async (val: boolean) => {
+      const res = await apiRequest("PATCH", "/api/workspace/settings", { briefing_enabled: val });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/briefing/settings"] });
+      toast({ title: "Saved", description: "Weekly briefing setting updated." });
+    },
+    onError: (err: Error) => {
+      setEnabled((prev) => !prev);
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -414,17 +467,21 @@ function WeeklyDigestTab() {
     const trimmed = newRecipientEmail.trim();
     if (!trimmed || !trimmed.includes("@")) return;
     if (recipients.some(r => r.email === trimmed)) return;
-    setRecipients([...recipients, {
-      id: Date.now().toString(),
+    const newList = [...recipients, {
+      id: trimmed,
       name: trimmed.split("@")[0],
       email: trimmed,
       isOwner: false,
-    }]);
+    }];
+    setRecipients(newList);
     setNewRecipientEmail("");
+    saveRecipientsMutation.mutate(newList);
   }
 
   function removeRecipient(id: string) {
-    setRecipients(recipients.filter(r => r.id !== id));
+    const newList = recipients.filter(r => r.id !== id);
+    setRecipients(newList);
+    saveRecipientsMutation.mutate(newList);
   }
 
   function getInitials(name: string): string {
@@ -473,7 +530,11 @@ function WeeklyDigestTab() {
           <Switch
             id="briefing-toggle"
             checked={enabled}
-            onCheckedChange={(val) => { setEnabled(val); }}
+            onCheckedChange={(val) => {
+              setEnabled(val);
+              toggleMutation.mutate(val);
+            }}
+            disabled={toggleMutation.isPending}
             data-testid="switch-briefing-enabled"
           />
         </div>
