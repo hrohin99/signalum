@@ -387,7 +387,7 @@ function TopicViewContent({
   const showWebsiteBanner = entity.entity_type_detected === "local_business" && !entity.website_url && !websiteBannerDismissed;
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div className="p-4 md:px-8 md:py-6 max-w-7xl mx-auto">
       <TopBar
         entity={entity}
         categoryName={categoryName}
@@ -560,10 +560,11 @@ function TopicViewContent({
           )}
           {(entity.topic_type || "general").toLowerCase() === "competitor" && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <PricingCard entity={entity} />
                 <BattlecardCollapsedHeader
                   entity={entity}
+                  categoryName={categoryName}
                   expanded={battlecardExpanded}
                   onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
                 />
@@ -738,17 +739,18 @@ function TopBar({
         }`,
       }}
     >
-      <div className="flex items-center gap-3 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap min-w-0">
         <Button
           variant="ghost"
           size="icon"
           onClick={onBack}
+          className="shrink-0"
           data-testid="button-back-to-workspace"
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>
 
-        <h1 className="text-xl font-bold text-[#1e3a5f]" data-testid="text-topic-name">
+        <h1 className="text-lg md:text-xl font-bold text-[#1e3a5f] break-words min-w-0" data-testid="text-topic-name">
           {entity.name}
         </h1>
 
@@ -1849,7 +1851,7 @@ function BattlecardWidget({
   );
 
   return (
-    <div className="border rounded-xl p-5 bg-white" data-testid="widget-battlecard">
+    <div className="border rounded-xl p-5 bg-white break-words" data-testid="widget-battlecard">
       {isLoading ? (
         <div className="space-y-3">
           <Skeleton className="h-16 w-full" />
@@ -1931,13 +1933,16 @@ function BattlecardWidget({
 
 function BattlecardCollapsedHeader({
   entity,
+  categoryName,
   expanded,
   onToggle,
 }: {
   entity: ExtractedEntity;
+  categoryName: string;
   expanded: boolean;
   onToggle: () => void;
 }) {
+  const { toast } = useToast();
   const { data: bcData, isLoading } = useQuery<{ battlecard: Battlecard | null }>({
     queryKey: ["/api/battlecard", entity.name],
     queryFn: async () => {
@@ -1946,25 +1951,78 @@ function BattlecardCollapsedHeader({
     },
   });
 
+  const autofillMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/battlecard/${encodeURIComponent(entity.name)}/autofill`, {
+        entityName: entity.name,
+        categoryName,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/battlecard", entity.name], data);
+      toast({ title: "Battlecard generated with AI." });
+      if (!expanded) onToggle();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to generate battlecard", description: err.message, variant: "destructive" });
+    },
+  });
+
   const bc = bcData?.battlecard;
   const firstStrength = (bc?.strengths as string[])?.[0] || null;
+  const hasBattlecard = !!(bc?.whatTheyDo || firstStrength || (bc?.weaknesses as string[])?.length || (bc?.howToBeat as string[])?.length);
 
   return (
     <Card className="min-h-[80px]" data-testid="widget-battlecard-header">
       <CardContent className="p-5">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-lg">⚔️</span>
             <span className="text-sm font-semibold text-[#1e3a5f]">Battlecard</span>
           </div>
-          <Button
-            size="sm"
-            className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white text-xs"
-            onClick={onToggle}
-            data-testid="button-view-battlecard"
-          >
-            {expanded ? "Close" : "View Battlecard"}
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {!hasBattlecard && !isLoading && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-[#1e3a5f]/30 text-[#1e3a5f] hover:bg-[#1e3a5f]/5"
+                onClick={() => autofillMutation.mutate()}
+                disabled={autofillMutation.isPending}
+                data-testid="button-generate-battlecard"
+              >
+                {autofillMutation.isPending ? (
+                  <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Generating...</>
+                ) : (
+                  <><Sparkles className="w-3 h-3 mr-1" />Generate Battlecard</>
+                )}
+              </Button>
+            )}
+            {hasBattlecard && expanded && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-[#1e3a5f]/30 text-[#1e3a5f] hover:bg-[#1e3a5f]/5"
+                onClick={() => autofillMutation.mutate()}
+                disabled={autofillMutation.isPending}
+                data-testid="button-regenerate-battlecard"
+              >
+                {autofillMutation.isPending ? (
+                  <><Loader2 className="w-3 h-3 mr-1 animate-spin" />Generating...</>
+                ) : (
+                  <><Sparkles className="w-3 h-3 mr-1" />Regenerate</>
+                )}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white text-xs"
+              onClick={onToggle}
+              data-testid="button-view-battlecard"
+            >
+              {expanded ? "Close" : "View Battlecard"}
+            </Button>
+          </div>
         </div>
         <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="text-battlecard-preview">
           {isLoading ? "Loading..." : firstStrength || "No battlecard yet"}

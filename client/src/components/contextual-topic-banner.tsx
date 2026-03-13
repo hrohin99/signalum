@@ -29,8 +29,8 @@ function getBannerContent(
         };
       }
       return {
-        message: "Generate a battlecard for this competitor — strengths, weaknesses, and how to beat them.",
-        actionType: "battlecard",
+        message: "Intelligence is building for this competitor. Keep adding updates to sharpen the picture.",
+        actionType: "none",
       };
     case "regulation":
     case "risk":
