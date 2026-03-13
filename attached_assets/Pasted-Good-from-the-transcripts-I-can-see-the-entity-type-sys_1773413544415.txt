@@ -1,0 +1,591 @@
+Good — from the transcripts I can see the entity type system clearly. Topics have a topic_type field with values like competitor, regulatory, standard etc., configured via topic_type_configs. Now I have everything needed to write the full prompt.
+
+Prompt for Replit AI:
+This is a large feature addition. Read carefully and implement exactly what is specified. Do not touch anything not mentioned.
+
+PART 1 — Database: create new tables at server startup
+In server/routes.ts, find the section where CREATE TABLE IF NOT EXISTS / ALTER TABLE statements run at startup via pool.query(). Add these immediately after the existing ones. Do NOT use drizzle-kit push. Do NOT touch shared/schema.ts.
+sqlCREATE TABLE IF NOT EXISTS entity_intelligence (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  content TEXT,
+  is_custom BOOLEAN DEFAULT false,
+  last_generated_at TIMESTAMPTZ,
+  last_edited_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(workspace_id, entity_id, field)
+);
+
+CREATE TABLE IF NOT EXISTS entity_capabilities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  capability_name TEXT NOT NULL,
+  capability_description TEXT,
+  competitor_has BOOLEAN,
+  us_has BOOLEAN,
+  assessment TEXT,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS entity_certifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  cert_name TEXT NOT NULL,
+  cert_description TEXT,
+  status TEXT DEFAULT 'active',
+  renewal_date TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+PART 2 — Backend: add API routes in server/routes.ts
+Add all routes inside registerRoutes. Use the same requireAuth middleware pattern already used in existing routes. For workspace lookup always use:
+typescriptconst wsResult = await pool.query(
+  `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+  [userId]
+);
+const workspaceId = wsResult.rows[0]?.id;
+For role checks, fetch from user_profiles and default to 'admin' if no row exists:
+typescriptconst profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+const role = profileResult.rows[0]?.role || 'admin';
+if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+Intelligence routes (so_what, swot):
+typescript// GET intelligence field for an entity
+app.get("/api/entities/:entityId/intelligence/:field", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // workspace lookup as above
+  const result = await pool.query(
+    `SELECT * FROM entity_intelligence WHERE entity_id = $1 AND workspace_id = $2 AND field = $3`,
+    [req.params.entityId, workspaceId, req.params.field]
+  );
+  res.json(result.rows[0] || null);
+});
+
+// PUT (upsert) intelligence field — marks is_custom = true
+app.put("/api/entities/:entityId/intelligence/:field", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check — block read_only
+  // workspace lookup as above
+  const { content } = req.body;
+  const result = await pool.query(
+    `INSERT INTO entity_intelligence (workspace_id, entity_id, field, content, is_custom, last_edited_at)
+     VALUES ($1, $2, $3, $4, true, NOW())
+     ON CONFLICT (workspace_id, entity_id, field)
+     DO UPDATE SET content = $4, is_custom = true, last_edited_at = NOW()
+     RETURNING *`,
+    [workspaceId, req.params.entityId, req.params.field, content]
+  );
+  res.json(result.rows[0]);
+});
+
+// POST regenerate — AI generates new content, sets is_custom = false
+app.post("/api/entities/:entityId/intelligence/:field/regenerate", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check — block read_only
+  // workspace lookup as above
+  // Fetch recent captures for this entity
+  const capturesResult = await pool.query(
+    `SELECT content, matched_category, created_at FROM captures 
+     WHERE user_id = $1 AND matched_entity ILIKE $2
+     ORDER BY created_at DESC LIMIT 20`,
+    [userId, `%${req.params.entityId}%`]
+  );
+  // Fetch entity name from workspace entities
+  const wsDataResult = await pool.query(`SELECT * FROM workspaces WHERE id = $1`, [workspaceId]);
+  const entityName = req.params.entityId;
+  const capturesSummary = capturesResult.rows.map(c => c.content?.slice(0, 200)).join('\n');
+
+  const anthropic = new (await import('@anthropic-ai/sdk')).default({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 500,
+    messages: [{
+      role: 'user',
+      content: `You are a competitive intelligence analyst. Based on recent signals about "${entityName}", write a concise "So what" paragraph (3-4 sentences max) that explains what this competitor's recent moves mean strategically for us. Be direct and actionable. No bullet points.\n\nRecent signals:\n${capturesSummary || 'No recent captures available.'}\n\nReturn only the paragraph text, no preamble.`
+    }]
+  });
+  const generatedContent = (response.content[0] as any).text;
+  const result = await pool.query(
+    `INSERT INTO entity_intelligence (workspace_id, entity_id, field, content, is_custom, last_generated_at)
+     VALUES ($1, $2, $3, $4, false, NOW())
+     ON CONFLICT (workspace_id, entity_id, field)
+     DO UPDATE SET content = $4, is_custom = false, last_generated_at = NOW()
+     RETURNING *`,
+    [workspaceId, req.params.entityId, req.params.field, generatedContent]
+  );
+  res.json(result.rows[0]);
+});
+Capability routes:
+typescriptapp.get("/api/entities/:entityId/capabilities", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // workspace lookup
+  const result = await pool.query(
+    `SELECT * FROM entity_capabilities WHERE entity_id = $1 AND workspace_id = $2 ORDER BY display_order, created_at`,
+    [req.params.entityId, workspaceId]
+  );
+  res.json(result.rows);
+});
+
+app.post("/api/entities/:entityId/capabilities", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  const { capability_name, capability_description, competitor_has, us_has, assessment } = req.body;
+  const result = await pool.query(
+    `INSERT INTO entity_capabilities (workspace_id, entity_id, capability_name, capability_description, competitor_has, us_has, assessment)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [workspaceId, req.params.entityId, capability_name, capability_description, competitor_has, us_has, assessment]
+  );
+  res.json(result.rows[0]);
+});
+
+app.put("/api/entities/:entityId/capabilities/:capId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  const { capability_name, capability_description, competitor_has, us_has, assessment } = req.body;
+  const result = await pool.query(
+    `UPDATE entity_capabilities SET capability_name=$1, capability_description=$2, competitor_has=$3, us_has=$4, assessment=$5
+     WHERE id=$6 AND workspace_id=$7 RETURNING *`,
+    [capability_name, capability_description, competitor_has, us_has, assessment, req.params.capId, workspaceId]
+  );
+  res.json(result.rows[0]);
+});
+
+app.delete("/api/entities/:entityId/capabilities/:capId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  await pool.query(`DELETE FROM entity_capabilities WHERE id=$1 AND workspace_id=$2`, [req.params.capId, workspaceId]);
+  res.json({ success: true });
+});
+Certification routes:
+typescriptapp.get("/api/entities/:entityId/certifications", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // workspace lookup
+  const result = await pool.query(
+    `SELECT * FROM entity_certifications WHERE entity_id = $1 AND workspace_id = $2 ORDER BY created_at`,
+    [req.params.entityId, workspaceId]
+  );
+  res.json(result.rows);
+});
+
+app.post("/api/entities/:entityId/certifications", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  const { cert_name, cert_description, status, renewal_date } = req.body;
+  const result = await pool.query(
+    `INSERT INTO entity_certifications (workspace_id, entity_id, cert_name, cert_description, status, renewal_date)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [workspaceId, req.params.entityId, cert_name, cert_description, status || 'active', renewal_date]
+  );
+  res.json(result.rows[0]);
+});
+
+app.delete("/api/entities/:entityId/certifications/:certId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  await pool.query(`DELETE FROM entity_certifications WHERE id=$1 AND workspace_id=$2`, [req.params.certId, workspaceId]);
+  res.json({ success: true });
+});
+
+PART 3 — Frontend: tabbed layout on entity detail page
+Find the entity detail page (likely client/src/pages/topic-detail.tsx or similar). This page is currently one long scrolling page. We are wrapping its content in a tabbed layout.
+CRITICAL: Only show the new tabs if the entity's topic_type (or equivalent field) is 'competitor'. For all other topic types, render the page exactly as it currently is with no changes.
+Check how topic_type is currently available on this page (from the entity data object, URL params, or query result) and use that same field.
+3a — Add tab state at the top of the component:
+typescriptconst [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'commercial' | 'competitive' | 'strategic' | 'updates'>('overview');
+3b — Tab bar component (render only for competitor topic_type):
+tsx{isCompetitor && (
+  <div style={{ display: 'flex', borderBottom: '0.5px solid var(--color-border-tertiary)', marginBottom: 20, gap: 0 }}>
+    {(['overview','profile','commercial','competitive','strategic','updates'] as const).map(tab => (
+      <div
+        key={tab}
+        onClick={() => setActiveTab(tab)}
+        style={{
+          fontSize: 13, padding: '10px 16px', cursor: 'pointer',
+          color: activeTab === tab ? '#534AB7' : 'var(--color-text-secondary)',
+          borderBottom: activeTab === tab ? '2px solid #534AB7' : '2px solid transparent',
+          fontWeight: activeTab === tab ? 500 : 400,
+          marginBottom: -0.5, whiteSpace: 'nowrap',
+          textTransform: 'capitalize'
+        }}
+      >
+        {tab === 'updates' ? 'Updates' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+      </div>
+    ))}
+  </div>
+)}
+3c — Tab content:
+Wrap existing page content in {(!isCompetitor || activeTab === 'updates') && <existing content here />}.
+Add new tab panels — each only renders when isCompetitor && activeTab === '<tab>':
+Overview tab — shows SoWhatCard + two-column grid of CapabilityMatrixCard preview (first 3 rows only) and CertificationsCard preview (first 3 items):
+tsx{isCompetitor && activeTab === 'overview' && (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <SoWhatCard entityId={entityId} userRole={userRole} />
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <CapabilityMatrixCard entityId={entityId} userRole={userRole} previewMode={true} />
+      <CertificationsCard entityId={entityId} userRole={userRole} previewMode={true} />
+    </div>
+  </div>
+)}
+Profile tab — existing "What they do", strengths/weaknesses, and pricing cards move here. Also add CapabilitiesListCard (standalone list, not matrix). Keep existing cards exactly as they are, just render them here instead of in the main flow.
+Commercial tab — existing pricing card if not already in Profile. Add placeholder card: Win / loss tracker — coming soon.
+Competitive tab — SoWhatCard + CapabilityMatrixCard (full) + existing battlecard card + CertificationsCard (full).
+Strategic tab — existing PartnershipsCard component (already built, move it here from its current position).
+Updates tab — all existing updates feed content, exactly as-is.
+
+PART 4 — New components
+Create these files in client/src/components/:
+SoWhatCard.tsx:
+typescriptimport { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+export function SoWhatCard({ entityId, userRole }: { entityId: string; userRole: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [regenerating, setRegenerating] = useState(false);
+  const canEdit = userRole === 'admin' || userRole === 'sub_admin';
+  const queryClient = useQueryClient();
+
+  const { data: intel, isLoading } = useQuery({
+    queryKey: ['/api/entities', entityId, 'intelligence', 'so_what'],
+    queryFn: async () => {
+      const res = await fetch(`/api/entities/${entityId}/intelligence/so_what`);
+      if (!res.ok) throw new Error('Failed to fetch');
+      return res.json();
+    }
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: async (content: string) => {
+      const res = await fetch(`/api/entities/${entityId}/intelligence/so_what`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content })
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'intelligence', 'so_what'] });
+      setEditing(false);
+    }
+  });
+
+  const regenerate = async () => {
+    if (intel?.is_custom) {
+      if (!confirm('You have a saved custom version. Regenerate will replace it — continue?')) return;
+    }
+    setRegenerating(true);
+    try {
+      await fetch(`/api/entities/${entityId}/intelligence/so_what/regenerate`, { method: 'POST' });
+      queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'intelligence', 'so_what'] });
+    } finally {
+      setRegenerating(false);
+    }
+  };
+
+  const content = intel?.content || '';
+
+  return (
+    <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>So what</span>
+          {intel && !intel.is_custom && (
+            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: '#EEEDFE', color: '#3C3489', border: '0.5px solid #AFA9EC', fontWeight: 500 }}>AI drafted</span>
+          )}
+          {intel?.is_custom && (
+            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 20, background: '#EAF3DE', color: '#27500A', border: '0.5px solid #639922', fontWeight: 500 }}>Custom</span>
+          )}
+        </div>
+        {canEdit && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={regenerate} disabled={regenerating} style={{ fontSize: 12, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', background: 'transparent' }}>
+              {regenerating ? 'Generating...' : 'Regenerate'}
+            </button>
+            {!editing && (
+              <button onClick={() => { setDraft(content); setEditing(true); }} style={{ fontSize: 12, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', background: 'transparent' }}>Edit</button>
+            )}
+          </div>
+        )}
+      </div>
+      <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)', padding: '16px 18px' }}>
+        {isLoading && <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>Loading...</p>}
+        {!isLoading && !content && !editing && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-tertiary)', margin: 0 }}>
+            No analysis yet.{canEdit && <> <button onClick={regenerate} style={{ color: '#534AB7', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, padding: 0 }}>Generate now</button></>}
+          </p>
+        )}
+        {!editing && content && (
+          <p style={{ fontSize: 13, color: 'var(--color-text-secondary)', lineHeight: 1.75, margin: 0 }}>{content}</p>
+        )}
+        {editing && (
+          <>
+            <textarea
+              value={draft}
+              onChange={e => setDraft(e.target.value)}
+              rows={4}
+              style={{ width: '100%', fontSize: 13, fontFamily: 'var(--font-sans)', padding: '10px 12px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 8, background: 'var(--color-background-secondary)', color: 'var(--color-text-primary)', resize: 'vertical', lineHeight: 1.75, boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+              <button onClick={() => setEditing(false)} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => saveMutation.mutate(draft)} disabled={saveMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                {saveMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+CapabilityMatrixCard.tsx:
+typescriptimport { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+const ASSESSMENT_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  advantage:  { bg: '#EAF3DE', color: '#27500A', label: 'Advantage' },
+  parity:     { bg: '#E6F1FB', color: '#0C447C', label: 'Parity' },
+  gap_risk:   { bg: '#FAEEDA', color: '#633806', label: 'Gap risk' },
+  behind:     { bg: '#FCEBEB', color: '#791F1F', label: 'Behind' },
+};
+
+export function CapabilityMatrixCard({ entityId, userRole, previewMode = false }: { entityId: string; userRole: string; previewMode?: boolean }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ capability_name: '', capability_description: '', competitor_has: true, us_has: false, assessment: 'parity' });
+  const canEdit = userRole === 'admin' || userRole === 'sub_admin';
+  const queryClient = useQueryClient();
+
+  const { data: capabilities = [] } = useQuery<any[]>({
+    queryKey: ['/api/entities', entityId, 'capabilities'],
+    queryFn: async () => {
+      const res = await fetch(`/api/entities/${entityId}/capabilities`);
+      return res.json();
+    }
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (data: typeof form) => {
+      const res = await fetch(`/api/entities/${entityId}/capabilities`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'capabilities'] });
+      setShowForm(false);
+      setForm({ capability_name: '', capability_description: '', competitor_has: true, us_has: false, assessment: 'parity' });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (capId: string) => {
+      await fetch(`/api/entities/${entityId}/capabilities/${capId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'capabilities'] })
+  });
+
+  const displayCaps = previewMode ? capabilities.slice(0, 3) : capabilities;
+
+  return (
+    <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>
+          Capability matrix{previewMode ? '' : ''}
+        </span>
+        {canEdit && !previewMode && (
+          <button onClick={() => setShowForm(!showForm)} style={{ fontSize: 12, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', background: 'transparent' }}>+ Add row</button>
+        )}
+      </div>
+      <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+          <thead>
+            <tr>
+              <th style={{ fontSize: 11, fontWeight: 500, padding: '8px 14px', textAlign: 'left', borderBottom: '0.5px solid var(--color-border-tertiary)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '40%' }}>Capability</th>
+              <th style={{ fontSize: 11, fontWeight: 500, padding: '8px 14px', textAlign: 'center', borderBottom: '0.5px solid var(--color-border-tertiary)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '18%' }}>Them</th>
+              <th style={{ fontSize: 11, fontWeight: 500, padding: '8px 14px', textAlign: 'center', borderBottom: '0.5px solid var(--color-border-tertiary)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '18%' }}>Us</th>
+              <th style={{ fontSize: 11, fontWeight: 500, padding: '8px 14px', textAlign: 'center', borderBottom: '0.5px solid var(--color-border-tertiary)', color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', width: '24%' }}>Assessment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {displayCaps.length === 0 && (
+              <tr><td colSpan={4} style={{ padding: '20px 14px', textAlign: 'center', fontSize: 13, color: 'var(--color-text-tertiary)' }}>No capabilities added yet.</td></tr>
+            )}
+            {displayCaps.map((cap: any) => {
+              const style = ASSESSMENT_STYLES[cap.assessment] || ASSESSMENT_STYLES.parity;
+              return (
+                <tr key={cap.id}>
+                  <td style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-tertiary)', verticalAlign: 'middle' }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>{cap.capability_name}</div>
+                    {cap.capability_description && <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>{cap.capability_description}</div>}
+                  </td>
+                  <td style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-tertiary)', textAlign: 'center' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: cap.competitor_has ? '#EAF3DE' : 'var(--color-background-secondary)', fontSize: 11, fontWeight: 500, color: cap.competitor_has ? '#3B6D11' : 'var(--color-text-tertiary)' }}>
+                      {cap.competitor_has ? '✓' : '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-tertiary)', textAlign: 'center' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', background: cap.us_has ? '#EAF3DE' : 'var(--color-background-secondary)', fontSize: 11, fontWeight: 500, color: cap.us_has ? '#3B6D11' : 'var(--color-text-tertiary)' }}>
+                      {cap.us_has ? '✓' : '—'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 14px', borderBottom: '0.5px solid var(--color-border-tertiary)', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500, background: style.bg, color: style.color }}>{style.label}</span>
+                      {canEdit && !previewMode && (
+                        <button onClick={() => { if (confirm('Remove this capability?')) deleteMutation.mutate(cap.id); }} style={{ fontSize: 11, color: 'var(--color-text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>×</button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {showForm && canEdit && (
+          <div style={{ padding: '14px 18px', borderTop: '0.5px solid var(--color-border-tertiary)', background: 'var(--color-background-secondary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input placeholder="Capability name *" value={form.capability_name} onChange={e => setForm(f => ({ ...f, capability_name: e.target.value }))} style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 6, background: 'var(--color-background-primary)', color: 'var(--color-text-primary)' }} />
+              <input placeholder="Description (optional)" value={form.capability_description} onChange={e => setForm(f => ({ ...f, capability_description: e.target.value }))} style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 6, background: 'var(--color-background-primary)', color: 'var(--color-text-primary)' }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, alignItems: 'center' }}>
+              <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={form.competitor_has} onChange={e => setForm(f => ({ ...f, competitor_has: e.target.checked }))} />
+                They have it
+              </label>
+              <label style={{ fontSize: 13, color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <input type="checkbox" checked={form.us_has} onChange={e => setForm(f => ({ ...f, us_has: e.target.checked }))} />
+                We have it
+              </label>
+              <select value={form.assessment} onChange={e => setForm(f => ({ ...f, assessment: e.target.value }))} style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 6, background: 'var(--color-background-primary)', color: 'var(--color-text-primary)' }}>
+                <option value="advantage">Advantage</option>
+                <option value="parity">Parity</option>
+                <option value="gap_risk">Gap risk</option>
+                <option value="behind">Behind</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setShowForm(false)} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => addMutation.mutate(form)} disabled={!form.capability_name || addMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                {addMutation.isPending ? 'Saving...' : 'Add row'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+CertificationsCard.tsx:
+typescriptimport { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  active:   { bg: '#EAF3DE', color: '#27500A', label: 'Active' },
+  renewal:  { bg: '#FAEEDA', color: '#633806', label: 'Renewal due' },
+  expired:  { bg: '#FCEBEB', color: '#791F1F', label: 'Expired' },
+  pending:  { bg: '#E6F1FB', color: '#0C447C', label: 'Pending' },
+};
+
+export function CertificationsCard({ entityId, userRole, previewMode = false }: { entityId: string; userRole: string; previewMode?: boolean }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({ cert_name: '', cert_description: '', status: 'active', renewal_date: '' });
+  const canEdit = userRole === 'admin' || userRole === 'sub_admin';
+  const queryClient = useQueryClient();
+
+  const { data: certs = [] } = useQuery<any[]>({
+    queryKey: ['/api/entities', entityId, 'certifications'],
+    queryFn: async () => {
+      const res = await fetch(`/api/entities/${entityId}/certifications`);
+      return res.json();
+    }
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (data: typeof form) => {
+      const res = await fetch(`/api/entities/${entityId}/certifications`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'certifications'] });
+      setShowForm(false);
+      setForm({ cert_name: '', cert_description: '', status: 'active', renewal_date: '' });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (certId: string) => {
+      await fetch(`/api/entities/${entityId}/certifications/${certId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'certifications'] })
+  });
+
+  const displayCerts = previewMode ? certs.slice(0, 3) : certs;
+
+  return (
+    <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>Certifications</span>
+          <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, background: 'var(--color-background-secondary)', color: 'var(--color-text-secondary)', border: '0.5px solid var(--color-border-tertiary)' }}>{certs.length}</span>
+        </div>
+        {canEdit && !previewMode && (
+          <button onClick={() => setShowForm(!showForm)} style={{ fontSize: 12, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', background: 'transparent' }}>+ Add</button>
+        )}
+      </div>
+      <div style={{ borderTop: '0.5px solid var(--color-border-tertiary)' }}>
+        {displayCerts.length === 0 && !showForm && (
+          <div style={{ padding: '20px 18px', textAlign: 'center', fontSize: 13, color: 'var(--color-text-tertiary)' }}>No certifications logged yet.</div>
+        )}
+        {displayCerts.map((cert: any) => {
+          const style = STATUS_STYLES[cert.status] || STATUS_STYLES.active;
+          return (
+            <div key={cert.id} style={{ padding: '11px 18px', borderBottom: '0.5px solid var(--color-border-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)' }}>{cert.cert_name}</div>
+                {cert.cert_description && <div style={{ fontSize: 12, color: 'var(--color-text-secondary)', marginTop: 2 }}>{cert.cert_description}</div>}
+                {cert.renewal_date && <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', marginTop: 2 }}>Renewal: {cert.renewal_date}</div>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, fontWeight: 500, background: style.bg, color: style.color }}>{style.label}</span>
+                {canEdit && !previewMode && (
+                  <button onClick={() => { if (confirm('Remove this certification?')) deleteMutation.mutate(cert.id); }} style={{ fontSize: 11, color: 'var(--color-text-tertiary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>×</button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {showForm && canEdit && (
+          <div style={{ padding: '14px 18px', borderTop: '0.5px solid var(--color-border-tertiary)', background: 'var(--color-background-secondary)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <input placeholder="Certification name *" value={form.cert_name} onChange={e => setForm(f => ({ ...f, cert_name: e.target.value }))} style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 6, background: 'var(--color-background-primary)', color: 'var(--color-text-primary)' }} />
+              <input placeholder="Description" value={form.cert_description} onChange={e => setForm(f => ({ ...f, cert_description: e.target.value }))} style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 6, background: 'var(--color-background-primary)', color: 'var(--color-text-primary)' }} />
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 6, background: 'var(--color-background-primary)', color: 'var(--color-text-primary)' }}>
+                <option value="active">Active</option>
+                <option value="renewal">Renewal due</option>
+                <option value="expired">Expired</option>
+                <option value="pending">Pending</option>
+              </select>
+              <input placeholder="Renewal date (e.g. Q3 2026)" value={form.renewal_date} onChange={e => setForm(f => ({ ...f, renewal_date: e.target.value }))} style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary)', borderRadius: 6, background: 'var(--color-background-primary)', color: 'var(--color-text-primary)' }} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setShowForm(false)} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary)', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => addMutation.mutate(form)} disabled={!form.cert_name || addMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                {addMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+Do NOT run drizzle-kit push. Do NOT touch shared/schema.ts. Do NOT modify any routes or components not specified above.
+Run npm run build, confirm no TypeScript errors, Republish.

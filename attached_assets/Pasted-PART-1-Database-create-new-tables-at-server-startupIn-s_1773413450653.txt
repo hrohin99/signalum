@@ -1,0 +1,173 @@
+PART 1 — Database: create new tables at server startupIn server/routes.ts, find the section where CREATE TABLE IF NOT EXISTS / ALTER TABLE statements run at startup via pool.query(). Add these immediately after the existing ones. Do NOT use drizzle-kit push. Do NOT touch shared/schema.ts.sqlCREATE TABLE IF NOT EXISTS entity_intelligence (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  content TEXT,
+  is_custom BOOLEAN DEFAULT false,
+  last_generated_at TIMESTAMPTZ,
+  last_edited_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(workspace_id, entity_id, field)
+);
+
+CREATE TABLE IF NOT EXISTS entity_capabilities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  capability_name TEXT NOT NULL,
+  capability_description TEXT,
+  competitor_has BOOLEAN,
+  us_has BOOLEAN,
+  assessment TEXT,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS entity_certifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  cert_name TEXT NOT NULL,
+  cert_description TEXT,
+  status TEXT DEFAULT 'active',
+  renewal_date TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);PART 2 — Backend: add API routes in server/routes.tsAdd all routes inside registerRoutes. Use the same requireAuth middleware pattern already used in existing routes. For workspace lookup always use:typescriptconst wsResult = await pool.query(
+  `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+  [userId]
+);
+const workspaceId = wsResult.rows[0]?.id;For role checks, fetch from user_profiles and default to 'admin' if no row exists:
+typescriptconst profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+const role = profileResult.rows[0]?.role || 'admin';
+if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });Intelligence routes (so_what, swot):typescript// GET intelligence field for an entity
+app.get("/api/entities/:entityId/intelligence/:field", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // workspace lookup as above
+  const result = await pool.query(
+    `SELECT * FROM entity_intelligence WHERE entity_id = $1 AND workspace_id = $2 AND field = $3`,
+    [req.params.entityId, workspaceId, req.params.field]
+  );
+  res.json(result.rows[0] || null);
+});
+
+// PUT (upsert) intelligence field — marks is_custom = true
+app.put("/api/entities/:entityId/intelligence/:field", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check — block read_only
+  // workspace lookup as above
+  const { content } = req.body;
+  const result = await pool.query(
+    `INSERT INTO entity_intelligence (workspace_id, entity_id, field, content, is_custom, last_edited_at)
+     VALUES ($1, $2, $3, $4, true, NOW())
+     ON CONFLICT (workspace_id, entity_id, field)
+     DO UPDATE SET content = $4, is_custom = true, last_edited_at = NOW()
+     RETURNING *`,
+    [workspaceId, req.params.entityId, req.params.field, content]
+  );
+  res.json(result.rows[0]);
+});
+
+// POST regenerate — AI generates new content, sets is_custom = false
+app.post("/api/entities/:entityId/intelligence/:field/regenerate", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check — block read_only
+  // workspace lookup as above
+  // Fetch recent captures for this entity
+  const capturesResult = await pool.query(
+    `SELECT content, matched_category, created_at FROM captures 
+     WHERE user_id = $1 AND matched_entity ILIKE $2
+     ORDER BY created_at DESC LIMIT 20`,
+    [userId, `%${req.params.entityId}%`]
+  );
+  // Fetch entity name from workspace entities
+  const wsDataResult = await pool.query(`SELECT * FROM workspaces WHERE id = $1`, [workspaceId]);
+  const entityName = req.params.entityId;
+  const capturesSummary = capturesResult.rows.map(c => c.content?.slice(0, 200)).join('\n');
+
+  const anthropic = new (await import('@anthropic-ai/sdk')).default({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5-20251001',
+    max_tokens: 500,
+    messages: [{
+      role: 'user',
+      content: `You are a competitive intelligence analyst. Based on recent signals about "${entityName}", write a concise "So what" paragraph (3-4 sentences max) that explains what this competitor's recent moves mean strategically for us. Be direct and actionable. No bullet points.\n\nRecent signals:\n${capturesSummary || 'No recent captures available.'}\n\nReturn only the paragraph text, no preamble.`
+    }]
+  });
+  const generatedContent = (response.content[0] as any).text;
+  const result = await pool.query(
+    `INSERT INTO entity_intelligence (workspace_id, entity_id, field, content, is_custom, last_generated_at)
+     VALUES ($1, $2, $3, $4, false, NOW())
+     ON CONFLICT (workspace_id, entity_id, field)
+     DO UPDATE SET content = $4, is_custom = false, last_generated_at = NOW()
+     RETURNING *`,
+    [workspaceId, req.params.entityId, req.params.field, generatedContent]
+  );
+  res.json(result.rows[0]);
+});Capability routes:typescriptapp.get("/api/entities/:entityId/capabilities", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // workspace lookup
+  const result = await pool.query(
+    `SELECT * FROM entity_capabilities WHERE entity_id = $1 AND workspace_id = $2 ORDER BY display_order, created_at`,
+    [req.params.entityId, workspaceId]
+  );
+  res.json(result.rows);
+});
+
+app.post("/api/entities/:entityId/capabilities", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  const { capability_name, capability_description, competitor_has, us_has, assessment } = req.body;
+  const result = await pool.query(
+    `INSERT INTO entity_capabilities (workspace_id, entity_id, capability_name, capability_description, competitor_has, us_has, assessment)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [workspaceId, req.params.entityId, capability_name, capability_description, competitor_has, us_has, assessment]
+  );
+  res.json(result.rows[0]);
+});
+
+app.put("/api/entities/:entityId/capabilities/:capId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  const { capability_name, capability_description, competitor_has, us_has, assessment } = req.body;
+  const result = await pool.query(
+    `UPDATE entity_capabilities SET capability_name=$1, capability_description=$2, competitor_has=$3, us_has=$4, assessment=$5
+     WHERE id=$6 AND workspace_id=$7 RETURNING *`,
+    [capability_name, capability_description, competitor_has, us_has, assessment, req.params.capId, workspaceId]
+  );
+  res.json(result.rows[0]);
+});
+
+app.delete("/api/entities/:entityId/capabilities/:capId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  await pool.query(`DELETE FROM entity_capabilities WHERE id=$1 AND workspace_id=$2`, [req.params.capId, workspaceId]);
+  res.json({ success: true });
+});Certification routes:typescriptapp.get("/api/entities/:entityId/certifications", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // workspace lookup
+  const result = await pool.query(
+    `SELECT * FROM entity_certifications WHERE entity_id = $1 AND workspace_id = $2 ORDER BY created_at`,
+    [req.params.entityId, workspaceId]
+  );
+  res.json(result.rows);
+});
+
+app.post("/api/entities/:entityId/certifications", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  const { cert_name, cert_description, status, renewal_date } = req.body;
+  const result = await pool.query(
+    `INSERT INTO entity_certifications (workspace_id, entity_id, cert_name, cert_description, status, renewal_date)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [workspaceId, req.params.entityId, cert_name, cert_description, status || 'active', renewal_date]
+  );
+  res.json(result.rows[0]);
+});
+
+app.delete("/api/entities/:entityId/certifications/:certId", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // role check + workspace lookup
+  await pool.query(`DELETE FROM entity_certifications WHERE id=$1 AND workspace_id=$2`, [req.params.certId, workspaceId]);
+  res.json({ success: true });
+});

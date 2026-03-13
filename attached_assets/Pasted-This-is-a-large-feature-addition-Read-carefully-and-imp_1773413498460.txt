@@ -1,0 +1,47 @@
+This is a large feature addition. Read carefully and implement exactly what is specified. Do not touch anything not mentioned.PART 1 — Database: create new tables at server startupIn server/routes.ts, find the section where CREATE TABLE IF NOT EXISTS / ALTER TABLE statements run at startup via pool.query(). Add these immediately after the existing ones. Do NOT use drizzle-kit push. Do NOT touch shared/schema.ts.sqlCREATE TABLE IF NOT EXISTS entity_intelligence (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  field TEXT NOT NULL,
+  content TEXT,
+  is_custom BOOLEAN DEFAULT false,
+  last_generated_at TIMESTAMPTZ,
+  last_edited_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(workspace_id, entity_id, field)
+);
+
+CREATE TABLE IF NOT EXISTS entity_capabilities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  capability_name TEXT NOT NULL,
+  capability_description TEXT,
+  competitor_has BOOLEAN,
+  us_has BOOLEAN,
+  assessment TEXT,
+  display_order INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS entity_certifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  cert_name TEXT NOT NULL,
+  cert_description TEXT,
+  status TEXT DEFAULT 'active',
+  renewal_date TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);PART 2 — Backend: add API routes in server/routes.tsAdd all routes inside registerRoutes. Use the same requireAuth middleware pattern already used in existing routes. For workspace lookup always use:typescriptconst wsResult = await pool.query(
+  `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+  [userId]
+);
+const workspaceId = wsResult.rows[0]?.id;For role checks, fetch from user_profiles and default to 'admin' if no row exists:
+typescriptconst profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+const role = profileResult.rows[0]?.role || 'admin';
+if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });Intelligence routes (so_what, swot):typescript// GET intelligence field for an entity
+app.get("/api/entities/:entityId/intelligence/:field", requireAuth, async (req, res) => {
+  const userId = (req as any).userId;
+  // workspace lookup as above
+  const result = await pool.query(
