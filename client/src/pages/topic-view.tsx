@@ -73,6 +73,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext, EntitySeoData } from "@shared/schema";
 import { ComingSoonCard } from "@/components/coming-soon-card";
+import { PartnershipsCard } from "@/components/PartnershipsCard";
 import { CoachMarks } from "@/components/coach-marks";
 import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
 import { topicTourSteps } from "@/lib/tourConfig";
@@ -249,6 +250,12 @@ function TopicViewContent({
   const [battlecardExpanded, setBattlecardExpanded] = useState(false);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
+
+  const { data: profileData } = useQuery<{ role: string | null }>({
+    queryKey: ["/api/profile"],
+    enabled: !!user,
+  });
+  const userRole = profileData?.role || "";
 
   const { data: extractionStatus } = useQuery<{ extraction: { status: string; noDataFound?: boolean } | null }>({
     queryKey: ["/api/entity/website-extraction-status", entity.name],
@@ -574,6 +581,7 @@ function TopicViewContent({
               )}
             </div>
           )}
+          <PartnershipsCard entityId={entity.name} userRole={userRole} />
           <WidgetsSection
             entity={entity}
             categoryName={categoryName}
