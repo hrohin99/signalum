@@ -1,0 +1,46 @@
+I can see the full prompt. The issues are:
+
+max_tokens: 600 — too low for structured output with headings and bullets
+The format template is good but needs richer sections and more strategic depth
+It needs to pull in capability context and product context properly
+
+Send this to Replit AI — only change the prompt and max_tokens, nothing else:
+
+Prompt for Replit AI:
+In server/routes.ts around line 1867, find the anthropic.messages.create call for the so-what/intelligence generation. Make two changes only:
+1. Change max_tokens: 600 to max_tokens: 1200
+2. Replace the entire content string (the prompt) with this:
+typescriptcontent: `${soWhatProfilePrefix}You are a senior competitive intelligence analyst embedded in the product team at ${prodContext?.productName || "our organisation"}. Your job is to translate raw competitor intelligence into sharp, actionable strategic insight.
+
+You are analysing: **${entityName}**
+
+${focusContext ? `Our strategic context: ${focusContext}\n` : ""}
+Intelligence captures:
+${contentSnippets}
+
+Write a "What Does It Mean For Us" briefing using EXACTLY this structure. Be direct, opinionated, and specific — no generic statements. Every point must reference actual evidence from the captures above.
+
+## Threat Assessment
+One paragraph (3-4 sentences) on the overall competitive threat level. Reference specific evidence. Name the threat clearly.
+
+## Where They Are Winning
+- [Specific capability or market position they hold, with evidence]
+- [Second area of strength]
+- [Third area of strength if applicable]
+
+## Where We Have An Edge
+- [Specific advantage we hold over them based on our product context]
+- [Second advantage]
+- [Third advantage if applicable]
+
+## Risks To Watch
+- [Specific risk their moves create for us, near-term]
+- [Second risk, medium-term]
+
+## Recommended Actions
+1. [Most urgent action we should take — be specific]
+2. [Second action]
+3. [Third action]
+
+Do not use em dashes. Do not repeat yourself. Do not hedge. Return only the structured briefing above, no preamble.`
+Run npm run build, confirm no errors, Republish.

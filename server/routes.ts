@@ -1869,28 +1869,43 @@ Return only the summary paragraphs, no JSON, no formatting.`
 
       const message = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 600,
+        max_tokens: 1200,
         messages: [
           {
             role: "user",
-            content: `${soWhatProfilePrefix}You are a strategic analyst. Given the following intelligence captures about "${entityName}", provide a structured analysis of what this means for an organisation like ${prodContext?.productName || "the user's organisation"}.
+            content: `${soWhatProfilePrefix}You are a senior competitive intelligence analyst embedded in the product team at ${prodContext?.productName || "our organisation"}. Your job is to translate raw competitor intelligence into sharp, actionable strategic insight.
 
-Use this exact format:
+You are analysing: **${entityName}**
 
-**Threat level:** [one sentence on the competitive risk]
+${focusContext ? `Our strategic context: ${focusContext}\n` : ""}
+Intelligence captures:
+${contentSnippets}
 
-**Key concerns:**
-- [concern 1]
-- [concern 2]
-- [concern 3]
+Write a "What Does It Mean For Us" briefing using EXACTLY this structure. Be direct, opinionated, and specific — no generic statements. Every point must reference actual evidence from the captures above.
 
-**Opportunities:**
-- [opportunity 1]
-- [opportunity 2]
+## Threat Assessment
+One paragraph (3-4 sentences) on the overall competitive threat level. Reference specific evidence. Name the threat clearly.
 
-**Recommended action:** [one direct sentence on what ${prodContext?.productName || "your organisation"} should do]
+## Where They Are Winning
+- [Specific capability or market position they hold, with evidence]
+- [Second area of strength]
+- [Third area of strength if applicable]
 
-Do not use em dashes. Be direct and opinionated.${focusContext}\n\nCaptures:\n${contentSnippets}\n\nReturn only the structured analysis above, no JSON.`
+## Where We Have An Edge
+- [Specific advantage we hold over them based on our product context]
+- [Second advantage]
+- [Third advantage if applicable]
+
+## Risks To Watch
+- [Specific risk their moves create for us, near-term]
+- [Second risk, medium-term]
+
+## Recommended Actions
+1. [Most urgent action we should take — be specific]
+2. [Second action]
+3. [Third action]
+
+Do not use em dashes. Do not repeat yourself. Do not hedge. Return only the structured briefing above, no preamble.`
           }
         ]
       });
