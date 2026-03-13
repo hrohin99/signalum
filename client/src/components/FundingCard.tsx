@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -64,14 +64,10 @@ const inputStyle = { fontSize: 13, padding: '7px 10px', border: '0.5px solid var
 export function FundingCard({ entityId, userRole }: { entityId: string; userRole: string }) {
   const [showSummaryEdit, setShowSummaryEdit] = useState(false);
   const [summaryForm, setSummaryForm] = useState(EMPTY_SUMMARY);
-  const summaryFormRef = React.useRef(summaryForm);
-  React.useEffect(() => { summaryFormRef.current = summaryForm; }, [summaryForm]);
 
   const [showRoundForm, setShowRoundForm] = useState(false);
   const [editingRoundId, setEditingRoundId] = useState<string | null>(null);
   const [roundForm, setRoundForm] = useState(EMPTY_ROUND);
-  const roundFormRef = React.useRef(roundForm);
-  React.useEffect(() => { roundFormRef.current = roundForm; }, [roundForm]);
 
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
 
@@ -199,7 +195,7 @@ export function FundingCard({ entityId, userRole }: { entityId: string; userRole
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button data-testid="button-cancel-funding-summary" onClick={() => setShowSummaryEdit(false)} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-            <button data-testid="button-save-funding-summary" onClick={() => saveSummaryMutation.mutate(summaryFormRef.current)} disabled={saveSummaryMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+            <button data-testid="button-save-funding-summary" onClick={() => saveSummaryMutation.mutate(summaryForm)} disabled={saveSummaryMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
               {saveSummaryMutation.isPending ? 'Saving...' : 'Save'}
             </button>
           </div>
@@ -228,7 +224,7 @@ export function FundingCard({ entityId, userRole }: { entityId: string; userRole
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button data-testid="button-cancel-round" onClick={() => { setShowRoundForm(false); setRoundForm(EMPTY_ROUND); }} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-            <button data-testid="button-save-round" onClick={() => addRoundMutation.mutate(roundFormRef.current)} disabled={!roundFormRef.current.round_name || addRoundMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+            <button data-testid="button-save-round" onClick={() => addRoundMutation.mutate(roundForm)} disabled={!roundForm.round_name || addRoundMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
               {addRoundMutation.isPending ? 'Saving...' : 'Save'}
             </button>
           </div>
@@ -257,7 +253,7 @@ export function FundingCard({ entityId, userRole }: { entityId: string; userRole
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button data-testid="button-cancel-round" onClick={() => { setEditingRoundId(null); setRoundForm(EMPTY_ROUND); }} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-                    <button data-testid="button-save-round" onClick={() => editRoundMutation.mutate({ id: item.id, data: roundFormRef.current })} disabled={!roundFormRef.current.round_name || editRoundMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                    <button data-testid="button-save-round" onClick={() => editRoundMutation.mutate({ id: item.id, data: roundForm })} disabled={!roundForm.round_name || editRoundMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
                       {editRoundMutation.isPending ? 'Saving...' : 'Save'}
                     </button>
                   </div>

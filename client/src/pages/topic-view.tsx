@@ -689,7 +689,7 @@ function TopicViewContent({
                   })
               }
             </div>
-            {/* <FundingOverviewPreview entityId={entity.name} /> */}
+            <FundingOverviewPreview entityId={entity.name} />
             <CertificationsCard entityId={entity.name} userRole={userRole} previewMode={true} />
           </div>
         </div>
@@ -723,8 +723,8 @@ function TopicViewContent({
       {isCompetitor && activeTab === 'commercial' && (
         <div className="space-y-6">
           <PricingCard entity={entity} />
-          {/* <WinLossCard entityId={entity.name} userRole={userRole} /> */}
-          {/* <FundingCard entityId={entity.name} userRole={userRole} /> */}
+          <WinLossCard entityId={entity.name} userRole={userRole} />
+          <FundingCard entityId={entity.name} userRole={userRole} />
         </div>
       )}
 
