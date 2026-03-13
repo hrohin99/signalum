@@ -5079,6 +5079,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         [userId]
       );
       const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
       const { product_name, description, status, tags } = req.body;
       if (!product_name) return res.status(400).json({ error: 'product_name is required' });
       const allowedStatuses = ['ga', 'beta', 'deprecated'];
@@ -5107,7 +5108,9 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         [userId]
       );
       const workspaceId = wsResult.rows[0]?.id;
-      await pool.query(`DELETE FROM entity_products WHERE id=$1 AND workspace_id=$2 AND entity_id=$3`, [req.params.productId, workspaceId, req.params.entityId]);
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const deleted = await pool.query(`DELETE FROM entity_products WHERE id=$1 AND workspace_id=$2 AND entity_id=$3 RETURNING id`, [req.params.productId, workspaceId, req.params.entityId]);
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Product not found' });
       res.json({ success: true });
     } catch (error: any) {
       console.error("Delete product error:", error);
