@@ -236,7 +236,7 @@ export async function sendBriefingEmail(
     entity_name: cap.matchedEntity || null,
   }));
 
-  const MAX_TOTAL = 40;
+  const MAX_TOTAL = 50;
 
   const topUpdates = allUpdates
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -261,18 +261,23 @@ export async function sendBriefingEmail(
   const categorySections = Object.entries(grouped).map(([category, entityGroups]) => {
     const colors = getCategoryColor(category);
     const allEntityRows = Object.entries(entityGroups).map(([entityName, items]) => {
-      const itemRows = items.map(item => `
+      const itemRows = items.map(item => {
+        const raw = (item.content || item.title || "").slice(0, 600);
+        const sourceMatch = raw.match(/Source:\s*(https?:\/\/[^\s]+)/i);
+        const cleanContent = raw.replace(/Source:\s*https?:\/\/[^\s]+/i, "").trim();
+        const sourceUrl = sourceMatch?.[1] || null;
+        return `
       <tr>
         <td style="padding: 8px 0; border-bottom: 1px solid #F8F8F6;">
-          <p style="margin: 0 0 3px 0; font-size: 13px; color: #1a1a2e; line-height: 1.5;">
-            ${(item.content || item.title || "").slice(0, 600)}
-          </p>
+          <p style="margin: 0 0 4px 0; font-size: 13px; color: #1a1a2e; line-height: 1.5;">${escapeHtml(cleanContent)}</p>
+          ${sourceUrl ? `<a href="${sourceUrl}" style="font-size: 11px; color: #534AB7; text-decoration: none;" target="_blank">${sourceUrl}</a>` : ""}
           <p style="margin: 0; font-size: 11px; color: #888780;">
             ${new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
           </p>
         </td>
       </tr>
-    `).join("");
+    `;
+      }).join("");
 
       return `
       <tr>
