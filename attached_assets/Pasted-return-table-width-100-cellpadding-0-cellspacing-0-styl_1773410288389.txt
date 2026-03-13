@@ -1,0 +1,60 @@
+return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; border-radius: 8px; overflow: hidden; border: 1px solid ${colors.border};">
+      <tr>
+        <td style="background: ${colors.bg}; padding: 10px 16px;">
+          <span style="font-size: 11px; font-weight: 700; color: ${colors.label}; text-transform: uppercase; letter-spacing: 0.06em;">${category}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background: #ffffff; padding: 0 16px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${itemRows}
+            ${overflowRow}
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+}).join("");
+
+const emailHtml = `
+<!DOCTYPE html>
+<html>
+<body style="margin: 0; padding: 0; background: #f8f8f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8f8f6; padding: 32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="max-width: 600px; width: 100%;">
+          <tr>
+            <td style="background: #1a1a2e; border-radius: 10px 10px 0 0; padding: 24px 32px;">
+              <p style="margin: 0; font-size: 20px; font-weight: 600; color: #ffffff;">Signalum</p>
+              <p style="margin: 4px 0 0 0; font-size: 13px; color: rgba(255,255,255,0.6);">Your weekly intelligence brief</p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background: #534AB7; padding: 12px 32px;">
+              <p style="margin: 0; font-size: 13px; color: #ffffff;">
+                <strong>${topUpdates.length} signals</strong> across <strong>${Object.keys(grouped).length} categories</strong> · Week of ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="background: #ffffff; padding: 32px; border-radius: 0 0 10px 10px;">
+              ${categorySections}
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-top: 32px; border-top: 1px solid #F1EFE8; padding-top: 16px;">
+                <tr>
+                  <td>
+                    <p style="margin: 0; font-size: 12px; color: #888780;">You're receiving this because you're a Signalum user. Log in to see the full picture.</p>
+                    <p style="margin: 8px 0 0 0; font-size: 12px; color: #888780;">— The Signalum team</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+`;
