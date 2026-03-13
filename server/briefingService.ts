@@ -237,65 +237,75 @@ export async function sendBriefingEmail(
   }));
 
   const MAX_TOTAL = 40;
-  const MAX_PER_CATEGORY = 7;
 
   const topUpdates = allUpdates
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, MAX_TOTAL);
 
-  const grouped: Record<string, any[]> = {};
+  const MAX_PER_ENTITY = 3;
+
+  // Group by category, then by entity within each category
+  const grouped: Record<string, Record<string, any[]>> = {};
   for (const update of topUpdates) {
     const cat = update.category || "General";
-    if (!grouped[cat]) grouped[cat] = [];
-    grouped[cat].push(update);
+    const entity = update.entity_name || "General";
+    if (!grouped[cat]) grouped[cat] = {};
+    if (!grouped[cat][entity]) grouped[cat][entity] = [];
+    if (grouped[cat][entity].length < MAX_PER_ENTITY) {
+      grouped[cat][entity].push(update);
+    }
   }
 
   const subject = `Your Weekly Signalum Intelligence Brief — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`;
 
-  const categorySections = Object.entries(grouped).map(([category, items]) => {
+  const categorySections = Object.entries(grouped).map(([category, entityGroups]) => {
     const colors = getCategoryColor(category);
-    const visibleItems = items.slice(0, MAX_PER_CATEGORY);
-    const overflow = items.length - visibleItems.length;
+    const allEntityRows = Object.entries(entityGroups).map(([entityName, items]) => {
+      const itemRows = items.map(item => `
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #F8F8F6;">
+          <p style="margin: 0 0 3px 0; font-size: 13px; color: #1a1a2e; line-height: 1.5;">
+            ${(item.content || item.title || "").slice(0, 600)}
+          </p>
+          <p style="margin: 0; font-size: 11px; color: #888780;">
+            ${new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </p>
+        </td>
+      </tr>
+    `).join("");
 
-    const itemRows = visibleItems.map(item => `
-    <tr>
-      <td style="padding: 10px 0; border-bottom: 1px solid #F1EFE8;">
-        <p style="margin: 0 0 4px 0; font-size: 14px; color: #1a1a2e; line-height: 1.5;">
-          ${item.content || item.title || ""}
-        </p>
-        <p style="margin: 0; font-size: 11px; color: #888780;">
-          ${item.entity_name ? `<strong>${item.entity_name}</strong> · ` : ""}${new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-        </p>
-      </td>
-    </tr>
-  `).join("");
+      return `
+      <tr>
+        <td style="padding: 10px 0 4px 0;">
+          <p style="margin: 0; font-size: 12px; font-weight: 600; color: ${colors.label};">${escapeHtml(entityName)}</p>
+        </td>
+      </tr>
+      ${itemRows}
+    `;
+    }).join("");
 
-    const overflowRow = overflow > 0 ? `
-    <tr>
-      <td style="padding: 8px 0;">
-        <p style="margin: 0; font-size: 12px; color: #888780;">+ ${overflow} more signals this week</p>
-      </td>
-    </tr>
-  ` : "";
+    const totalItems = Object.values(entityGroups).reduce((sum, items) => sum + items.length, 0);
 
     return `
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; border-radius: 8px; overflow: hidden; border: 1px solid ${colors.border};">
       <tr>
         <td style="background: ${colors.bg}; padding: 10px 16px;">
-          <span style="font-size: 11px; font-weight: 700; color: ${colors.label}; text-transform: uppercase; letter-spacing: 0.06em;">${category}</span>
+          <span style="font-size: 11px; font-weight: 700; color: ${colors.label}; text-transform: uppercase; letter-spacing: 0.06em;">${escapeHtml(category)}</span>
+          <span style="font-size: 11px; color: ${colors.label}; opacity: 0.7; margin-left: 8px;">${Object.keys(entityGroups).length} topics · ${totalItems} signals</span>
         </td>
       </tr>
       <tr>
-        <td style="background: #ffffff; padding: 0 16px;">
+        <td style="background: #ffffff; padding: 4px 16px 12px 16px;">
           <table width="100%" cellpadding="0" cellspacing="0">
-            ${itemRows}
-            ${overflowRow}
+            ${allEntityRows}
           </table>
         </td>
       </tr>
     </table>
   `;
   }).join("");
+
+  const totalEntities = Object.values(grouped).reduce((sum, eg) => sum + Object.keys(eg).length, 0);
 
   let emailHtml = `
 <!DOCTYPE html>
@@ -314,7 +324,7 @@ export async function sendBriefingEmail(
           <tr>
             <td style="background: #534AB7; padding: 12px 32px;">
               <p style="margin: 0; font-size: 13px; color: #ffffff;">
-                <strong>${topUpdates.length} signals</strong> across <strong>${Object.keys(grouped).length} categories</strong> · Week of ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                <strong>${topUpdates.length} signals</strong> across <strong>${totalEntities} topics</strong> in <strong>${Object.keys(grouped).length} categories</strong> · Week of ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </p>
             </td>
           </tr>
