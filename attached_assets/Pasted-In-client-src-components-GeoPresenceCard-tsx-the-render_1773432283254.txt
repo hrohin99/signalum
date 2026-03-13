@@ -1,0 +1,242 @@
+In client/src/components/GeoPresenceCard.tsx, the renderForm function is called inline in JSX which causes React to remount the form inputs on every state change, losing keyboard input. Remove the renderForm function entirely and paste the form JSX directly inline in the return statement.
+Replace the entire file with this corrected version:
+typescriptimport { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface GeoPresence {
+  id: string;
+  workspace_id: string;
+  entity_id: string;
+  region: string;
+  iso_code: string | null;
+  presence_type: string;
+  channels: string | null;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+const PRESENCE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  active:    { bg: '#EAF3DE', color: '#27500A', label: 'Active' },
+  expanding: { bg: '#E0EDFF', color: '#1A3F6F', label: 'Expanding' },
+  limited:   { bg: '#FAEEDA', color: '#633806', label: 'Limited' },
+  exited:    { bg: '#F1EFE8', color: '#444441', label: 'Exited' },
+};
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  'united states': '🇺🇸','usa': '🇺🇸','us': '🇺🇸',
+  'united kingdom': '🇬🇧','uk': '🇬🇧','gb': '🇬🇧',
+  'canada': '🇨🇦','germany': '🇩🇪','france': '🇫🇷','japan': '🇯🇵',
+  'china': '🇨🇳','india': '🇮🇳','australia': '🇦🇺','brazil': '🇧🇷',
+  'south korea': '🇰🇷','korea': '🇰🇷','mexico': '🇲🇽','italy': '🇮🇹',
+  'spain': '🇪🇸','netherlands': '🇳🇱','switzerland': '🇨🇭','sweden': '🇸🇪',
+  'norway': '🇳🇴','denmark': '🇩🇰','finland': '🇫🇮','singapore': '🇸🇬',
+  'ireland': '🇮🇪','israel': '🇮🇱','south africa': '🇿🇦','new zealand': '🇳🇿',
+  'argentina': '🇦🇷','portugal': '🇵🇹','poland': '🇵🇱','austria': '🇦🇹',
+  'belgium': '🇧🇪','russia': '🇷🇺','turkey': '🇹🇷','saudi arabia': '🇸🇦',
+  'uae': '🇦🇪','united arab emirates': '🇦🇪','indonesia': '🇮🇩','thailand': '🇹🇭',
+  'vietnam': '🇻🇳','malaysia': '🇲🇾','philippines': '🇵🇭','colombia': '🇨🇴',
+  'chile': '🇨🇱','egypt': '🇪🇬','nigeria': '🇳🇬','taiwan': '🇹🇼','hong kong': '🇭🇰',
+  'europe': '🇪🇺','eu': '🇪🇺','latin america': '🌎','latam': '🌎',
+  'asia pacific': '🌏','apac': '🌏','middle east': '🌍','mena': '🌍',
+  'africa': '🌍','global': '🌐','north america': '🌎',
+};
+
+const ISO_CODES: Record<string, string> = {
+  'united states': 'US','usa': 'US','us': 'US','united kingdom': 'GB','uk': 'GB','gb': 'GB',
+  'canada': 'CA','germany': 'DE','france': 'FR','japan': 'JP','china': 'CN','india': 'IN',
+  'australia': 'AU','brazil': 'BR','south korea': 'KR','korea': 'KR','mexico': 'MX',
+  'italy': 'IT','spain': 'ES','netherlands': 'NL','switzerland': 'CH','sweden': 'SE',
+  'norway': 'NO','denmark': 'DK','finland': 'FI','singapore': 'SG','ireland': 'IE',
+  'israel': 'IL','south africa': 'ZA','new zealand': 'NZ','argentina': 'AR','portugal': 'PT',
+  'poland': 'PL','austria': 'AT','belgium': 'BE','russia': 'RU','turkey': 'TR',
+  'saudi arabia': 'SA','uae': 'AE','united arab emirates': 'AE','indonesia': 'ID',
+  'thailand': 'TH','vietnam': 'VN','malaysia': 'MY','philippines': 'PH','colombia': 'CO',
+  'chile': 'CL','egypt': 'EG','nigeria': 'NG','taiwan': 'TW','hong kong': 'HK',
+  'europe': 'EU','eu': 'EU','latin america': 'LATAM','latam': 'LATAM',
+  'asia pacific': 'APAC','apac': 'APAC','middle east': 'MENA','mena': 'MENA',
+  'africa': 'AFR','global': 'GLB','north america': 'NA',
+};
+
+export function getRegionFlag(name: string): string {
+  return COUNTRY_FLAGS[name.toLowerCase().trim()] || '🌐';
+}
+
+export function getRegionISOCode(name: string): string {
+  const lower = name.toLowerCase().trim();
+  return ISO_CODES[lower] || name.substring(0, 2).toUpperCase();
+}
+
+const EMPTY_FORM = { region: '', presence_type: 'active', channels: '', notes: '' };
+const inputStyle = { fontSize: 13, padding: '7px 10px', border: '0.5px solid #cbd5e1', borderRadius: 6, background: '#fff', color: '#1e293b', width: '100%', boxSizing: 'border-box' as const };
+
+export function GeoPresenceCard({ entityId, userRole }: { entityId: string; userRole: string }) {
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const canEdit = userRole === 'admin' || userRole === 'sub_admin';
+
+  const { data: geoPresence = [], isLoading } = useQuery<GeoPresence[]>({
+    queryKey: [`/api/entities/${entityId}/geo-presence`],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`);
+      return res.json();
+    },
+    staleTime: 0, gcTime: 0, refetchOnMount: true, retry: 2, retryDelay: 500
+  });
+
+  const addMutation = useMutation({
+    mutationFn: async (data: typeof EMPTY_FORM) => {
+      const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] });
+      setShowForm(false);
+      setForm(EMPTY_FORM);
+    }
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof EMPTY_FORM }) => {
+      const res = await apiRequest("PUT", `/api/entities/${encodeURIComponent(entityId)}/geo-presence/${encodeURIComponent(id)}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] });
+      setEditingId(null);
+      setForm(EMPTY_FORM);
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/geo-presence/${encodeURIComponent(id)}`);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] })
+  });
+
+  const formStyle = { padding: '14px 18px', background: '#f8fafc', borderTop: '0.5px solid #e2e8f0', display: 'flex', flexDirection: 'column' as const, gap: 8 };
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>Geographic presence</span>
+          <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, background: '#f8fafc', color: '#64748b', border: '0.5px solid #e2e8f0' }}>
+            {geoPresence.length} {geoPresence.length === 1 ? 'market' : 'markets'}
+          </span>
+        </div>
+        {canEdit && !showForm && (
+          <button onClick={() => { setShowForm(true); setEditingId(null); setForm(EMPTY_FORM); }}
+            style={{ fontSize: 12, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', background: 'transparent' }}>+ Add</button>
+        )}
+      </div>
+
+      {/* Add form — inline JSX, never inside a function call */}
+      {showForm && canEdit && (
+        <div style={formStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <input placeholder="Country / region name *" value={form.region}
+              onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
+            <select value={form.presence_type}
+              onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
+              <option value="active">Active</option>
+              <option value="expanding">Expanding</option>
+              <option value="limited">Limited</option>
+              <option value="exited">Exited</option>
+            </select>
+          </div>
+          <input placeholder="Channels (e.g. Direct, Partner · BankID)"
+            value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))} style={inputStyle} />
+          <textarea placeholder="Notes (optional)" value={form.notes}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+              style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid #e2e8f0', borderRadius: 6, background: 'transparent', color: '#64748b', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => addMutation.mutate(form)}
+              disabled={!form.region || addMutation.isPending}
+              style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: form.region ? 'pointer' : 'not-allowed', opacity: form.region ? 1 : 0.5 }}>
+              {addMutation.isPending ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit forms — one per item, inline */}
+      {editingId && geoPresence.filter(g => g.id === editingId).map(g => (
+        <div key={g.id} style={formStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <input placeholder="Country / region name *" value={form.region}
+              onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
+            <select value={form.presence_type}
+              onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
+              <option value="active">Active</option>
+              <option value="expanding">Expanding</option>
+              <option value="limited">Limited</option>
+              <option value="exited">Exited</option>
+            </select>
+          </div>
+          <input placeholder="Channels (e.g. Direct, Partner · BankID)"
+            value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))} style={inputStyle} />
+          <textarea placeholder="Notes (optional)" value={form.notes}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }}
+              style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid #e2e8f0', borderRadius: 6, background: 'transparent', color: '#64748b', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => editMutation.mutate({ id: g.id, data: form })}
+              disabled={!form.region || editMutation.isPending}
+              style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: form.region ? 'pointer' : 'not-allowed', opacity: form.region ? 1 : 0.5 }}>
+              {editMutation.isPending ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {/* List */}
+      <div style={{ borderTop: '0.5px solid #e2e8f0' }}>
+        {isLoading && <div style={{ padding: '16px 18px', fontSize: 13, color: '#94a3b8' }}>Loading...</div>}
+        {!isLoading && geoPresence.length === 0 && !showForm && (
+          <div style={{ padding: '20px 18px', textAlign: 'center', fontSize: 13, color: '#94a3b8' }}>No geographic data logged yet.</div>
+        )}
+        {geoPresence.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0 }}>
+            {geoPresence.filter(g => g.id !== editingId).map((g) => {
+              const s = PRESENCE_STYLES[g.presence_type] || PRESENCE_STYLES.active;
+              const flag = getRegionFlag(g.region);
+              const isoCode = g.iso_code || getRegionISOCode(g.region);
+              return (
+                <div key={g.id} style={{ padding: '13px 18px', borderBottom: '0.5px solid #e2e8f0', borderRight: '0.5px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 16 }}>{flag}</span>
+                    <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{g.region}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8', fontFamily: 'monospace' }}>{isoCode}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, fontWeight: 500, background: s.bg, color: s.color }}>{s.label}</span>
+                    {canEdit && (
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button onClick={() => { setEditingId(g.id); setShowForm(false); setForm({ region: g.region, presence_type: g.presence_type || 'active', channels: g.channels || '', notes: g.notes || '' }); }}
+                          style={{ fontSize: 11, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', background: 'transparent' }}>Edit</button>
+                        <button onClick={() => { if (confirm(`Remove ${g.region}?`)) deleteMutation.mutate(g.id); }}
+                          style={{ fontSize: 11, color: '#94a3b8', border: '0.5px solid #e2e8f0', borderRadius: 6, padding: '2px 8px', cursor: 'pointer', background: 'transparent' }}>Remove</button>
+                      </div>
+                    )}
+                  </div>
+                  {g.channels && <div style={{ fontSize: 12, color: '#64748b' }}>Channels: {g.channels}</div>}
+                  {g.notes && <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{g.notes}</div>}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+Apply the exact same pattern fix to WinLossCard.tsx — find any renderForm or helper function that returns JSX and inline it directly in the return statement.
+Run npm run build, confirm no errors, Republish.

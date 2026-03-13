@@ -1,0 +1,44 @@
+In client/src/components/GeoPresenceCard.tsx, the renderForm function is called inline in JSX which causes React to remount the form inputs on every state change, losing keyboard input. Remove the renderForm function entirely and paste the form JSX directly inline in the return statement.
+Replace the entire file with this corrected version:
+typescriptimport { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface GeoPresence {
+  id: string;
+  workspace_id: string;
+  entity_id: string;
+  region: string;
+  iso_code: string | null;
+  presence_type: string;
+  channels: string | null;
+  notes: string | null;
+  sort_order: number;
+  created_at: string;
+}
+
+const PRESENCE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  active:    { bg: '#EAF3DE', color: '#27500A', label: 'Active' },
+  expanding: { bg: '#E0EDFF', color: '#1A3F6F', label: 'Expanding' },
+  limited:   { bg: '#FAEEDA', color: '#633806', label: 'Limited' },
+  exited:    { bg: '#F1EFE8', color: '#444441', label: 'Exited' },
+};
+
+const COUNTRY_FLAGS: Record<string, string> = {
+  'united states': '🇺🇸','usa': '🇺🇸','us': '🇺🇸',
+  'united kingdom': '🇬🇧','uk': '🇬🇧','gb': '🇬🇧',
+  'canada': '🇨🇦','germany': '🇩🇪','france': '🇫🇷','japan': '🇯🇵',
+  'china': '🇨🇳','india': '🇮🇳','australia': '🇦🇺','brazil': '🇧🇷',
+  'south korea': '🇰🇷','korea': '🇰🇷','mexico': '🇲🇽','italy': '🇮🇹',
+  'spain': '🇪🇸','netherlands': '🇳🇱','switzerland': '🇨🇭','sweden': '🇸🇪',
+  'norway': '🇳🇴','denmark': '🇩🇰','finland': '🇫🇮','singapore': '🇸🇬',
+  'ireland': '🇮🇪','israel': '🇮🇱','south africa': '🇿🇦','new zealand': '🇳🇿',
+  'argentina': '🇦🇷','portugal': '🇵🇹','poland': '🇵🇱','austria': '🇦🇹',
+  'belgium': '🇧🇪','russia': '🇷🇺','turkey': '🇹🇷','saudi arabia': '🇸🇦',
+  'uae': '🇦🇪','united arab emirates': '🇦🇪','indonesia': '🇮🇩','thailand': '🇹🇭',
+  'vietnam': '🇻🇳','malaysia': '🇲🇾','philippines': '🇵🇭','colombia': '🇨🇴',
+  'chile': '🇨🇱','egypt': '🇪🇬','nigeria': '🇳🇬','taiwan': '🇹🇼','hong kong': '🇭🇰',
+  'europe': '🇪🇺','eu': '🇪🇺','latin america': '🌎','latam': '🌎',
+  'asia pacific': '🌏','apac': '🌏','middle east': '🌍','mena': '🌍',
+  'africa': '🌍','global': '🌐','north america': '🌎',
+};

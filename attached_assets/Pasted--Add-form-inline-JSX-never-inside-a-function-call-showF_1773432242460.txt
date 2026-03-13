@@ -1,0 +1,30 @@
+{/* Add form — inline JSX, never inside a function call */}
+      {showForm && canEdit && (
+        <div style={formStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <input placeholder="Country / region name *" value={form.region}
+              onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
+            <select value={form.presence_type}
+              onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
+              <option value="active">Active</option>
+              <option value="expanding">Expanding</option>
+              <option value="limited">Limited</option>
+              <option value="exited">Exited</option>
+            </select>
+          </div>
+          <input placeholder="Channels (e.g. Direct, Partner · BankID)"
+            value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))} style={inputStyle} />
+          <textarea placeholder="Notes (optional)" value={form.notes}
+            onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+              style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid #e2e8f0', borderRadius: 6, background: 'transparent', color: '#64748b', cursor: 'pointer' }}>Cancel</button>
+            <button onClick={() => addMutation.mutate(form)}
+              disabled={!form.region || addMutation.isPending}
+              style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: form.region ? 'pointer' : 'not-allowed', opacity: form.region ? 1 : 0.5 }}>
+              {addMutation.isPending ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
