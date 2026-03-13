@@ -5150,14 +5150,14 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       );
       const workspaceId = wsResult.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
-      const { region_name, iso_code, presence_type, channels, notes } = req.body;
-      if (!region_name) return res.status(400).json({ error: 'region_name is required' });
+      const { region, iso_code, presence_type, channels, notes } = req.body;
+      if (!region) return res.status(400).json({ error: 'region is required' });
       const allowedTypes = ['active', 'expanding', 'limited', 'exited'];
       const safeType = allowedTypes.includes(presence_type) ? presence_type : 'active';
       const result = await pool.query(
-        `INSERT INTO entity_geo_presence (workspace_id, entity_id, region_name, iso_code, presence_type, channels, notes)
+        `INSERT INTO entity_geo_presence (workspace_id, entity_id, region, iso_code, presence_type, channels, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [workspaceId, req.params.entityId, region_name, iso_code || null, safeType, channels || null, notes || null]
+        [workspaceId, req.params.entityId, region, iso_code || null, safeType, channels || null, notes || null]
       );
       res.json(result.rows[0]);
     } catch (error: any) {
@@ -5178,14 +5178,14 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       );
       const workspaceId = wsResult.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
-      const { region_name, iso_code, presence_type, channels, notes } = req.body;
-      if (!region_name) return res.status(400).json({ error: 'region_name is required' });
+      const { region, iso_code, presence_type, channels, notes } = req.body;
+      if (!region) return res.status(400).json({ error: 'region is required' });
       const allowedTypes = ['active', 'expanding', 'limited', 'exited'];
       const safeType = allowedTypes.includes(presence_type) ? presence_type : 'active';
       const result = await pool.query(
-        `UPDATE entity_geo_presence SET region_name=$1, iso_code=$2, presence_type=$3, channels=$4, notes=$5
+        `UPDATE entity_geo_presence SET region=$1, iso_code=$2, presence_type=$3, channels=$4, notes=$5
          WHERE id=$6 AND workspace_id=$7 AND entity_id=$8 RETURNING *`,
-        [region_name, iso_code || null, safeType, channels || null, notes || null, req.params.geoId, workspaceId, req.params.entityId]
+        [region, iso_code || null, safeType, channels || null, notes || null, req.params.geoId, workspaceId, req.params.entityId]
       );
       if (result.rowCount === 0) return res.status(404).json({ error: 'Geo presence entry not found' });
       res.json(result.rows[0]);
