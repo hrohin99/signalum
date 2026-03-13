@@ -601,6 +601,17 @@ function TopicViewContent({
         <div className="space-y-6">
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
           <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
+          <div className="space-y-4">
+            <BattlecardCollapsedHeader
+              entity={entity}
+              categoryName={categoryName}
+              expanded={battlecardExpanded}
+              onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
+            />
+            {battlecardExpanded && (
+              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+            )}
+          </div>
           <CompetitorCapabilitiesCard entityName={entity.name} />
         </div>
       )}
