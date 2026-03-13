@@ -1,0 +1,49 @@
+Two separate bugs. Here's the prompt:
+
+Prompt for Replit AI:
+Fix two bugs on the Briefings page weekly digest tab. Do not touch any other pages or routes.
+Bug 1 — Recipients not saving:
+In the Briefings page component, find the "Add recipient" functionality. Currently recipients are only stored in React state and never persisted. Fix this:
+
+Check if a digest_recipients column exists on the workspaces table by running at server startup:
+
+typescriptawait pool.query(`
+  ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS digest_recipients JSONB DEFAULT '[]'
+`);
+
+Add two routes in server/routes.ts:
+
+typescriptGET /api/workspace/digest-recipients
+// SELECT digest_recipients FROM workspaces WHERE user_id = $1
+// OR where parent_workspace_id matches (for shared workspace users)
+// Return the array, defaulting to []
+
+POST /api/workspace/digest-recipients
+// body: { recipients: Array<{ email: string, name: string }> }
+// UPDATE workspaces SET digest_recipients = $1 
+// WHERE id = (SELECT id FROM workspaces WHERE user_id = $2 
+//   OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $2) LIMIT 1)
+// Admin and sub_admin only
+
+In the Briefings page component:
+
+
+On mount, fetch recipients from GET /api/workspace/digest-recipients using useQuery and populate the recipients list from it — not just React state
+When a recipient is added or removed, immediately call POST /api/workspace/digest-recipients with the full updated recipients array
+Show a brief "Saved" toast or green confirmation after successful save
+If the POST fails, show an error and revert the change
+
+Bug 2 — Weekly digest toggle not saving:
+Find the "Enable weekly briefing" toggle. Check what field it maps to on the workspace (briefing_enabled or similar). Verify the toggle's onChange handler is actually calling the save API and not just updating local state. If it's not saving:
+
+On toggle change call PATCH /api/workspace/settings (or whatever endpoint already handles workspace settings) with { briefing_enabled: true/false }
+If that endpoint doesn't exist, add it:
+
+typescriptPATCH /api/workspace/settings
+// body: { briefing_enabled?: boolean }
+// UPDATE workspaces SET briefing_enabled = $1 WHERE user_id = $2
+// Admin and sub_admin only — return 403 for read_only
+
+On page load, read briefing_enabled from the workspace query and initialise the toggle from that value — not hardcoded false
+
+Do not touch any other files or routes. Run npm run build, confirm no errors, Republish.
