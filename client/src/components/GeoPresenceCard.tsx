@@ -172,32 +172,6 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] })
   });
 
-  const renderForm = (isEdit: boolean, itemId?: string) => (
-    <div style={formRowStyle}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <input data-testid="input-geo-region-name" placeholder="Country / region name *" value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
-        <select data-testid="select-geo-presence-type" value={form.presence_type} onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
-          <option value="active">Active</option>
-          <option value="expanding">Expanding</option>
-          <option value="limited">Limited</option>
-          <option value="exited">Exited</option>
-        </select>
-      </div>
-      <input data-testid="input-geo-channels" placeholder="Channels (e.g. Direct, Partners, Online)" value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))} style={inputStyle} />
-      <textarea data-testid="input-geo-notes" placeholder="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
-        style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button data-testid="button-cancel-geo" onClick={() => { if (isEdit) setEditingId(null); else setShowForm(false); setForm(EMPTY_FORM); }}
-          style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-        <button data-testid="button-save-geo" onClick={() => { if (isEdit && itemId) editMutation.mutate({ id: itemId, data: form }); else addMutation.mutate(form); }}
-          disabled={!form.region || (isEdit ? editMutation.isPending : addMutation.isPending)}
-          style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-          {(isEdit ? editMutation.isPending : addMutation.isPending) ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div data-testid="card-geo-presence" style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
@@ -213,7 +187,31 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
         )}
       </div>
 
-      {showForm && canEdit && renderForm(false)}
+      {showForm && canEdit && (
+        <div style={formRowStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <input data-testid="input-geo-region-name" placeholder="Country / region name *" value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
+            <select data-testid="select-geo-presence-type" value={form.presence_type} onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
+              <option value="active">Active</option>
+              <option value="expanding">Expanding</option>
+              <option value="limited">Limited</option>
+              <option value="exited">Exited</option>
+            </select>
+          </div>
+          <input data-testid="input-geo-channels" placeholder="Channels (e.g. Direct, Partners, Online)" value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))} style={inputStyle} />
+          <textarea data-testid="input-geo-notes" placeholder="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button data-testid="button-cancel-geo" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+              style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
+            <button data-testid="button-save-geo" onClick={() => addMutation.mutate(form)}
+              disabled={!form.region || addMutation.isPending}
+              style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+              {addMutation.isPending ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ borderTop: '0.5px solid var(--color-border-tertiary, #e2e8f0)' }}>
         {isLoading && <div style={{ padding: '16px 18px', fontSize: 13, color: 'var(--color-text-tertiary, #94a3b8)' }}>Loading...</div>}
@@ -221,7 +219,31 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
           <div data-testid="text-geo-empty" style={{ padding: '20px 18px', textAlign: 'center', fontSize: 13, color: 'var(--color-text-tertiary, #94a3b8)' }}>No geographic data logged yet.</div>
         )}
         {editingId && geoPresence.filter(g => g.id === editingId).map(g => (
-          <div key={g.id}>{renderForm(true, g.id)}</div>
+          <div key={g.id}>
+            <div style={formRowStyle}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <input data-testid="input-geo-region-name" placeholder="Country / region name *" value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
+                <select data-testid="select-geo-presence-type" value={form.presence_type} onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
+                  <option value="active">Active</option>
+                  <option value="expanding">Expanding</option>
+                  <option value="limited">Limited</option>
+                  <option value="exited">Exited</option>
+                </select>
+              </div>
+              <input data-testid="input-geo-channels" placeholder="Channels (e.g. Direct, Partners, Online)" value={form.channels} onChange={e => setForm(f => ({ ...f, channels: e.target.value }))} style={inputStyle} />
+              <textarea data-testid="input-geo-notes" placeholder="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+                style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button data-testid="button-cancel-geo" onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }}
+                  style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
+                <button data-testid="button-save-geo" onClick={() => editMutation.mutate({ id: g.id, data: form })}
+                  disabled={!form.region || editMutation.isPending}
+                  style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                  {editMutation.isPending ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
         ))}
         {geoPresence.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 0 }}>
