@@ -284,8 +284,7 @@ function TopicViewContent({
   const { data: products = [] } = useQuery<any[]>({
     queryKey: [`/api/entities/${entityId}/products`],
     queryFn: async () => {
-      const res = await fetch(`/api/entities/${entityId}/products`);
-      if (!res.ok) return [];
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/products`);
       return res.json();
     },
     enabled: !!entityId,
