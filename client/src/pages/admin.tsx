@@ -109,12 +109,18 @@ function UsersSection({ users, currentEmail }: { users: AdminUser[]; currentEmai
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const [lastTempPassword, setLastTempPassword] = useState<string | null>(null);
+  const [lastInvitedEmail, setLastInvitedEmail] = useState<string | null>(null);
+
   const inviteMutation = useMutation({
     mutationFn: async (data: { email: string; role: string }) => {
-      await apiRequest("POST", "/api/admin/invite-user", data);
+      const res = await apiRequest("POST", "/api/admin/invite-user", data);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       setShowInvite(false);
+      setLastTempPassword(data.tempPassword || null);
+      setLastInvitedEmail(data.email || null);
       setInviteEmail("");
       setInviteRole("read_only");
       queryClient.invalidateQueries({ queryKey: ["/api/admin/stats"] });
@@ -224,6 +230,36 @@ function UsersSection({ users, currentEmail }: { users: AdminUser[]; currentEmai
               style={{ background: "#534AB7", color: "#fff", fontSize: "13px", padding: "6px 14px", borderRadius: "8px", border: "none", cursor: "pointer", fontWeight: 500, opacity: inviteMutation.isPending ? 0.6 : 1 }}
             >
               {inviteMutation.isPending ? "Sending..." : "Send invite"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {lastTempPassword && lastInvitedEmail && (
+        <div
+          data-testid="card-temp-password"
+          style={{ background: "#f0fdf4", border: "0.5px solid #86efac", borderRadius: "12px", padding: "16px", marginBottom: "20px" }}
+        >
+          <p className="text-[13px] font-medium text-[#166534] mb-1">Invite sent to {lastInvitedEmail}</p>
+          <p className="text-[12px] text-[#555] mb-2">Temporary password (share with the user):</p>
+          <div className="flex items-center gap-2">
+            <code
+              data-testid="text-temp-password"
+              style={{ background: "#dcfce7", padding: "6px 10px", borderRadius: "6px", fontSize: "14px", fontFamily: "monospace", letterSpacing: "0.05em", color: "#166534" }}
+            >
+              {lastTempPassword}
+            </code>
+            <button
+              onClick={() => { navigator.clipboard.writeText(lastTempPassword); toast({ title: "Copied to clipboard" }); }}
+              style={{ fontSize: "12px", padding: "4px 10px", borderRadius: "6px", border: "0.5px solid #86efac", background: "#fff", cursor: "pointer", color: "#166534" }}
+            >
+              Copy
+            </button>
+            <button
+              onClick={() => { setLastTempPassword(null); setLastInvitedEmail(null); }}
+              style={{ fontSize: "12px", padding: "4px 10px", borderRadius: "6px", border: "0.5px solid #d1d5db", background: "#fff", cursor: "pointer", color: "#555" }}
+            >
+              Dismiss
             </button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { db } from "./storage";
+import { db, pool } from "./storage";
 import { sql } from "drizzle-orm";
 
 export async function ensureDatabaseSchema(): Promise<void> {
@@ -149,6 +149,15 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.log("[DBSafety] captures AI columns verified.");
   } catch (error: any) {
     console.error("[DBSafety] Error ensuring workspace profile columns:", error?.message || error);
+  }
+
+  try {
+    await pool.query(`
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS parent_workspace_id UUID;
+    `);
+    console.log("[DBSafety] parent_workspace_id column verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring parent_workspace_id column:", error?.message || error);
   }
 
   console.log("[DBSafety] All database schema safety checks complete.");

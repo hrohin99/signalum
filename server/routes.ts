@@ -18,6 +18,11 @@ import { buildProfileContext } from "./profileContext";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+function generateTempPassword(): string {
+  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+}
+
 const parseWorkspaceArray = (val: any): string[] => {
   if (Array.isArray(val)) return val.filter(Boolean);
   if (typeof val === "string") return val.replace(/^\{|\}$/g, "").split(",").map(s => s.replace(/^"|"$/g, "").trim()).filter(Boolean);
@@ -2565,6 +2570,25 @@ Rules:
     }
   });
 
+  app.get("/api/profile", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const wsResult = await pool.query(
+        `SELECT parent_workspace_id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const role = profileResult.rows[0]?.role || null;
+      const parentWorkspaceId = wsResult.rows[0]?.parent_workspace_id || null;
+      return res.json({ role, parentWorkspaceId });
+    } catch (error: any) {
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/briefs/generate", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
@@ -3067,11 +3091,17 @@ Rules:
   app.get("/api/workspace/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      let result = await pool.query("SELECT *, capture_token FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      let result = await pool.query(
+        `SELECT * FROM workspaces
+         WHERE user_id = $1
+         OR id = (SELECT parent_workspace_id::varchar FROM workspaces WHERE user_id = $1)
+         LIMIT 1`,
+        [userId]
+      );
       if (result.rows[0] && !result.rows[0].capture_token) {
         const { randomBytes } = await import('crypto');
         const newToken = randomBytes(6).toString('hex');
-        await pool.query("UPDATE workspaces SET capture_token = $1 WHERE user_id = $2", [newToken, userId]);
+        await pool.query("UPDATE workspaces SET capture_token = $1 WHERE id = $2", [newToken, result.rows[0].id]);
         result.rows[0].capture_token = newToken;
       }
       if (result.rows.length === 0) {
@@ -3339,7 +3369,10 @@ Rules:
   app.get("/api/product-context", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const wsResult = await pool.query("SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id::varchar FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        [userId]
+      );
       const tenantId = wsResult.rows[0]?.id;
       if (!tenantId) return res.json({ productContext: null });
       const result = await pool.query("SELECT * FROM product_context WHERE tenant_id = $1 LIMIT 1", [tenantId]);
@@ -3362,7 +3395,10 @@ Rules:
   app.put("/api/product-context", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const wsResult = await pool.query("SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id::varchar FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        [userId]
+      );
       const tenantId = wsResult.rows[0]?.id;
       const { productName, description, targetCustomer, strengths, weaknesses } = req.body;
       console.log('[product-context POST] saving:', JSON.stringify(req.body));
@@ -4106,6 +4142,7 @@ Return only the bullet points, no JSON, no headers.`
 
   app.post("/api/admin/invite-user", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
+      const adminUserId = (req as any).userId;
       const { email, role } = req.body;
       if (!email || !role) {
         return res.status(400).json({ message: "Email and role are required" });
@@ -4115,7 +4152,16 @@ Return only the bullet points, no JSON, no headers.`
         return res.status(400).json({ message: "Invalid role" });
       }
 
-      const tempPassword = randomUUID().slice(0, 16);
+      const adminWsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [adminUserId]
+      );
+      const adminWorkspaceId = adminWsResult.rows[0]?.id;
+      if (!adminWorkspaceId) {
+        return res.status(400).json({ message: "Admin workspace not found" });
+      }
+
+      const tempPassword = generateTempPassword();
       const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
         email,
         password: tempPassword,
@@ -4125,24 +4171,34 @@ Return only the bullet points, no JSON, no headers.`
 
       if (newUser?.user) {
         await pool.query(
-          `INSERT INTO user_profiles (user_id, role) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET role = $2`,
+          `INSERT INTO user_profiles (user_id, role, workspace_ready, historical_seeding_completed)
+           VALUES ($1, $2, 1, 1)
+           ON CONFLICT (user_id) DO UPDATE SET role = $2, workspace_ready = 1, historical_seeding_completed = 1`,
           [newUser.user.id, role]
+        );
+
+        const newWorkspaceId = randomUUID();
+        await pool.query(
+          `INSERT INTO workspaces (id, user_id, categories, onboarding_completed, parent_workspace_id)
+           VALUES ($1, $2, $3, true, $4)
+           ON CONFLICT (user_id) DO UPDATE SET parent_workspace_id = $4, onboarding_completed = true`,
+          [newWorkspaceId, newUser.user.id, JSON.stringify([]), adminWorkspaceId]
         );
       }
 
       const fromAddress = process.env.EMAIL_FROM || "noreply@example.com";
       const { Resend } = await import("resend");
       const resendClient = new Resend(process.env.RESEND_API_KEY);
-      const appUrl = getAppUrl();
+      const loginUrl = "https://watchloom.rohin.co/signin";
       await resendClient.emails.send({
         from: fromAddress,
         to: email,
-        subject: "You've been invited to Signalum",
-        html: `<p>You've been invited to join Signalum as a <strong>${role.replace("_", " ")}</strong>.</p><p>Sign in at <a href="${appUrl}/signin">${appUrl}/signin</a> with this temporary password: <strong>${tempPassword}</strong></p><p>Please change your password after first login.</p>`,
-        text: `You've been invited to join Signalum as a ${role.replace("_", " ")}. Sign in at ${appUrl}/signin with temporary password: ${tempPassword}`,
+        subject: "You've been invited to Watchloom",
+        html: `<p>You've been invited to join Watchloom as a <strong>${role.replace("_", " ")}</strong>.</p><p>Sign in at <a href="${loginUrl}">${loginUrl}</a> with:<br/><strong>Email:</strong> ${email}<br/><strong>Temporary password:</strong> <code>${tempPassword}</code></p><p>Please change your password after first login.</p>`,
+        text: `You've been invited to join Watchloom as a ${role.replace("_", " ")}. Sign in at ${loginUrl} with email: ${email} and temporary password: ${tempPassword}`,
       });
 
-      return res.json({ success: true, message: "Invite sent" });
+      return res.json({ success: true, email, tempPassword });
     } catch (error: any) {
       console.error("Invite user error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });

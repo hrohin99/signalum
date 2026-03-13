@@ -1,5 +1,6 @@
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/lib/auth-context";
+import { useRole } from "@/App";
 import {
   Sidebar,
   SidebarContent,
@@ -26,7 +27,7 @@ import {
 
 const navItems = [
   { title: "My Workspace", url: "/", icon: Network },
-  { title: "Capture", url: "/capture", icon: PenLine },
+  { title: "Capture", url: "/capture", icon: PenLine, requiresWrite: true },
   { title: "Live Feed", url: "/inbox", icon: Inbox },
   { title: "Briefings", url: "/briefings", icon: Newspaper },
   { title: "Settings", url: "/settings", icon: Settings },
@@ -35,6 +36,13 @@ const navItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const { user, signOut } = useAuth();
+  const { role } = useRole();
+
+  const isReadOnly = role === "read_only";
+  const isSubAdmin = role === "sub_admin";
+  const isAdmin = !role || role === "admin";
+
+  const showAdminNav = isAdmin && user?.email === "hrohin99@gmail.com";
 
   return (
     <Sidebar>
@@ -51,7 +59,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.map((item) => (
+              {navItems.filter(item => !(item.requiresWrite && isReadOnly)).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
@@ -65,7 +73,7 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
-              {user?.email === "hrohin99@gmail.com" && (
+              {showAdminNav && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
@@ -90,6 +98,11 @@ export function AppSidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{user?.email || "User"}</p>
+            {isReadOnly && (
+              <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded font-medium">
+                Read only
+              </span>
+            )}
           </div>
           <Button
             size="icon"

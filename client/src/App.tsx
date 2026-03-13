@@ -17,6 +17,16 @@ import CompetitorWebsiteModal from "@/components/CompetitorWebsiteModal";
 
 export const WorkspaceContext = createContext<{ captureToken: string | null }>({ captureToken: null });
 
+export type UserRole = "admin" | "sub_admin" | "read_only" | null;
+export const RoleContext = createContext<{ role: UserRole; parentWorkspaceId: string | null }>({
+  role: null,
+  parentWorkspaceId: null,
+});
+
+export function useRole() {
+  return useContext(RoleContext);
+}
+
 function AppContent() {
   const { user, session, loading } = useAuth();
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState<boolean | null>(null);
@@ -24,6 +34,8 @@ function AppContent() {
   const [autoOnboarding, setAutoOnboarding] = useState(false);
   const [pendingCompetitorUrls, setPendingCompetitorUrls] = useState<string[] | null>(null);
   const [location, setLocation] = useLocation();
+  const [role, setRole] = useState<UserRole>(null);
+  const [parentWorkspaceId, setParentWorkspaceId] = useState<string | null>(null);
   const initialLoadComplete = useRef(false);
   const checkedUserId = useRef<string | null>(null);
   const onboardingInProgress = useRef(false);
@@ -55,6 +67,8 @@ function AppContent() {
       onboardingInProgress.current = false;
       initialLoadComplete.current = false;
       setHasCompletedOnboarding(null);
+      setRole(null);
+      setParentWorkspaceId(null);
       return;
     }
 
@@ -85,6 +99,31 @@ function AppContent() {
         } catch {
           profileRes = null;
           profileData = null;
+        }
+
+        try {
+          const userProfileRes = await fetch("/api/profile", {
+            credentials: "include",
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          });
+          if (userProfileRes.ok) {
+            const userProfileData = await userProfileRes.json();
+            setRole(userProfileData.role || null);
+            setParentWorkspaceId(userProfileData.parentWorkspaceId || null);
+            if (userProfileData.parentWorkspaceId) {
+              checkedUserId.current = user.id;
+              onboardingInProgress.current = false;
+              if (profileData?.capture_token) {
+                localStorage.setItem("ws_capture_token", profileData.capture_token);
+              }
+              setHasCompletedOnboarding(true);
+              localStorage.removeItem("pendingOnboarding");
+              setCheckingOnboarding(false);
+              initialLoadComplete.current = true;
+              return;
+            }
+          }
+        } catch {
         }
 
         if (!profileRes || !profileRes.ok || !profileData) {
@@ -366,26 +405,28 @@ function AppContent() {
   }
 
   return (
-    <Switch>
-      <Route path="/onboarding">
-        <OnboardingPage
-          onComplete={() => {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get("edit") === "true") {
-              setLocation("/settings");
-            } else {
-              queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
-              checkedUserId.current = null;
-              setHasCompletedOnboarding(null);
-              setLocation("/");
-            }
-          }}
-        />
-      </Route>
-      <Route>
-        <Dashboard />
-      </Route>
-    </Switch>
+    <RoleContext.Provider value={{ role, parentWorkspaceId }}>
+      <Switch>
+        <Route path="/onboarding">
+          <OnboardingPage
+            onComplete={() => {
+              const params = new URLSearchParams(window.location.search);
+              if (params.get("edit") === "true") {
+                setLocation("/settings");
+              } else {
+                queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
+                checkedUserId.current = null;
+                setHasCompletedOnboarding(null);
+                setLocation("/");
+              }
+            }}
+          />
+        </Route>
+        <Route>
+          <Dashboard />
+        </Route>
+      </Switch>
+    </RoleContext.Provider>
   );
 }
 

@@ -110,11 +110,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWorkspaceByUserId(userId: string): Promise<Workspace | undefined> {
-    const [workspace] = await db
-      .select()
-      .from(workspaces)
-      .where(eq(workspaces.userId, userId));
-    return workspace;
+    const result = await pool.query(
+      `SELECT * FROM workspaces
+       WHERE user_id = $1
+       OR id = (SELECT parent_workspace_id::varchar FROM workspaces WHERE user_id = $1)
+       LIMIT 1`,
+      [userId]
+    );
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      userId: row.user_id,
+      categories: row.categories,
+      websiteUrl: row.website_url,
+      pendingSeedUrls: row.pending_seed_urls,
+      captureToken: row.capture_token,
+      onboardingCompleted: row.onboarding_completed,
+      createdAt: row.created_at,
+    } as Workspace;
   }
 
   async getWorkspaceByCaptureToken(token: string): Promise<Workspace | null> {
@@ -132,12 +146,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined> {
-    const [updated] = await db
-      .update(workspaces)
-      .set({ categories })
-      .where(eq(workspaces.userId, userId))
-      .returning();
-    return updated;
+    const effective = await this.getWorkspaceByUserId(userId);
+    if (!effective) return undefined;
+    const result = await pool.query(
+      `UPDATE workspaces SET categories = $1 WHERE id = $2 RETURNING *`,
+      [JSON.stringify(categories), effective.id]
+    );
+    if (!result.rows[0]) return undefined;
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      userId: row.user_id,
+      categories: row.categories,
+      websiteUrl: row.website_url,
+      pendingSeedUrls: row.pending_seed_urls,
+      captureToken: row.capture_token,
+      onboardingCompleted: row.onboarding_completed,
+      createdAt: row.created_at,
+    } as Workspace;
   }
 
   async createCapture(capture: InsertCapture): Promise<Capture> {
