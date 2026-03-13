@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -29,6 +29,8 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const formRef = React.useRef(form);
+  React.useEffect(() => { formRef.current = form; }, [form]);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
@@ -99,7 +101,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button data-testid="button-cancel-product" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
               style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-            <button data-testid="button-save-product" onClick={() => addMutation.mutate(form)} disabled={!form.product_name || addMutation.isPending}
+            <button data-testid="button-save-product" onClick={() => addMutation.mutate(formRef.current)} disabled={!formRef.current.product_name || addMutation.isPending}
               style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
               {addMutation.isPending ? 'Saving...' : 'Save'}
             </button>
@@ -134,7 +136,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button data-testid="button-cancel-product" onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }}
                       style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-                    <button data-testid="button-save-product" onClick={() => editMutation.mutate({ id: p.id, data: form })} disabled={!form.product_name || editMutation.isPending}
+                    <button data-testid="button-save-product" onClick={() => editMutation.mutate({ id: p.id, data: formRef.current })} disabled={!formRef.current.product_name || editMutation.isPending}
                       style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
                       {editMutation.isPending ? 'Saving...' : 'Save'}
                     </button>
