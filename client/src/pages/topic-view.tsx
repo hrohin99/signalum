@@ -75,7 +75,7 @@ import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext, EntitySeoData } from "@shared/schema";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { PartnershipsCard } from "@/components/PartnershipsCard";
-import { SoWhatIntelCard } from "@/components/SoWhatIntelCard";
+import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
 import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { CoachMarks } from "@/components/coach-marks";
@@ -601,20 +601,6 @@ function TopicViewContent({
         <div className="space-y-6">
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
           <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <PricingCard entity={entity} />
-              <BattlecardCollapsedHeader
-                entity={entity}
-                categoryName={categoryName}
-                expanded={battlecardExpanded}
-                onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
-              />
-            </div>
-            {battlecardExpanded && (
-              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
-            )}
-          </div>
           <CompetitorCapabilitiesCard entityName={entity.name} />
         </div>
       )}
@@ -650,7 +636,6 @@ function TopicViewContent({
 
       {isCompetitor && activeTab === 'strategic' && (
         <div className="space-y-6">
-          <StrategicDirectionCard entity={entity} categoryName={categoryName} captures={captures} />
           <PartnershipsCard entityId={entity.name} userRole={userRole} />
         </div>
       )}

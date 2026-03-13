@@ -1,5 +1,14 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+
+interface Certification {
+  id: string;
+  cert_name: string;
+  cert_description: string | null;
+  status: string;
+  renewal_date: string | null;
+}
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   active:   { bg: '#EAF3DE', color: '#27500A', label: 'Active' },
@@ -14,20 +23,17 @@ export function CertificationsCard({ entityId, userRole, previewMode = false }: 
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
   const queryClient = useQueryClient();
 
-  const { data: certs = [] } = useQuery<any[]>({
+  const { data: certs = [] } = useQuery<Certification[]>({
     queryKey: ['/api/entities', entityId, 'certifications'],
     queryFn: async () => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/certifications`);
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/certifications`);
       return res.json();
     }
   });
 
   const addMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/certifications`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-      });
-      if (!res.ok) throw new Error('Failed to add certification');
+      const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/certifications`, data);
       return res.json();
     },
     onSuccess: () => {
@@ -39,8 +45,7 @@ export function CertificationsCard({ entityId, userRole, previewMode = false }: 
 
   const deleteMutation = useMutation({
     mutationFn: async (certId: string) => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/certifications/${certId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete certification');
+      await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/certifications/${certId}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'certifications'] })
   });
@@ -62,7 +67,7 @@ export function CertificationsCard({ entityId, userRole, previewMode = false }: 
         {displayCerts.length === 0 && !showForm && (
           <div style={{ padding: '20px 18px', textAlign: 'center', fontSize: 13, color: 'var(--color-text-tertiary, #94a3b8)' }} data-testid="text-certifications-empty">No certifications logged yet.</div>
         )}
-        {displayCerts.map((cert: any) => {
+        {displayCerts.map((cert) => {
           const style = STATUS_STYLES[cert.status] || STATUS_STYLES.active;
           return (
             <div key={cert.id} style={{ padding: '11px 18px', borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }} data-testid={`item-certification-${cert.id}`}>

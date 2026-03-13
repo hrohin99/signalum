@@ -1,5 +1,15 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+
+interface Capability {
+  id: string;
+  capability_name: string;
+  capability_description: string | null;
+  competitor_has: boolean;
+  us_has: boolean;
+  assessment: string;
+}
 
 const ASSESSMENT_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   advantage:  { bg: '#EAF3DE', color: '#27500A', label: 'Advantage' },
@@ -14,20 +24,17 @@ export function CapabilityMatrixCard({ entityId, userRole, previewMode = false }
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
   const queryClient = useQueryClient();
 
-  const { data: capabilities = [] } = useQuery<any[]>({
+  const { data: capabilities = [] } = useQuery<Capability[]>({
     queryKey: ['/api/entities', entityId, 'capabilities'],
     queryFn: async () => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/capabilities`);
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/capabilities`);
       return res.json();
     }
   });
 
   const addMutation = useMutation({
     mutationFn: async (data: typeof form) => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/capabilities`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-      });
-      if (!res.ok) throw new Error('Failed to add capability');
+      const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/capabilities`, data);
       return res.json();
     },
     onSuccess: () => {
@@ -39,8 +46,7 @@ export function CapabilityMatrixCard({ entityId, userRole, previewMode = false }
 
   const deleteMutation = useMutation({
     mutationFn: async (capId: string) => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/capabilities/${capId}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete capability');
+      await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/capabilities/${capId}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'capabilities'] })
   });
@@ -71,7 +77,7 @@ export function CapabilityMatrixCard({ entityId, userRole, previewMode = false }
             {displayCaps.length === 0 && (
               <tr><td colSpan={4} style={{ padding: '20px 14px', textAlign: 'center', fontSize: 13, color: 'var(--color-text-tertiary, #94a3b8)' }} data-testid="text-capabilities-empty">No capabilities added yet.</td></tr>
             )}
-            {displayCaps.map((cap: any) => {
+            {displayCaps.map((cap) => {
               const style = ASSESSMENT_STYLES[cap.assessment] || ASSESSMENT_STYLES.parity;
               return (
                 <tr key={cap.id} data-testid={`row-capability-${cap.id}`}>

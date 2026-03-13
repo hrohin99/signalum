@@ -1,30 +1,30 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
-export function SoWhatIntelCard({ entityId, userRole }: { entityId: string; userRole: string }) {
+interface IntelData {
+  content: string;
+  is_custom: boolean;
+}
+
+export function SoWhatCard({ entityId, userRole }: { entityId: string; userRole: string }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [regenerating, setRegenerating] = useState(false);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
   const queryClient = useQueryClient();
 
-  const { data: intel, isLoading } = useQuery({
+  const { data: intel, isLoading } = useQuery<IntelData>({
     queryKey: ['/api/entities', entityId, 'intelligence', 'so_what'],
     queryFn: async () => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/intelligence/so_what`);
-      if (!res.ok) throw new Error('Failed to fetch');
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/intelligence/so_what`);
       return res.json();
     }
   });
 
   const saveMutation = useMutation({
     mutationFn: async (content: string) => {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/intelligence/so_what`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content })
-      });
-      if (!res.ok) throw new Error('Failed to save');
+      const res = await apiRequest("PUT", `/api/entities/${encodeURIComponent(entityId)}/intelligence/so_what`, { content });
       return res.json();
     },
     onSuccess: () => {
@@ -39,8 +39,7 @@ export function SoWhatIntelCard({ entityId, userRole }: { entityId: string; user
     }
     setRegenerating(true);
     try {
-      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/intelligence/so_what/regenerate`, { method: 'POST' });
-      if (!res.ok) throw new Error('Failed to regenerate');
+      await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/intelligence/so_what/regenerate`);
       queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'intelligence', 'so_what'] });
     } finally {
       setRegenerating(false);

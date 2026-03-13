@@ -5044,7 +5044,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role || 'read_only';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5072,7 +5072,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role || 'read_only';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5098,7 +5098,8 @@ Return ONLY a JSON array of 3 strings. No explanation.`
           content: `You are a competitive intelligence analyst. Based on recent signals about "${entityName}", write a concise "So what" paragraph (3-4 sentences max) that explains what this competitor's recent moves mean strategically for us. Be direct and actionable. No bullet points.\n\nRecent signals:\n${capturesSummary || 'No recent captures available.'}\n\nReturn only the paragraph text, no preamble.`
         }]
       });
-      const generatedContent = (response.content[0] as any).text;
+      const firstBlock = response.content[0];
+      const generatedContent = firstBlock.type === 'text' ? firstBlock.text : '';
       const result = await pool.query(
         `INSERT INTO entity_intelligence (workspace_id, entity_id, field, content, is_custom, last_generated_at)
          VALUES ($1, $2, $3, $4, false, NOW())
@@ -5138,7 +5139,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role || 'read_only';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5163,7 +5164,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role || 'read_only';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5188,7 +5189,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role || 'read_only';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5228,7 +5229,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role || 'read_only';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5253,7 +5254,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role || 'read_only';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
