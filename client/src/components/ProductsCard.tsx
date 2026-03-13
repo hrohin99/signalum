@@ -1,5 +1,18 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+
+interface Product {
+  id: string;
+  workspace_id: string;
+  entity_id: string;
+  product_name: string;
+  description: string | null;
+  status: string;
+  tags: string | null;
+  sort_order: number;
+  created_at: string;
+}
 
 const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
   ga:         { bg: '#EAF3DE', color: '#27500A', label: 'GA' },
@@ -14,23 +27,18 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
-  const queryClient = useQueryClient();
 
-  const { data: products = [], isLoading } = useQuery<any[]>({
+  const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['/api/entities', entityId, 'products'],
     queryFn: async () => {
-      const res = await fetch(`/api/entities/${entityId}/products`);
-      if (!res.ok) throw new Error('Failed');
+      const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/products`);
       return res.json();
     }
   });
 
   const addMutation = useMutation({
     mutationFn: async (data: typeof EMPTY_FORM) => {
-      const res = await fetch(`/api/entities/${entityId}/products`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-      });
-      if (!res.ok) throw new Error('Failed to add product');
+      const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/products`, data);
       return res.json();
     },
     onSuccess: () => {
@@ -42,10 +50,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
 
   const editMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof EMPTY_FORM }) => {
-      const res = await fetch(`/api/entities/${entityId}/products/${id}`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
-      });
-      if (!res.ok) throw new Error('Failed to update product');
+      const res = await apiRequest("PUT", `/api/entities/${encodeURIComponent(entityId)}/products/${encodeURIComponent(id)}`, data);
       return res.json();
     },
     onSuccess: () => {
@@ -57,8 +62,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`/api/entities/${entityId}/products/${id}`, { method: 'DELETE' });
-      if (!res.ok) throw new Error('Failed to delete product');
+      await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/products/${encodeURIComponent(id)}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'products'] })
   });
@@ -115,7 +119,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
         {!isLoading && products.length === 0 && !showForm && (
           <div data-testid="text-products-empty" style={{ padding: '20px 18px', textAlign: 'center', fontSize: 13, color: 'var(--color-text-tertiary)' }}>No products logged yet.</div>
         )}
-        {products.map((p: any) => {
+        {products.map((p) => {
           const s = STATUS_STYLES[p.status] || STATUS_STYLES.ga;
           const isEditing = editingId === p.id;
           const tagList = p.tags ? p.tags.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
