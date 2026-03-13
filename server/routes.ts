@@ -3355,9 +3355,12 @@ Rules:
   app.post("/api/workspace/digest-recipients", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1::varchar`, [userId]);
-      const role = profileResult.rows[0]?.role;
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1::varchar`,
+        [userId]
+      );
+      const role = profileResult.rows[0]?.role ?? "admin";
+      if (role === "read_only") {
         return res.status(403).json({ error: "Forbidden" });
       }
       const { recipients } = req.body;
@@ -3394,8 +3397,11 @@ Rules:
   app.patch("/api/workspace/settings", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1::varchar`, [userId]);
-      const role = profileResult.rows[0]?.role;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1::varchar`,
+        [userId]
+      );
+      const role = profileResult.rows[0]?.role ?? "admin";
       if (role === "read_only") {
         return res.status(403).json({ error: "Forbidden" });
       }
