@@ -671,7 +671,7 @@ function TopicViewContent({
               {geoPresence.length === 0
                 ? <div style={{ fontSize: 13, color: '#94a3b8' }}>No geographic data logged yet.</div>
                 : geoPresence.slice(0, 3).map((g: any) => {
-                    const flag = getRegionFlag(g.region_name);
+                    const flag = getRegionFlag(g.region);
                     const presenceStyles: Record<string, { bg: string; color: string; label: string }> = {
                       active: { bg: '#EAF3DE', color: '#27500A', label: 'Active' },
                       expanding: { bg: '#E0EDFF', color: '#1A3F6F', label: 'Expanding' },
@@ -682,7 +682,7 @@ function TopicViewContent({
                     return (
                       <div key={g.id} style={{ padding: '6px 0', borderBottom: '0.5px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{ fontSize: 14 }}>{flag}</span>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{g.region_name}</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{g.region}</span>
                         <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, fontWeight: 500, background: s.bg, color: s.color }}>{s.label}</span>
                       </div>
                     );
