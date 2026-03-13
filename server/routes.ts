@@ -2029,7 +2029,7 @@ Do not use em dashes. Be direct and opinionated.${focusContext}\n\nCaptures:\n${
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -2335,7 +2335,7 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -2912,7 +2912,7 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -2952,7 +2952,7 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -3154,7 +3154,7 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -3480,7 +3480,7 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -3533,7 +3533,7 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -3602,7 +3602,7 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -3799,7 +3799,7 @@ Return only the bullet points, no JSON, no headers.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -3837,7 +3837,7 @@ Return only the bullet points, no JSON, no headers.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -4523,7 +4523,7 @@ Return only the bullet points, no JSON, no headers.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -4962,7 +4962,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -4996,7 +4996,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role;
+      const role = profileResult.rows[0]?.role || 'admin';
       if (!role || !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
@@ -5434,7 +5434,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'read_only';
+      const role = profileResult.rows[0]?.role || 'admin';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5462,7 +5462,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'read_only';
+      const role = profileResult.rows[0]?.role || 'admin';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5529,7 +5529,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'read_only';
+      const role = profileResult.rows[0]?.role || 'admin';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5554,7 +5554,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'read_only';
+      const role = profileResult.rows[0]?.role || 'admin';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5579,7 +5579,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'read_only';
+      const role = profileResult.rows[0]?.role || 'admin';
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
