@@ -624,6 +624,18 @@ function TopicViewContent({
             )}
           </div>
           <CompetitorCapabilitiesCard entityName={entity.name} />
+
+          {/* Products & Solutions */}
+          <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>Products & solutions</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Product and solution data coming soon.</div>
+          </div>
+
+          {/* Geographic Presence */}
+          <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+            <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary)', marginBottom: 4 }}>Geographic presence</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-tertiary)' }}>Geographic presence data coming soon.</div>
+          </div>
         </div>
       )}
 
