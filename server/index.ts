@@ -158,7 +158,7 @@ app.use((req, res, next) => {
             return;
           }
 
-          const { storage } = await import("./storage");
+          const { storage, pool } = await import("./storage");
           const { generateWeeklyDigest } = await import("./weeklyDigest");
           const { sendWeeklyDigestEmail } = await import("./email");
           const { createClient } = await import("@supabase/supabase-js");
@@ -185,11 +185,24 @@ app.use((req, res, next) => {
                 continue;
               }
 
-              const emailResult = await sendWeeklyDigestEmail(authUser.user.email, digest.content);
-              if (emailResult.success) {
-                log(`Weekly digest sent to ${authUser.user.email}`, "cron");
-              } else {
-                log(`Failed to email digest to ${authUser.user.email}: ${emailResult.error}`, "cron");
+              const wsResult = await pool.query(
+                `SELECT digest_recipients FROM workspaces WHERE user_id = $1 LIMIT 1`,
+                [user.userId]
+              );
+              const digestRecipients = (wsResult.rows[0]?.digest_recipients || []) as any[];
+              const extraEmails = digestRecipients
+                .map((r: any) => (typeof r === "string" ? r : r.email))
+                .filter(Boolean) as string[];
+
+              const allRecipients = [...new Set([authUser.user.email, ...extraEmails].filter(Boolean))];
+
+              for (const recipientEmail of allRecipients) {
+                const emailResult = await sendWeeklyDigestEmail(recipientEmail, digest.content);
+                if (emailResult.success) {
+                  log(`Weekly digest sent to ${recipientEmail}`, "cron");
+                } else {
+                  log(`Failed to email digest to ${recipientEmail}: ${emailResult.error}`, "cron");
+                }
               }
             } catch (userError) {
               console.error(`[cron] Weekly digest failed for user ${user.userId}:`, userError);
