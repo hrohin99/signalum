@@ -611,7 +611,12 @@ function TopicViewContent({
               {products.length === 0
                 ? <div style={{ fontSize: 13, color: '#94a3b8' }}>No products logged yet.</div>
                 : products.slice(0, 3).map((p: any) => (
-                    <div key={p.id} style={{ fontSize: 13, color: '#1e293b', padding: '3px 0', borderBottom: '0.5px solid #f1f5f9' }}>{p.product_name}</div>
+                    <div key={p.id} style={{ padding: '6px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{p.product_name}</div>
+                      {p.description && (
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, whiteSpace: 'pre-wrap' }}>{p.description}</div>
+                      )}
+                    </div>
                   ))
               }
             </div>

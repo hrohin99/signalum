@@ -32,7 +32,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
-    queryKey: ['/api/entities', entityId, 'products'],
+    queryKey: [`/api/entities/${entityId}/products`],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/products`);
       return res.json();
@@ -45,7 +45,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'products'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/products`] });
       setShowForm(false);
       setForm(EMPTY_FORM);
     }
@@ -57,7 +57,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'products'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/products`] });
       setEditingId(null);
       setForm(EMPTY_FORM);
     }
@@ -67,7 +67,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/products/${encodeURIComponent(id)}`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'products'] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/products`] })
   });
 
   return (
@@ -158,7 +158,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
                       </div>
                     )}
                   </div>
-                  {p.description && <div data-testid={`text-product-description-${p.id}`} style={{ fontSize: 13, color: 'var(--color-text-secondary, #64748b)', lineHeight: 1.6 }}>{p.description}</div>}
+                  {p.description && <div data-testid={`text-product-description-${p.id}`} style={{ fontSize: 13, color: 'var(--color-text-secondary, #64748b)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{p.description}</div>}
                   {tagList.length > 0 && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                       {tagList.map((tag: string) => (
