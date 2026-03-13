@@ -3333,8 +3333,14 @@ Rules:
     try {
       const userId = (req as any).userId;
       const result = await pool.query(
-        `SELECT digest_recipients FROM workspaces WHERE user_id = $1::varchar
-         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1::varchar LIMIT 1)
+        `SELECT digest_recipients FROM workspaces 
+         WHERE user_id = $1
+         OR id::text = (
+           SELECT parent_workspace_id::text 
+           FROM workspaces 
+           WHERE user_id = $1
+           LIMIT 1
+         )
          LIMIT 1`,
         [userId]
       );
@@ -3359,8 +3365,14 @@ Rules:
         return res.status(400).json({ message: "recipients must be an array" });
       }
       const wsResult = await pool.query(
-        `SELECT id FROM workspaces WHERE user_id = $1::varchar
-         OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1::varchar LIMIT 1)
+        `SELECT id FROM workspaces 
+         WHERE user_id = $1
+         OR id::text = (
+           SELECT parent_workspace_id::text 
+           FROM workspaces 
+           WHERE user_id = $1
+           LIMIT 1
+         )
          LIMIT 1`,
         [userId]
       );
