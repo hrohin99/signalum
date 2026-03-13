@@ -141,7 +141,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       ALTER TABLE captures ADD COLUMN IF NOT EXISTS extracted_excerpt TEXT;
       ALTER TABLE captures ADD COLUMN IF NOT EXISTS suggested_new_category TEXT;
       ALTER TABLE captures ADD COLUMN IF NOT EXISTS suggested_new_category_reason TEXT;
@@ -152,7 +152,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS parent_workspace_id UUID;
     `);
     console.log("[DBSafety] parent_workspace_id column verified.");
@@ -161,7 +161,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS digest_recipients JSONB DEFAULT '[]'
     `);
     console.log("[DBSafety] digest_recipients column verified.");
@@ -170,7 +170,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS entity_partnerships (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,
@@ -191,7 +191,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS entity_intelligence (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,
@@ -211,7 +211,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS entity_capabilities (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,
@@ -231,7 +231,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS entity_certifications (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,
@@ -249,7 +249,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS entity_products (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,
@@ -268,7 +268,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
   }
 
   try {
-    await pool.query(`
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS entity_geo_presence (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,
