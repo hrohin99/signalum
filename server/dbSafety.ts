@@ -190,5 +190,63 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring entity_partnerships table:", error?.message || error);
   }
 
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS entity_intelligence (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        field TEXT NOT NULL,
+        content TEXT,
+        is_custom BOOLEAN DEFAULT false,
+        last_generated_at TIMESTAMPTZ,
+        last_edited_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(workspace_id, entity_id, field)
+      )
+    `);
+    console.log("[DBSafety] entity_intelligence table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_intelligence table:", error?.message || error);
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS entity_capabilities (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        capability_name TEXT NOT NULL,
+        capability_description TEXT,
+        competitor_has BOOLEAN,
+        us_has BOOLEAN,
+        assessment TEXT,
+        display_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[DBSafety] entity_capabilities table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_capabilities table:", error?.message || error);
+  }
+
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS entity_certifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        cert_name TEXT NOT NULL,
+        cert_description TEXT,
+        status TEXT DEFAULT 'active',
+        renewal_date TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[DBSafety] entity_certifications table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_certifications table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

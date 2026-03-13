@@ -75,6 +75,9 @@ import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext, EntitySeoData } from "@shared/schema";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { PartnershipsCard } from "@/components/PartnershipsCard";
+import { SoWhatIntelCard } from "@/components/SoWhatIntelCard";
+import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
+import { CertificationsCard } from "@/components/CertificationsCard";
 import { CoachMarks } from "@/components/coach-marks";
 import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
 import { topicTourSteps } from "@/lib/tourConfig";
@@ -249,6 +252,8 @@ function TopicViewContent({
   const [extractionNoData, setExtractionNoData] = useState(false);
   const [extractionNoDataDismissed, setExtractionNoDataDismissed] = useState(false);
   const [battlecardExpanded, setBattlecardExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'commercial' | 'competitive' | 'strategic' | 'updates'>('overview');
+  const isCompetitor = currentTopicType === 'competitor';
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -560,71 +565,145 @@ function TopicViewContent({
         </div>
       )}
 
-      <div className="flex flex-col lg:flex-row gap-6 mt-6">
-        <div className="lg:w-[65%] space-y-6">
+      {isCompetitor && (
+        <div style={{ display: 'flex', borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)', marginBottom: 20, marginTop: 16, gap: 0 }} data-testid="tab-bar-competitor">
+          {(['overview','profile','commercial','competitive','strategic','updates'] as const).map(tab => (
+            <div
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                fontSize: 13, padding: '10px 16px', cursor: 'pointer',
+                color: activeTab === tab ? '#534AB7' : 'var(--color-text-secondary, #64748b)',
+                borderBottom: activeTab === tab ? '2px solid #534AB7' : '2px solid transparent',
+                fontWeight: activeTab === tab ? 500 : 400,
+                marginBottom: -0.5, whiteSpace: 'nowrap',
+                textTransform: 'capitalize'
+              }}
+              data-testid={`tab-${tab}`}
+            >
+              {tab === 'updates' ? 'Updates' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isCompetitor && activeTab === 'overview' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <CapabilityMatrixCard entityId={entity.name} userRole={userRole} previewMode={true} />
+            <CertificationsCard entityId={entity.name} userRole={userRole} previewMode={true} />
+          </div>
+        </div>
+      )}
+
+      {isCompetitor && activeTab === 'profile' && (
+        <div className="space-y-6">
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
           <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
-          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
-            <StrategicDirectionCard entity={entity} categoryName={categoryName} captures={captures} />
-          )}
-          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <PricingCard entity={entity} />
-                <BattlecardCollapsedHeader
-                  entity={entity}
-                  categoryName={categoryName}
-                  expanded={battlecardExpanded}
-                  onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
-                />
-              </div>
-              {battlecardExpanded && (
-                <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
-              )}
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <PricingCard entity={entity} />
+              <BattlecardCollapsedHeader
+                entity={entity}
+                categoryName={categoryName}
+                expanded={battlecardExpanded}
+                onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
+              />
             </div>
-          )}
-          <PartnershipsCard entityId={entity.name} userRole={userRole} />
-          <WidgetsSection
-            entity={entity}
-            categoryName={categoryName}
-            captures={captures}
-            widgetConfig={widgetConfig}
-            allCaptures={allCaptures}
-          />
-          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
-            <CompetitorCapabilitiesCard entityName={entity.name} />
-          )}
+            {battlecardExpanded && (
+              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+            )}
+          </div>
+          <CompetitorCapabilitiesCard entityName={entity.name} />
         </div>
+      )}
 
-        <div className="lg:w-[35%] space-y-6">
-          <TopicDetailsCard
-            entity={entity}
-            categoryName={categoryName}
-            captures={captures}
-            allTopics={allTopics}
-            categories={categories}
-          />
-          <RecentSignalsCard captures={captures} />
-          <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
-          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
-            <MonitoredUrlsCard entity={entity} />
-          )}
-          {false && (
-            entity.website_url && (
-              <DigitalPresenceCard entity={entity} categoryName={categoryName} isExtractionRunning={isExtractionRunning} />
-            )
-          )}
-          {false && (
-            entity.website_url && (
-              <SeoIntelligenceCard entity={entity} categoryName={categoryName} />
-            )
-          )}
-          {(entity.topic_type || "general").toLowerCase() === "competitor" && (
-            <AIVisibilityCard />
-          )}
-          <InlineCaptureCard entity={entity} categoryName={categoryName} />
+      {isCompetitor && activeTab === 'commercial' && (
+        <div className="space-y-6">
+          <PricingCard entity={entity} />
+          <div style={{ background: 'var(--color-background-primary, #fff)', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 12, padding: '24px 18px', textAlign: 'center' }} data-testid="card-win-loss-coming-soon">
+            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary, #1e293b)', margin: '0 0 4px' }}>Win / loss tracker</p>
+            <p style={{ fontSize: 12, color: 'var(--color-text-tertiary, #94a3b8)', margin: 0 }}>Track wins and losses against this competitor — coming soon.</p>
+          </div>
         </div>
-      </div>
+      )}
+
+      {isCompetitor && activeTab === 'competitive' && (
+        <div className="space-y-6">
+          <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
+          <CapabilityMatrixCard entityId={entity.name} userRole={userRole} previewMode={false} />
+          <div className="space-y-4">
+            <BattlecardCollapsedHeader
+              entity={entity}
+              categoryName={categoryName}
+              expanded={battlecardExpanded}
+              onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
+            />
+            {battlecardExpanded && (
+              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+            )}
+          </div>
+          <CertificationsCard entityId={entity.name} userRole={userRole} previewMode={false} />
+        </div>
+      )}
+
+      {isCompetitor && activeTab === 'strategic' && (
+        <div className="space-y-6">
+          <StrategicDirectionCard entity={entity} categoryName={categoryName} captures={captures} />
+          <PartnershipsCard entityId={entity.name} userRole={userRole} />
+        </div>
+      )}
+
+      {(!isCompetitor || activeTab === 'updates') && (
+        <div className="flex flex-col lg:flex-row gap-6 mt-6">
+          <div className="lg:w-[65%] space-y-6">
+            {!isCompetitor && (
+              <>
+                <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+                <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
+                <PartnershipsCard entityId={entity.name} userRole={userRole} />
+              </>
+            )}
+            <WidgetsSection
+              entity={entity}
+              categoryName={categoryName}
+              captures={captures}
+              widgetConfig={widgetConfig}
+              allCaptures={allCaptures}
+            />
+          </div>
+
+          <div className="lg:w-[35%] space-y-6">
+            <TopicDetailsCard
+              entity={entity}
+              categoryName={categoryName}
+              captures={captures}
+              allTopics={allTopics}
+              categories={categories}
+            />
+            <RecentSignalsCard captures={captures} />
+            <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
+            {currentTopicType === "competitor" && (
+              <MonitoredUrlsCard entity={entity} />
+            )}
+            {false && (
+              entity.website_url && (
+                <DigitalPresenceCard entity={entity} categoryName={categoryName} isExtractionRunning={isExtractionRunning} />
+              )
+            )}
+            {false && (
+              entity.website_url && (
+                <SeoIntelligenceCard entity={entity} categoryName={categoryName} />
+              )
+            )}
+            {currentTopicType === "competitor" && (
+              <AIVisibilityCard />
+            )}
+            <InlineCaptureCard entity={entity} categoryName={categoryName} />
+          </div>
+        </div>
+      )}
 
       {showCoachMarks && (
         <CoachMarks

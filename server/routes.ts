@@ -5020,5 +5020,254 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  app.get("/api/entities/:entityId/intelligence/:field", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.json(null);
+      const result = await pool.query(
+        `SELECT * FROM entity_intelligence WHERE entity_id = $1 AND workspace_id = $2 AND field = $3`,
+        [req.params.entityId, workspaceId, req.params.field]
+      );
+      res.json(result.rows[0] || null);
+    } catch (error: any) {
+      console.error("Get intelligence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entities/:entityId/intelligence/:field", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const { content } = req.body;
+      const result = await pool.query(
+        `INSERT INTO entity_intelligence (workspace_id, entity_id, field, content, is_custom, last_edited_at)
+         VALUES ($1, $2, $3, $4, true, NOW())
+         ON CONFLICT (workspace_id, entity_id, field)
+         DO UPDATE SET content = $4, is_custom = true, last_edited_at = NOW()
+         RETURNING *`,
+        [workspaceId, req.params.entityId, req.params.field, content]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Put intelligence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/intelligence/:field/regenerate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const capturesResult = await pool.query(
+        `SELECT content, matched_category, created_at FROM captures
+         WHERE user_id = $1 AND matched_entity ILIKE $2
+         ORDER BY created_at DESC LIMIT 20`,
+        [userId, `%${req.params.entityId}%`]
+      );
+      const entityName = req.params.entityId;
+      const capturesSummary = capturesResult.rows.map((c: any) => c.content?.slice(0, 200)).join('\n');
+
+      const anthropic = getAnthropicClient();
+      const response = await anthropic.messages.create({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: `You are a competitive intelligence analyst. Based on recent signals about "${entityName}", write a concise "So what" paragraph (3-4 sentences max) that explains what this competitor's recent moves mean strategically for us. Be direct and actionable. No bullet points.\n\nRecent signals:\n${capturesSummary || 'No recent captures available.'}\n\nReturn only the paragraph text, no preamble.`
+        }]
+      });
+      const generatedContent = (response.content[0] as any).text;
+      const result = await pool.query(
+        `INSERT INTO entity_intelligence (workspace_id, entity_id, field, content, is_custom, last_generated_at)
+         VALUES ($1, $2, $3, $4, false, NOW())
+         ON CONFLICT (workspace_id, entity_id, field)
+         DO UPDATE SET content = $4, is_custom = false, last_generated_at = NOW()
+         RETURNING *`,
+        [workspaceId, req.params.entityId, req.params.field, generatedContent]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Regenerate intelligence error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/entities/:entityId/capabilities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.json([]);
+      const result = await pool.query(
+        `SELECT * FROM entity_capabilities WHERE entity_id = $1 AND workspace_id = $2 ORDER BY display_order, created_at`,
+        [req.params.entityId, workspaceId]
+      );
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get capabilities error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/capabilities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const { capability_name, capability_description, competitor_has, us_has, assessment } = req.body;
+      const result = await pool.query(
+        `INSERT INTO entity_capabilities (workspace_id, entity_id, capability_name, capability_description, competitor_has, us_has, assessment)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [workspaceId, req.params.entityId, capability_name, capability_description, competitor_has, us_has, assessment]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Create capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entities/:entityId/capabilities/:capId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const { capability_name, capability_description, competitor_has, us_has, assessment } = req.body;
+      const result = await pool.query(
+        `UPDATE entity_capabilities SET capability_name=$1, capability_description=$2, competitor_has=$3, us_has=$4, assessment=$5
+         WHERE id=$6 AND workspace_id=$7 AND entity_id=$8 RETURNING *`,
+        [capability_name, capability_description, competitor_has, us_has, assessment, req.params.capId, workspaceId, req.params.entityId]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entities/:entityId/capabilities/:capId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      await pool.query(`DELETE FROM entity_capabilities WHERE id=$1 AND workspace_id=$2 AND entity_id=$3`, [req.params.capId, workspaceId, req.params.entityId]);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/entities/:entityId/certifications", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.json([]);
+      const result = await pool.query(
+        `SELECT * FROM entity_certifications WHERE entity_id = $1 AND workspace_id = $2 ORDER BY created_at`,
+        [req.params.entityId, workspaceId]
+      );
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get certifications error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/certifications", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const { cert_name, cert_description, status, renewal_date } = req.body;
+      const result = await pool.query(
+        `INSERT INTO entity_certifications (workspace_id, entity_id, cert_name, cert_description, status, renewal_date)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+        [workspaceId, req.params.entityId, cert_name, cert_description, status || 'active', renewal_date]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Create certification error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entities/:entityId/certifications/:certId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      await pool.query(`DELETE FROM entity_certifications WHERE id=$1 AND workspace_id=$2 AND entity_id=$3`, [req.params.certId, workspaceId, req.params.entityId]);
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete certification error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }
