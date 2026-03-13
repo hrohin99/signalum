@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -31,8 +31,6 @@ export function WinLossCard({ entityId, userRole }: { entityId: string; userRole
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const formRef = React.useRef(form);
-  React.useEffect(() => { formRef.current = form; }, [form]);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
 
   const { data: items = [], isLoading } = useQuery<WinLossItem[]>({
@@ -121,7 +119,7 @@ export function WinLossCard({ entityId, userRole }: { entityId: string; userRole
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
             <button data-testid="button-cancel-win-loss" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-            <button data-testid="button-save-win-loss" onClick={() => addMutation.mutate(formRef.current)} disabled={!form.deal_name || addMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+            <button data-testid="button-save-win-loss" onClick={() => addMutation.mutate(form)} disabled={!form.deal_name || addMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
               {addMutation.isPending ? 'Saving...' : 'Save'}
             </button>
           </div>
@@ -156,7 +154,7 @@ export function WinLossCard({ entityId, userRole }: { entityId: string; userRole
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                     <button data-testid="button-cancel-win-loss" onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-                    <button data-testid="button-save-win-loss" onClick={() => editMutation.mutate({ id: item.id, data: formRef.current })} disabled={!form.deal_name || editMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                    <button data-testid="button-save-win-loss" onClick={() => editMutation.mutate({ id: item.id, data: form })} disabled={!form.deal_name || editMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
                       {editMutation.isPending ? 'Saving...' : 'Save'}
                     </button>
                   </div>

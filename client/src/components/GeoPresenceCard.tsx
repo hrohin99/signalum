@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -126,8 +126,6 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
-  const formRef = React.useRef(form);
-  React.useEffect(() => { formRef.current = form; }, [form]);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
 
   const { data: geoPresence = [], isLoading } = useQuery<GeoPresence[]>({
@@ -191,8 +189,8 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
         <button data-testid="button-cancel-geo" onClick={() => { if (isEdit) setEditingId(null); else setShowForm(false); setForm(EMPTY_FORM); }}
           style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-        <button data-testid="button-save-geo" onClick={() => { if (isEdit && itemId) editMutation.mutate({ id: itemId, data: formRef.current }); else addMutation.mutate(formRef.current); }}
-          disabled={!formRef.current.region || (isEdit ? editMutation.isPending : addMutation.isPending)}
+        <button data-testid="button-save-geo" onClick={() => { if (isEdit && itemId) editMutation.mutate({ id: itemId, data: form }); else addMutation.mutate(form); }}
+          disabled={!form.region || (isEdit ? editMutation.isPending : addMutation.isPending)}
           style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
           {(isEdit ? editMutation.isPending : addMutation.isPending) ? 'Saving...' : 'Save'}
         </button>
