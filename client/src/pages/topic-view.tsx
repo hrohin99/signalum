@@ -589,9 +589,20 @@ function TopicViewContent({
 
       {isCompetitor && activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <CapabilityMatrixCard entityId={entity.name} userRole={userRole} previewMode={true} />
+          <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+            <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Products & solutions</div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Profile tab to manage</div>
+            </div>
+            <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Markets & geography</div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Profile tab to manage</div>
+            </div>
+            <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Funding</div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Commercial tab to manage</div>
+            </div>
             <CertificationsCard entityId={entity.name} userRole={userRole} previewMode={true} />
           </div>
         </div>

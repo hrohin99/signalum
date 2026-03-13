@@ -1,0 +1,32 @@
+Prompt for Replit AI:
+In client/src/pages/topic-detail.tsx, find the Overview tab content section (the JSX that renders when activeTab === 'overview'). We are replacing what's currently there.
+First run:
+bashgrep -n "activeTab.*overview\|overview.*activeTab\|SoWhatCard\|Capability\|Certifications" client/src/pages/topic-detail.tsx | head -20
+Then find the AI Summary card that currently renders in the Profile tab — it likely references aiSummary, AI Summary, or AISummaryCard. Get the exact variable/component name:
+bashgrep -n "AI Summary\|aiSummary\|AISummary\|summary" client/src/pages/topic-detail.tsx | head -15
+Replace the Overview tab content with this layout:
+
+AI Summary card at the top — reuse the exact same JSX/component already used in the Profile tab. Do not duplicate logic, just render the same component/JSX in both tabs.
+Below it, a 2×2 grid of snapshot cards:
+
+tsx<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+  {/* Products */}
+  <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+    <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Products & solutions</div>
+    <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Profile tab to manage</div>
+  </div>
+  {/* Markets */}
+  <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+    <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Markets & geography</div>
+    <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Profile tab to manage</div>
+  </div>
+  {/* Funding */}
+  <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
+    <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Funding</div>
+    <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Commercial tab to manage</div>
+  </div>
+  {/* Certifications — reuse existing CertificationsCard in previewMode */}
+  <CertificationsCard entityId={entityId} userRole={userRole} previewMode={true} />
+</div>
+Remove SoWhatCard and CapabilityMatrixCard from the Overview tab — they belong in Competitive.
+Do not touch any other tab, route, or component. Run npm run build, confirm no errors, Republish.
