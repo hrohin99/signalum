@@ -1,0 +1,220 @@
+Part 1 — DB table in server/dbSafety.ts
+Find where entity_products table is created and add immediately after:
+typescriptawait pool.query(`
+  CREATE TABLE IF NOT EXISTS entity_geo_presence (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    entity_id TEXT NOT NULL,
+    region TEXT NOT NULL,
+    country_code TEXT,
+    presence_type TEXT DEFAULT 'active',
+    channel TEXT,
+    notes TEXT,
+    sort_order INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+  )
+`);
+Part 2 — API routes in server/routes.ts
+Copy the exact auth + workspace pattern from the products routes and add four routes immediately after them:
+typescriptapp.get("/api/entities/:entityId/geo-presence", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const wsResult = await pool.query(`SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`, [userId]);
+    const workspaceId = wsResult.rows[0]?.id;
+    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+    const result = await pool.query(`SELECT * FROM entity_geo_presence WHERE workspace_id=$1 AND entity_id=$2 ORDER BY sort_order, created_at`, [workspaceId, req.params.entityId]);
+    res.json(result.rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.post("/api/entities/:entityId/geo-presence", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+    const role = profileResult.rows[0]?.role || 'admin';
+    if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+    const wsResult = await pool.query(`SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`, [userId]);
+    const workspaceId = wsResult.rows[0]?.id;
+    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+    const { region, country_code, presence_type, channel, notes } = req.body;
+    if (!region) return res.status(400).json({ error: 'region is required' });
+    const result = await pool.query(
+      `INSERT INTO entity_geo_presence (workspace_id, entity_id, region, country_code, presence_type, channel, notes) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [workspaceId, req.params.entityId, region, country_code, presence_type || 'active', channel, notes]
+    );
+    res.json(result.rows[0]);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.put("/api/entities/:entityId/geo-presence/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const wsResult = await pool.query(`SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`, [userId]);
+    const workspaceId = wsResult.rows[0]?.id;
+    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+    const { region, country_code, presence_type, channel, notes } = req.body;
+    const result = await pool.query(
+      `UPDATE entity_geo_presence SET region=$1, country_code=$2, presence_type=$3, channel=$4, notes=$5 WHERE id=$6 AND workspace_id=$7 RETURNING *`,
+      [region, country_code, presence_type, channel, notes, req.params.id, workspaceId]
+    );
+    res.json(result.rows[0]);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete("/api/entities/:entityId/geo-presence/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const wsResult = await pool.query(`SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`, [userId]);
+    const workspaceId = wsResult.rows[0]?.id;
+    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+    await pool.query(`DELETE FROM entity_geo_presence WHERE id=$1 AND workspace_id=$2`, [req.params.id, workspaceId]);
+    res.json({ success: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+Part 3 — Create client/src/components/GeoPresenceCard.tsx
+Full component. Use apiRequest from @/lib/queryClient and useQuery/useMutation/queryClient from @tanstack/react-query.
+Include this flag detection utility — it uses the Unicode flag emoji standard so every country in the world works automatically:
+typescript// Full ISO 3166-1 alpha-2 country name lookup
+const COUNTRY_NAMES: Record<string, string> = {
+  'afghanistan':'AF','albania':'AL','algeria':'DZ','argentina':'AR','armenia':'AM',
+  'australia':'AU','austria':'AT','azerbaijan':'AZ','bahrain':'BH','bangladesh':'BD',
+  'belarus':'BY','belgium':'BE','brazil':'BR','bulgaria':'BG','cambodia':'KH',
+  'canada':'CA','chile':'CL','china':'CN','colombia':'CO','croatia':'HR',
+  'czech republic':'CZ','czechia':'CZ','denmark':'DK','egypt':'EG','estonia':'EE',
+  'ethiopia':'ET','finland':'FI','france':'FR','georgia':'GE','germany':'DE',
+  'ghana':'GH','greece':'GR','hong kong':'HK','hungary':'HU','india':'IN',
+  'indonesia':'ID','iran':'IR','iraq':'IQ','ireland':'IE','israel':'IL',
+  'italy':'IT','japan':'JP','jordan':'JO','kazakhstan':'KZ','kenya':'KE',
+  'south korea':'KR','korea':'KR','kuwait':'KW','latvia':'LV','lebanon':'LB',
+  'lithuania':'LT','luxembourg':'LU','malaysia':'MY','mexico':'MX','morocco':'MA',
+  'netherlands':'NL','new zealand':'NZ','nigeria':'NG','norway':'NO','oman':'OM',
+  'pakistan':'PK','peru':'PE','philippines':'PH','poland':'PL','portugal':'PT',
+  'qatar':'QA','romania':'RO','russia':'RU','saudi arabia':'SA','senegal':'SN',
+  'serbia':'RS','singapore':'SG','slovakia':'SK','slovenia':'SI','south africa':'ZA',
+  'spain':'ES','sri lanka':'LK','sweden':'SE','switzerland':'CH','taiwan':'TW',
+  'thailand':'TH','turkey':'TR','ukraine':'UA','united arab emirates':'AE',
+  'uae':'AE','united kingdom':'GB','united states':'US','uruguay':'UY',
+  'uzbekistan':'UZ','venezuela':'VE','vietnam':'VN','zimbabwe':'ZW',
+  // Aliases
+  'uk':'GB','us':'US','usa':'US','britain':'GB','great britain':'GB',
+  'holland':'NL','south korea':'KR','russia':'RU',
+};
+
+// Regional / multi-country mappings
+const REGIONAL: Record<string, { code: string; flag: string }> = {
+  'north america': { code: 'NA', flag: '🌎' },
+  'latin america': { code: 'LA', flag: '🌎' },
+  'south america': { code: 'SA', flag: '🌎' },
+  'europe': { code: 'EU', flag: '🇪🇺' },
+  'western europe': { code: 'EU', flag: '🇪🇺' },
+  'eastern europe': { code: 'EU', flag: '🇪🇺' },
+  'middle east': { code: 'ME', flag: '🌍' },
+  'mena': { code: 'ME', flag: '🌍' },
+  'africa': { code: 'AF', flag: '🌍' },
+  'apac': { code: 'AP', flag: '🌏' },
+  'asia pacific': { code: 'AP', flag: '🌏' },
+  'asia': { code: 'AS', flag: '🌏' },
+  'southeast asia': { code: 'SEA', flag: '🌏' },
+  'global': { code: 'GL', flag: '🌍' },
+  'worldwide': { code: 'GL', flag: '🌍' },
+  'uk & ireland': { code: 'GB', flag: '🇬🇧' },
+  'uk and ireland': { code: 'GB', flag: '🇬🇧' },
+  'nordics': { code: 'NO', flag: '🇸🇪' },
+  'nordics': { code: 'NO', flag: '🇸🇪' },
+  'gcc': { code: 'SA', flag: '🇸🇦' },
+};
+
+// Convert ISO code to flag emoji using Unicode regional indicator symbols
+function isoToFlag(code: string): string {
+  if (code.length !== 2) return '🌐';
+  return String.fromCodePoint(
+    0x1F1E6 + (code.toUpperCase().charCodeAt(0) - 65),
+    0x1F1E6 + (code.toUpperCase().charCodeAt(1) - 65)
+  );
+}
+
+function detectCountry(region: string): { code: string; flag: string } {
+  const key = region.toLowerCase().trim();
+  // Check regional overrides first
+  for (const [k, v] of Object.entries(REGIONAL)) {
+    if (key === k || key.startsWith(k) || k.startsWith(key)) return v;
+  }
+  // Check full country name lookup
+  for (const [name, iso] of Object.entries(COUNTRY_NAMES)) {
+    if (key === name || key.includes(name) || name.includes(key)) {
+      return { code: iso, flag: isoToFlag(iso) };
+    }
+  }
+  // Fallback: use first 2 chars as code, generic globe
+  return { code: region.substring(0, 2).toUpperCase(), flag: '🌐' };
+}
+Presence type styles:
+typescriptconst PRESENCE_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+  active:    { bg: '#EAF3DE', color: '#27500A', label: 'Active' },
+  expanding: { bg: '#EAF0FB', color: '#1E3A6E', label: 'Expanding' },
+  limited:   { bg: '#FAEEDA', color: '#633806', label: 'Limited' },
+  exited:    { bg: '#F5E6E6', color: '#7A1C1C', label: 'Exited' },
+};
+const EMPTY_GEO = { region: '', presence_type: 'active', channel: '', notes: '' };
+Component structure — identical pattern to ProductsCard (single useState for form, staleTime: 0, gcTime: 0, refetchOnMount: true on useQuery, formRef pattern for Save):
+Header: "Geographic presence" + count badge (e.g. "6 markets") + "+ Add" button
+Add/edit form fields:
+
+region input (required): placeholder "Country or region, e.g. United Kingdom"
+presence_type select: Active / Expanding / Limited / Exited
+channel input: placeholder "e.g. Direct, Partner · BankID"
+notes textarea: placeholder "Notes (optional)"
+Cancel / Save buttons
+
+List display — 3-column CSS grid with gap: 1px, background: '#e2e8f0' (creates hairline borders between cells):
+tsx<div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1px', background: '#e2e8f0' }}>
+  {geoItems.map(item => {
+    const { code, flag } = detectCountry(item.region);
+    const ps = PRESENCE_STYLES[item.presence_type] || PRESENCE_STYLES.active;
+    return (
+      <div key={item.id} style={{ background: '#fff', padding: '12px 16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
+          <span style={{ fontSize: 16 }}>{flag}</span>
+          <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.08em' }}>{code}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{item.region}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, padding: '1px 7px', borderRadius: 10, fontWeight: 500, background: ps.bg, color: ps.color }}>{ps.label}</span>
+          {item.channel && <span style={{ fontSize: 12, color: '#64748b' }}>· {item.channel}</span>}
+        </div>
+        {canEdit && (
+          <div style={{ marginTop: 6, display: 'flex', gap: 4 }}>
+            <button onClick={() => { setEditingId(item.id); setShowForm(false); setForm({ region: item.region, presence_type: item.presence_type || 'active', channel: item.channel || '', notes: item.notes || '' }); }}
+              style={{ fontSize: 10, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 4, padding: '1px 6px', cursor: 'pointer', background: 'transparent' }}>Edit</button>
+            <button onClick={() => { if (confirm(`Remove ${item.region}?`)) deleteMutation.mutate(item.id); }}
+              style={{ fontSize: 10, color: '#94a3b8', border: '0.5px solid #e2e8f0', borderRadius: 4, padding: '1px 6px', cursor: 'pointer', background: 'transparent' }}>Remove</button>
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
+Count badge should show "N markets" not just "N".
+Empty state: centered "No geographic data logged yet."
+Export as GeoPresenceCard.
+Part 4 — Mount in client/src/pages/topic-view.tsx
+
+Import GeoPresenceCard from @/components/GeoPresenceCard
+Replace the Geographic presence placeholder div with: <GeoPresenceCard entityId={entityId} userRole={userRole} />
+Add a geo presence useQuery near the products query (same apiRequest pattern, same staleTime: 0, gcTime: 0, refetchOnMount: true):
+
+typescriptconst { data: geoItems = [] } = useQuery<any[]>({
+  queryKey: [`/api/entities/${entityId}/geo-presence`],
+  queryFn: async () => {
+    const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`);
+    return res.json();
+  },
+  enabled: !!entityId,
+  staleTime: 0,
+  gcTime: 0,
+  refetchOnMount: true
+});
+
+In the Overview tab Markets & Geography box, replace the static placeholder with a live preview showing up to 3 regions using the same detectCountry logic (copy the function into topic-view.tsx or import it), with flag + region name + presence badge, and a "Manage →" button that calls setActiveTab('profile').
+
+Run npm run build, confirm no errors, Republish.

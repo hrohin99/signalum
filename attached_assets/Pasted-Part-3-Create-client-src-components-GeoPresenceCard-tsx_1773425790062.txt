@@ -1,0 +1,25 @@
+Part 3 — Create client/src/components/GeoPresenceCard.tsxFull component. Use apiRequest from @/lib/queryClient and useQuery/useMutation/queryClient from @tanstack/react-query.Include this flag detection utility — it uses the Unicode flag emoji standard so every country in the world works automatically:typescript// Full ISO 3166-1 alpha-2 country name lookup
+const COUNTRY_NAMES: Record<string, string> = {
+  'afghanistan':'AF','albania':'AL','algeria':'DZ','argentina':'AR','armenia':'AM',
+  'australia':'AU','austria':'AT','azerbaijan':'AZ','bahrain':'BH','bangladesh':'BD',
+  'belarus':'BY','belgium':'BE','brazil':'BR','bulgaria':'BG','cambodia':'KH',
+  'canada':'CA','chile':'CL','china':'CN','colombia':'CO','croatia':'HR',
+  'czech republic':'CZ','czechia':'CZ','denmark':'DK','egypt':'EG','estonia':'EE',
+  'ethiopia':'ET','finland':'FI','france':'FR','georgia':'GE','germany':'DE',
+  'ghana':'GH','greece':'GR','hong kong':'HK','hungary':'HU','india':'IN',
+  'indonesia':'ID','iran':'IR','iraq':'IQ','ireland':'IE','israel':'IL',
+  'italy':'IT','japan':'JP','jordan':'JO','kazakhstan':'KZ','kenya':'KE',
+  'south korea':'KR','korea':'KR','kuwait':'KW','latvia':'LV','lebanon':'LB',
+  'lithuania':'LT','luxembourg':'LU','malaysia':'MY','mexico':'MX','morocco':'MA',
+  'netherlands':'NL','new zealand':'NZ','nigeria':'NG','norway':'NO','oman':'OM',
+  'pakistan':'PK','peru':'PE','philippines':'PH','poland':'PL','portugal':'PT',
+  'qatar':'QA','romania':'RO','russia':'RU','saudi arabia':'SA','senegal':'SN',
+  'serbia':'RS','singapore':'SG','slovakia':'SK','slovenia':'SI','south africa':'ZA',
+  'spain':'ES','sri lanka':'LK','sweden':'SE','switzerland':'CH','taiwan':'TW',
+  'thailand':'TH','turkey':'TR','ukraine':'UA','united arab emirates':'AE',
+  'uae':'AE','united kingdom':'GB','united states':'US','uruguay':'UY',
+  'uzbekistan':'UZ','venezuela':'VE','vietnam':'VN','zimbabwe':'ZW',
+  // Aliases
+  'uk':'GB','us':'US','usa':'US','britain':'GB','great britain':'GB',
+  'holland':'NL','south korea':'KR','russia':'RU',
+};
