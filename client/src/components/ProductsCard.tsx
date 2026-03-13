@@ -27,7 +27,6 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
-  console.log('showForm:', showForm);
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: ['/api/entities', entityId, 'products'],
