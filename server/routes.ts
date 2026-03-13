@@ -2026,6 +2026,13 @@ Do not use em dashes. Be direct and opinionated.${focusContext}\n\nCaptures:\n${
   app.patch("/api/entity", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const { categoryName, entityName, topic_type, priority } = req.body;
 
       if (!categoryName || !entityName) {
@@ -2325,6 +2332,13 @@ Rules:
   app.post("/api/entity/update-website-url", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const { entityName, categoryName, website_url } = req.body;
 
       if (!entityName || !categoryName) {
@@ -2894,6 +2908,14 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
 
   app.put("/api/battlecard/:entityId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const { entityId } = req.params;
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const { whatTheyDo, strengths, weaknesses, howToBeat } = req.body;
@@ -2927,6 +2949,13 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
   app.post("/api/battlecard/:entityId/autofill", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const { entityId } = req.params;
       const { entityName, categoryName } = req.body;
       const tenantId = "00000000-0000-0000-0000-000000000000";
@@ -3122,6 +3151,13 @@ Rules:
   app.put("/api/workspace/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
 
       const fieldMap: Record<string, string> = {
         trackingIntent: "tracking_intent",
@@ -3349,6 +3385,14 @@ Rules:
 
   app.put("/api/workspace-context", requireAuth, async (req: Request, res: Response) => {
     try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const { primaryDomain, relevantSubtopics, domainKeywords } = req.body;
 
@@ -3395,6 +3439,13 @@ Rules:
   app.put("/api/product-context", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id::varchar FROM workspaces WHERE user_id = $1) LIMIT 1`,
         [userId]
@@ -3457,6 +3508,13 @@ Rules:
   app.post("/api/strategic-direction/:entityId", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const { entityId } = req.params;
       const { entityName, categoryName } = req.body;
@@ -3646,6 +3704,14 @@ Return only the bullet points, no JSON, no headers.`
 
   app.post("/api/topics/:entityId/dates", requireAuth, async (req: Request, res: Response) => {
     try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const { entityId } = req.params;
       const parsed = createTopicDateSchema.safeParse(req.body);
@@ -3676,6 +3742,14 @@ Return only the bullet points, no JSON, no headers.`
 
   app.patch("/api/topics/:entityId/dates/:dateId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const { entityId, dateId } = req.params;
       const parsed = updateTopicDateSchema.safeParse(req.body);
@@ -4354,6 +4428,14 @@ Return only the bullet points, no JSON, no headers.`
 
   app.put("/api/competitor-capabilities/:entityId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const { capabilityId, status, evidence } = req.body;
       if (!capabilityId || !status) {
@@ -4778,9 +4860,12 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const entityId = req.params.entityId;
-      const roleResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1 LIMIT 1`, [userId]);
-      if (roleResult.rows[0]?.role === "read_only") {
-        return res.status(403).json({ message: "Forbidden" });
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       const ws = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,
@@ -4809,9 +4894,12 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const { partnershipId } = req.params;
-      const roleResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1 LIMIT 1`, [userId]);
-      if (roleResult.rows[0]?.role === "read_only") {
-        return res.status(403).json({ message: "Forbidden" });
+      const profileResult = await pool.query(
+        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
+      );
+      const role = profileResult.rows[0]?.role;
+      if (!role || !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
       }
       const ws = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,

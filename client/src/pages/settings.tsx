@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useRole } from "@/App";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,8 @@ const cardStyle: React.CSSProperties = {
 function AccountSection() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState("");
 
@@ -90,40 +93,57 @@ function AccountSection() {
 
           <div style={{ borderBottom: "0.5px solid #e5e7eb" }} />
 
-          <div>
-            <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Display name</Label>
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Your display name"
-              style={inputStyle}
-              className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-              data-testid="input-display-name"
-            />
-          </div>
+          {isEditor ? (
+            <>
+              <div>
+                <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Display name</Label>
+                <input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Your display name"
+                  style={inputStyle}
+                  className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                  data-testid="input-display-name"
+                />
+              </div>
 
-          <div>
-            <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Role</Label>
-            <input
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
-              placeholder="e.g. Product Manager"
-              style={inputStyle}
-              className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-              data-testid="input-role"
-            />
-          </div>
+              <div>
+                <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Role</Label>
+                <input
+                  value={role}
+                  onChange={(e) => setRole(e.target.value)}
+                  placeholder="e.g. Product Manager"
+                  style={inputStyle}
+                  className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                  data-testid="input-role"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <Label className="text-xs text-gray-500 uppercase tracking-wide">Display name</Label>
+                <p className="text-sm mt-1 text-gray-700" data-testid="input-display-name">{displayName || "—"}</p>
+              </div>
+              <div>
+                <Label className="text-xs text-gray-500 uppercase tracking-wide">Role</Label>
+                <p className="text-sm mt-1 text-gray-700" data-testid="input-role">{role || "—"}</p>
+              </div>
+            </>
+          )}
         </div>
 
-        <Button
-          onClick={() => saveMutation.mutate()}
-          disabled={saveMutation.isPending}
-          className="w-full mt-6 text-white"
-          style={{ background: "#534AB7", borderRadius: "8px" }}
-          data-testid="button-save-account"
-        >
-          {saveMutation.isPending ? "Saving..." : "Save"}
-        </Button>
+        {isEditor && (
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="w-full mt-6 text-white"
+            style={{ background: "#534AB7", borderRadius: "8px" }}
+            data-testid="button-save-account"
+          >
+            {saveMutation.isPending ? "Saving..." : "Save"}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -131,6 +151,8 @@ function AccountSection() {
 
 function ProductSection() {
   const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const [productName, setProductName] = useState("");
   const [description, setDescription] = useState("");
   const [targetCustomer, setTargetCustomer] = useState("");
@@ -195,6 +217,7 @@ function ProductSection() {
         <h3 className="text-base font-semibold mb-1" data-testid="text-my-product-header">My Product</h3>
         <p className="text-sm text-gray-500 mb-5">Help Signalum give you personalised competitive insights by describing what you offer.</p>
 
+        {isEditor ? (
         <form onSubmit={handleSaveProduct} className="space-y-4">
           <div>
             <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Product name</Label>
@@ -275,6 +298,22 @@ function ProductSection() {
             {saveProductMutation.isPending ? "Saving..." : "Save"}
           </Button>
         </form>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs text-gray-500 uppercase tracking-wide">Product name</Label>
+              <p className="text-sm mt-1 text-gray-700" data-testid="input-product-name">{productName || "—"}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 uppercase tracking-wide">What it does</Label>
+              <p className="text-sm mt-1 text-gray-700" data-testid="input-product-description">{description || "—"}</p>
+            </div>
+            <div>
+              <Label className="text-xs text-gray-500 uppercase tracking-wide">Who it is for</Label>
+              <p className="text-sm mt-1 text-gray-700" data-testid="input-target-customer">{targetCustomer || "—"}</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -282,6 +321,8 @@ function ProductSection() {
 
 function CapabilitiesSection() {
   const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const [newCapName, setNewCapName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -399,7 +440,7 @@ function CapabilitiesSection() {
           </div>
         ) : (
           <div className="space-y-0">
-            {capabilities.length === 0 && suggestionsData?.suggestions && suggestionsData.suggestions.length > 0 && (
+            {isEditor && capabilities.length === 0 && suggestionsData?.suggestions && suggestionsData.suggestions.length > 0 && (
               <div className="mb-4">
                 <p className="text-xs text-gray-400 mb-2">Suggested for your market:</p>
                 <div className="flex flex-wrap gap-2">
@@ -458,49 +499,55 @@ function CapabilitiesSection() {
                 ) : (
                   <span className="text-sm text-gray-700 flex-1" data-testid={`text-capability-name-${cap.id}`}>{cap.name}</span>
                 )}
-                <button
-                  onClick={() => { setEditingId(cap.id); setEditingName(cap.name); }}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#534AB7] transition-opacity"
-                  data-testid={`button-edit-capability-${cap.id}`}
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => deleteMutation.mutate(cap.id)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
-                  data-testid={`button-delete-capability-${cap.id}`}
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                {isEditor && (
+                  <button
+                    onClick={() => { setEditingId(cap.id); setEditingName(cap.name); }}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#534AB7] transition-opacity"
+                    data-testid={`button-edit-capability-${cap.id}`}
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {isEditor && (
+                  <button
+                    onClick={() => deleteMutation.mutate(cap.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
+                    data-testid={`button-delete-capability-${cap.id}`}
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             ))}
 
-            <div className="flex items-center gap-2 mt-4">
-              <input
-                ref={addInputRef}
-                value={newCapName}
-                onChange={(e) => setNewCapName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleAdd();
-                }}
-                placeholder="Add a capability..."
-                style={inputStyle}
-                className="flex-1 outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-                data-testid="input-new-capability"
-              />
-              <Button
-                size="sm"
-                onClick={handleAdd}
-                disabled={!newCapName.trim() || addMutation.isPending}
-                className="text-white h-9 px-4"
-                style={{ background: "#534AB7", borderRadius: "8px" }}
-                data-testid="button-save-capability"
-              >
-                {addMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
-                  <span className="flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add</span>
-                )}
-              </Button>
-            </div>
+            {isEditor && (
+              <div className="flex items-center gap-2 mt-4">
+                <input
+                  ref={addInputRef}
+                  value={newCapName}
+                  onChange={(e) => setNewCapName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAdd();
+                  }}
+                  placeholder="Add a capability..."
+                  style={inputStyle}
+                  className="flex-1 outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                  data-testid="input-new-capability"
+                />
+                <Button
+                  size="sm"
+                  onClick={handleAdd}
+                  disabled={!newCapName.trim() || addMutation.isPending}
+                  className="text-white h-9 px-4"
+                  style={{ background: "#534AB7", borderRadius: "8px" }}
+                  data-testid="button-save-capability"
+                >
+                  {addMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (
+                    <span className="flex items-center gap-1"><Plus className="w-3.5 h-3.5" /> Add</span>
+                  )}
+                </Button>
+              </div>
+            )}
 
             {capabilities.length >= 15 && (
               <p className="text-xs text-gray-400 mt-2">Maximum of 15 capabilities reached.</p>

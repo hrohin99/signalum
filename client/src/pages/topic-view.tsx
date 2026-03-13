@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from "@/lib/auth-context";
+import { useRole } from "@/App";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Badge } from "@/components/ui/badge";
@@ -415,6 +416,7 @@ function TopicViewContent({
           setRenameTopicOpen(true);
         }}
         onDelete={() => setDeleteTopicOpen(true)}
+        userRole={userRole}
       />
 
       {detectMultipleEntities(entity.name) && (
@@ -714,6 +716,7 @@ function TopBar({
   onBack,
   onRename,
   onDelete,
+  userRole,
 }: {
   entity: ExtractedEntity;
   categoryName: string;
@@ -731,7 +734,9 @@ function TopBar({
   onBack: () => void;
   onRename: () => void;
   onDelete: () => void;
+  userRole: string;
 }) {
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const [, navigate] = useLocation();
 
   return (
@@ -762,65 +767,83 @@ function TopBar({
           {entity.name}
         </h1>
 
-        <div className="relative" ref={typeDropdownRef}>
-          <button
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] text-xs font-medium hover:bg-[#1e3a5f]/20 transition-colors"
-            onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-            data-testid="button-edit-topic-type"
-          >
+        {isEditor && (
+          <div className="relative" ref={typeDropdownRef}>
+            <button
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] text-xs font-medium hover:bg-[#1e3a5f]/20 transition-colors"
+              onClick={() => setShowTypeDropdown(!showTypeDropdown)}
+              data-testid="button-edit-topic-type"
+            >
+              <span>{typeInfo.icon}</span>
+              <span>{typeInfo.displayName}</span>
+              <Pencil className="w-3 h-3 ml-0.5 opacity-60" />
+            </button>
+            {showTypeDropdown && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[200px] max-h-[280px] overflow-y-auto" data-testid="dropdown-topic-type">
+                {Object.entries(topicTypeMap).map(([key, val]) => (
+                  <button
+                    key={key}
+                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentTopicType ? "bg-muted font-medium" : ""}`}
+                    onClick={() => {
+                      if (key !== currentTopicType) updateEntityMutation.mutate({ topic_type: key });
+                      setShowTypeDropdown(false);
+                    }}
+                    data-testid={`option-type-${key}`}
+                  >
+                    <span>{val.icon}</span>
+                    <span>{val.displayName}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isEditor && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#1e3a5f]/10 text-[#1e3a5f] text-xs font-medium">
             <span>{typeInfo.icon}</span>
             <span>{typeInfo.displayName}</span>
-            <Pencil className="w-3 h-3 ml-0.5 opacity-60" />
-          </button>
-          {showTypeDropdown && (
-            <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[200px] max-h-[280px] overflow-y-auto" data-testid="dropdown-topic-type">
-              {Object.entries(topicTypeMap).map(([key, val]) => (
-                <button
-                  key={key}
-                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentTopicType ? "bg-muted font-medium" : ""}`}
-                  onClick={() => {
-                    if (key !== currentTopicType) updateEntityMutation.mutate({ topic_type: key });
-                    setShowTypeDropdown(false);
-                  }}
-                  data-testid={`option-type-${key}`}
-                >
-                  <span>{val.icon}</span>
-                  <span>{val.displayName}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          </span>
+        )}
 
-        <div className="relative" ref={priorityDropdownRef}>
-          <button
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-xs font-medium hover:bg-muted transition-colors"
-            onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
-            data-testid="button-edit-priority"
-          >
+        {isEditor && (
+          <div className="relative" ref={priorityDropdownRef}>
+            <button
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-xs font-medium hover:bg-muted transition-colors"
+              onClick={() => setShowPriorityDropdown(!showPriorityDropdown)}
+              data-testid="button-edit-priority"
+            >
+              <span className={`w-2 h-2 rounded-full ${priInfo.dotClass}`} />
+              <span className="text-foreground">{priInfo.label}</span>
+              <ChevronDown className="w-3 h-3 opacity-60" />
+            </button>
+            {showPriorityDropdown && (
+              <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]" data-testid="dropdown-priority">
+                {Object.entries(priorityConfig).map(([key, val]) => (
+                  <button
+                    key={key}
+                    className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentPriority ? "bg-muted font-medium" : ""}`}
+                    onClick={() => {
+                      if (key !== currentPriority) updateEntityMutation.mutate({ priority: key });
+                      setShowPriorityDropdown(false);
+                    }}
+                    data-testid={`option-priority-${key}`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${val.dotClass}`} />
+                    <span>{val.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {!isEditor && (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-border text-xs font-medium">
             <span className={`w-2 h-2 rounded-full ${priInfo.dotClass}`} />
             <span className="text-foreground">{priInfo.label}</span>
-            <ChevronDown className="w-3 h-3 opacity-60" />
-          </button>
-          {showPriorityDropdown && (
-            <div className="absolute top-full left-0 mt-1 bg-white border border-border rounded-lg shadow-lg z-50 py-1 min-w-[140px]" data-testid="dropdown-priority">
-              {Object.entries(priorityConfig).map(([key, val]) => (
-                <button
-                  key={key}
-                  className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center gap-2 ${key === currentPriority ? "bg-muted font-medium" : ""}`}
-                  onClick={() => {
-                    if (key !== currentPriority) updateEntityMutation.mutate({ priority: key });
-                    setShowPriorityDropdown(false);
-                  }}
-                  data-testid={`option-priority-${key}`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${val.dotClass}`} />
-                  <span>{val.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+          </span>
+        )}
 
         <span className="text-sm text-slate-500" data-testid="text-category-label">
           in {categoryName}
@@ -828,23 +851,25 @@ function TopBar({
       </div>
 
       <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" data-testid="button-topic-actions-menu">
-              <MoreVertical className="w-4 h-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={onRename} data-testid="menu-rename-topic">
-              <Pencil className="w-4 h-4 mr-2" />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onDelete} className="text-red-600 focus:text-red-600" data-testid="menu-delete-topic">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {isEditor && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" data-testid="button-topic-actions-menu">
+                <MoreVertical className="w-4 h-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={onRename} data-testid="menu-rename-topic">
+                <Pencil className="w-4 h-4 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} className="text-red-600 focus:text-red-600" data-testid="menu-delete-topic">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         <Button
           className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white"
           onClick={() => navigate("/capture")}
@@ -929,6 +954,8 @@ function SoWhatCard({ entity, categoryName, captureCount }: { entity: ExtractedE
 
 function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity: ExtractedEntity; categoryName: string; onOpenAspectModal: () => void }) {
   const { user } = useAuth();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const { toast } = useToast();
   const [thumbsDownOpen, setThumbsDownOpen] = useState(false);
   const [showFeedbackInput, setShowFeedbackInput] = useState(false);
@@ -1086,6 +1113,7 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
               <>
                 <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
                 <span className="text-xs text-slate-500">Based on your workspace focus</span>
+                {isEditor && (
                 <Popover open={thumbsDownOpen} onOpenChange={(open) => { setThumbsDownOpen(open); if (!open) { setShowFeedbackInput(false); setFeedbackText(""); } }}>
                   <PopoverTrigger asChild>
                     <button className="ml-1 text-slate-400 hover:text-slate-600 transition-colors" data-testid="button-thumbs-down">
@@ -1143,19 +1171,22 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
                     )}
                   </PopoverContent>
                 </Popover>
+                )}
               </>
             )}
             {confidenceState === 3 && (
               <>
                 <span className="w-2 h-2 rounded-full bg-slate-400 inline-block" />
                 <span className="text-xs text-slate-500">General summary</span>
-                <button
-                  className="ml-1 text-slate-400 hover:text-slate-600 transition-colors"
-                  onClick={onOpenAspectModal}
-                  data-testid="button-scope-summary"
-                >
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
+                {isEditor && (
+                  <button
+                    className="ml-1 text-slate-400 hover:text-slate-600 transition-colors"
+                    onClick={onOpenAspectModal}
+                    data-testid="button-scope-summary"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -1343,6 +1374,8 @@ const PRICING_MODEL_FIELDS: Record<string, { planLabel: string; planPlaceholder:
 
 function PricingCard({ entity }: { entity: ExtractedEntity }) {
   const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const entityId = entity.name;
   const [pricingExpanded, setPricingExpanded] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1456,13 +1489,15 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
                   ) : "—"}
                 </td>
                 <td className="py-2 px-2">
-                  <button
-                    className="text-slate-400 hover:text-red-500 transition-colors"
-                    onClick={() => deleteMutation.mutate(entry.id)}
-                    data-testid={`button-delete-pricing-${entry.id}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {isEditor && (
+                    <button
+                      className="text-slate-400 hover:text-red-500 transition-colors"
+                      onClick={() => deleteMutation.mutate(entry.id)}
+                      data-testid={`button-delete-pricing-${entry.id}`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -1494,7 +1529,7 @@ function PricingCard({ entity }: { entity: ExtractedEntity }) {
                 <ChevronDown className="w-4 h-4 text-slate-400" />
               )}
             </div>
-            {pricingExpanded && (
+            {pricingExpanded && isEditor && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1785,6 +1820,8 @@ function BattlecardWidget({
   captures: Capture[];
 }) {
   const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const entityId = entity.name;
 
   const { data: bcData, isLoading } = useQuery<{ battlecard: Battlecard | null }>({
@@ -1875,64 +1912,86 @@ function BattlecardWidget({
                 </span>
               )}
 
-              {!hasData && autofillButton}
+              {!hasData && isEditor && autofillButton}
 
               <div className="rounded-lg bg-slate-50 p-4 mb-3">
                 <p className="text-sm font-semibold text-slate-600 mb-1.5 flex items-center gap-1">
                   <span>📝</span> What they do
-                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                  {isEditor && <Pencil className="w-3 h-3 ml-auto opacity-40" />}
                 </p>
-                <EditableText
-                  value={bc?.whatTheyDo || ""}
-                  onSave={(val) => updateMutation.mutate({ whatTheyDo: val })}
-                  placeholder="Click to describe what this competitor does..."
-                  testId="input-battlecard-what"
-                />
+                {isEditor ? (
+                  <EditableText
+                    value={bc?.whatTheyDo || ""}
+                    onSave={(val) => updateMutation.mutate({ whatTheyDo: val })}
+                    placeholder="Click to describe what this competitor does..."
+                    testId="input-battlecard-what"
+                  />
+                ) : (
+                  <p className="text-sm text-slate-700" data-testid="input-battlecard-what">{bc?.whatTheyDo || <span className="text-slate-400 italic">No description yet.</span>}</p>
+                )}
               </div>
 
               <div className="rounded-lg bg-green-50 p-4 mb-3 border-l-4 border-green-400">
                 <p className="text-sm font-semibold text-green-700 mb-1.5 flex items-center gap-1">
                   <span>💪</span> Their strengths
-                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                  {isEditor && <Pencil className="w-3 h-3 ml-auto opacity-40" />}
                 </p>
-                <EditableBulletList
-                  items={(bc?.strengths as string[]) || []}
-                  onSave={(items) => updateMutation.mutate({ strengths: items })}
-                  placeholder="Click to add their strengths..."
-                  testId="input-battlecard-strengths"
-                />
+                {isEditor ? (
+                  <EditableBulletList
+                    items={(bc?.strengths as string[]) || []}
+                    onSave={(items) => updateMutation.mutate({ strengths: items })}
+                    placeholder="Click to add their strengths..."
+                    testId="input-battlecard-strengths"
+                  />
+                ) : (
+                  <ul className="space-y-1" data-testid="input-battlecard-strengths">
+                    {((bc?.strengths as string[]) || []).length > 0 ? (bc?.strengths as string[]).map((s, i) => <li key={i} className="text-sm text-slate-700">• {s}</li>) : <li className="text-sm text-slate-400 italic">No strengths listed yet.</li>}
+                  </ul>
+                )}
               </div>
 
               <div className="rounded-lg bg-red-50 p-4 mb-3 border-l-4 border-red-400">
                 <p className="text-sm font-semibold text-red-700 mb-1.5 flex items-center gap-1">
                   <span>🎯</span> Their weaknesses
-                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                  {isEditor && <Pencil className="w-3 h-3 ml-auto opacity-40" />}
                 </p>
-                <EditableBulletList
-                  items={(bc?.weaknesses as string[]) || []}
-                  onSave={(items) => updateMutation.mutate({ weaknesses: items })}
-                  placeholder="Click to add their weaknesses..."
-                  testId="input-battlecard-weaknesses"
-                />
+                {isEditor ? (
+                  <EditableBulletList
+                    items={(bc?.weaknesses as string[]) || []}
+                    onSave={(items) => updateMutation.mutate({ weaknesses: items })}
+                    placeholder="Click to add their weaknesses..."
+                    testId="input-battlecard-weaknesses"
+                  />
+                ) : (
+                  <ul className="space-y-1" data-testid="input-battlecard-weaknesses">
+                    {((bc?.weaknesses as string[]) || []).length > 0 ? (bc?.weaknesses as string[]).map((s, i) => <li key={i} className="text-sm text-slate-700">• {s}</li>) : <li className="text-sm text-slate-400 italic">No weaknesses listed yet.</li>}
+                  </ul>
+                )}
               </div>
 
               <div className="rounded-lg bg-blue-50 p-4 mb-3 border-l-4 border-blue-500">
                 <p className="text-sm font-semibold text-blue-700 mb-1.5 flex items-center gap-1">
                   <span>🏆</span> How to beat them
-                  <Pencil className="w-3 h-3 ml-auto opacity-40" />
+                  {isEditor && <Pencil className="w-3 h-3 ml-auto opacity-40" />}
                 </p>
-                <EditableBulletList
-                  items={(bc?.howToBeat as string[]) || []}
-                  onSave={(items) => updateMutation.mutate({ howToBeat: items })}
-                  placeholder="Click to add competitive strategies..."
-                  testId="input-battlecard-howtobeat"
-                />
+                {isEditor ? (
+                  <EditableBulletList
+                    items={(bc?.howToBeat as string[]) || []}
+                    onSave={(items) => updateMutation.mutate({ howToBeat: items })}
+                    placeholder="Click to add competitive strategies..."
+                    testId="input-battlecard-howtobeat"
+                  />
+                ) : (
+                  <ul className="space-y-1" data-testid="input-battlecard-howtobeat">
+                    {((bc?.howToBeat as string[]) || []).length > 0 ? (bc?.howToBeat as string[]).map((s, i) => <li key={i} className="text-sm text-slate-700">• {s}</li>) : <li className="text-sm text-slate-400 italic">No strategies listed yet.</li>}
+                  </ul>
+                )}
                 <p className="text-[11px] text-blue-500 mt-2 italic" data-testid="text-product-context-hint">
                   Add your product details in Settings for personalised advice.
                 </p>
               </div>
 
-        {hasData && autofillButton}
+        {hasData && isEditor && autofillButton}
       </div>
       )}
     </div>
@@ -3303,6 +3362,8 @@ function DatesAndDeadlinesCard({
   categoryName: string;
 }) {
   const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
   const entityId = entity.name;
   const topicType = (entity.topic_type || "general").toLowerCase();
   const isProminent = topicType === "regulation" || topicType === "risk";
@@ -3459,13 +3520,15 @@ function DatesAndDeadlinesCard({
               <AlertTriangle className="w-3.5 h-3.5 text-amber-500" data-testid="icon-dates-warning" />
             )}
           </div>
-          <button
-            onClick={openAddModal}
-            className="w-6 h-6 rounded flex items-center justify-center bg-[#1e3a5f] text-white hover:bg-[#1e3a5f]/90 transition-colors"
-            data-testid="button-add-date"
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          {isEditor && (
+            <button
+              onClick={openAddModal}
+              className="w-6 h-6 rounded flex items-center justify-center bg-[#1e3a5f] text-white hover:bg-[#1e3a5f]/90 transition-colors"
+              data-testid="button-add-date"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         <Dialog open={showDateModal} onOpenChange={(open) => { if (!open) closeModal(); }}>
@@ -3613,47 +3676,49 @@ function DatesAndDeadlinesCard({
                       {td.label}
                     </p>
                   </div>
-                  <div className="relative" ref={openMenuId === td.id ? menuRef : undefined}>
-                    <button
-                      onClick={() => setOpenMenuId(openMenuId === td.id ? null : td.id)}
-                      className="p-1 rounded hover:bg-slate-100 transition-colors"
-                      data-testid={`button-date-menu-${td.id}`}
-                    >
-                      <MoreVertical className="w-3.5 h-3.5 text-slate-400" />
-                    </button>
-                    {openMenuId === td.id && (
-                      <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-border rounded-lg shadow-lg py-1 w-36" data-testid={`menu-date-${td.id}`}>
-                        <button
-                          onClick={() => handleEdit(td)}
-                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
-                          data-testid={`button-date-edit-${td.id}`}
-                        >
-                          <Pencil className="w-3 h-3" /> Edit
-                        </button>
-                        <button
-                          onClick={() => handleMarkComplete(td.id)}
-                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
-                          data-testid={`button-date-complete-${td.id}`}
-                        >
-                          <CheckCircle2 className="w-3 h-3" /> Mark complete
-                        </button>
-                        <button
-                          onClick={() => handleDismiss(td.id)}
-                          className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
-                          data-testid={`button-date-dismiss-${td.id}`}
-                        >
-                          <XCircle className="w-3 h-3" /> Dismiss
-                        </button>
-                        <button
-                          onClick={() => handleDelete(td.id)}
-                          className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                          data-testid={`button-date-delete-${td.id}`}
-                        >
-                          <Trash2 className="w-3 h-3" /> Delete
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  {isEditor && (
+                    <div className="relative" ref={openMenuId === td.id ? menuRef : undefined}>
+                      <button
+                        onClick={() => setOpenMenuId(openMenuId === td.id ? null : td.id)}
+                        className="p-1 rounded hover:bg-slate-100 transition-colors"
+                        data-testid={`button-date-menu-${td.id}`}
+                      >
+                        <MoreVertical className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                      {openMenuId === td.id && (
+                        <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-border rounded-lg shadow-lg py-1 w-36" data-testid={`menu-date-${td.id}`}>
+                          <button
+                            onClick={() => handleEdit(td)}
+                            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
+                            data-testid={`button-date-edit-${td.id}`}
+                          >
+                            <Pencil className="w-3 h-3" /> Edit
+                          </button>
+                          <button
+                            onClick={() => handleMarkComplete(td.id)}
+                            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
+                            data-testid={`button-date-complete-${td.id}`}
+                          >
+                            <CheckCircle2 className="w-3 h-3" /> Mark complete
+                          </button>
+                          <button
+                            onClick={() => handleDismiss(td.id)}
+                            className="w-full text-left px-3 py-1.5 text-sm hover:bg-slate-50 flex items-center gap-2"
+                            data-testid={`button-date-dismiss-${td.id}`}
+                          >
+                            <XCircle className="w-3 h-3" /> Dismiss
+                          </button>
+                          <button
+                            onClick={() => handleDelete(td.id)}
+                            className="w-full text-left px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            data-testid={`button-date-delete-${td.id}`}
+                          >
+                            <Trash2 className="w-3 h-3" /> Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
