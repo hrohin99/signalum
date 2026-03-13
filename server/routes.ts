@@ -1675,7 +1675,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
     }
   });
 
-  app.put("/api/categories/:name", requireAuth, async (req: Request, res: Response) => {
+  app.put("/api/categories/:name", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const oldName = decodeURIComponent(req.params.name);
@@ -1710,7 +1710,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
     }
   });
 
-  app.delete("/api/categories/:name", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/categories/:name", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const categoryName = decodeURIComponent(req.params.name);
@@ -1733,7 +1733,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
     }
   });
 
-  app.put("/api/topics/:entityName", requireAuth, async (req: Request, res: Response) => {
+  app.put("/api/topics/:entityName", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const oldEntityName = decodeURIComponent(req.params.entityName);
@@ -1773,7 +1773,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
     }
   });
 
-  app.delete("/api/topics/:entityName", requireAuth, async (req: Request, res: Response) => {
+  app.delete("/api/topics/:entityName", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const entityName = decodeURIComponent(req.params.entityName);
@@ -4016,21 +4016,41 @@ Return only the bullet points, no JSON, no headers.`
 
   const ADMIN_EMAIL = "hrohin99@gmail.com";
 
-  function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  async function requireAdmin(req: Request, res: Response, next: NextFunction) {
+    const userId = (req as any).userId;
     const email = (req as any).userEmail;
-    if (email !== ADMIN_EMAIL) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    next();
+    if (email === ADMIN_EMAIL) return next();
+    try {
+      const result = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      if (result.rows.length > 0 && result.rows[0].role === "admin") return next();
+    } catch {}
+    return res.status(403).json({ message: "Forbidden" });
   }
 
-  app.get("/api/admin/stats", requireAuth, requireAdmin, async (_req: Request, res: Response) => {
+  async function requireSubAdmin(req: Request, res: Response, next: NextFunction) {
+    const userId = (req as any).userId;
+    const email = (req as any).userEmail;
+    if (email === ADMIN_EMAIL) return next();
+    try {
+      const result = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      if (result.rows.length > 0 && ["admin", "sub_admin"].includes(result.rows[0].role)) return next();
+    } catch {}
+    return res.status(403).json({ message: "Forbidden" });
+  }
+
+  app.get("/api/admin/stats", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const { data: { users: allUsers }, error: usersError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
       if (usersError) throw usersError;
       const emailMap = new Map<string, string>();
       for (const u of allUsers) {
         if (u.id && u.email) emailMap.set(u.id, u.email);
+      }
+
+      const roleResult = await pool.query(`SELECT user_id, role FROM user_profiles`);
+      const roleMap = new Map<string, string>();
+      for (const r of roleResult.rows) {
+        roleMap.set(r.user_id, r.role || "read_only");
       }
 
       const feedbackResult = await pool.query(
@@ -4069,6 +4089,7 @@ Return only the bullet points, no JSON, no headers.`
         return {
           userId: u.id,
           email: u.email || "unknown",
+          role: u.email === ADMIN_EMAIL ? "admin" : (roleMap.get(u.id) || "read_only"),
           createdAt: u.created_at,
           lastSignIn: u.last_sign_in_at || null,
           topicCount,
@@ -4079,6 +4100,106 @@ Return only the bullet points, no JSON, no headers.`
       return res.json({ feedback: feedbackData, featureInterest: featureData, users: usersData });
     } catch (error: any) {
       console.error("Admin stats error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/admin/invite-user", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { email, role } = req.body;
+      if (!email || !role) {
+        return res.status(400).json({ message: "Email and role are required" });
+      }
+      const validRoles = ["sub_admin", "read_only"];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+
+      const tempPassword = randomUUID().slice(0, 16);
+      const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
+        email,
+        password: tempPassword,
+        email_confirm: true,
+      });
+      if (createError) throw createError;
+
+      if (newUser?.user) {
+        await pool.query(
+          `INSERT INTO user_profiles (user_id, role) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET role = $2`,
+          [newUser.user.id, role]
+        );
+      }
+
+      const fromAddress = process.env.EMAIL_FROM || "noreply@example.com";
+      const { Resend } = await import("resend");
+      const resendClient = new Resend(process.env.RESEND_API_KEY);
+      const appUrl = getAppUrl();
+      await resendClient.emails.send({
+        from: fromAddress,
+        to: email,
+        subject: "You've been invited to Signalum",
+        html: `<p>You've been invited to join Signalum as a <strong>${role.replace("_", " ")}</strong>.</p><p>Sign in at <a href="${appUrl}/signin">${appUrl}/signin</a> with this temporary password: <strong>${tempPassword}</strong></p><p>Please change your password after first login.</p>`,
+        text: `You've been invited to join Signalum as a ${role.replace("_", " ")}. Sign in at ${appUrl}/signin with temporary password: ${tempPassword}`,
+      });
+
+      return res.json({ success: true, message: "Invite sent" });
+    } catch (error: any) {
+      console.error("Invite user error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.patch("/api/admin/users/:userId/role", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const { role } = req.body;
+      const validRoles = ["admin", "sub_admin", "read_only", "suspended"];
+      if (!role || !validRoles.includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      await pool.query(
+        `UPDATE user_profiles SET role = $1 WHERE user_id = $2`,
+        [role, userId]
+      );
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Update user role error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/admin/users/:userId/reset-password", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+      if (userError || !userData?.user?.email) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      const { error: resetError } = await supabaseAdmin.auth.admin.generateLink({
+        type: "recovery",
+        email: userData.user.email,
+      });
+      if (resetError) throw resetError;
+      return res.json({ success: true, message: "Password reset email sent" });
+    } catch (error: any) {
+      console.error("Reset password error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/admin/users/:userId", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { userId } = req.params;
+      const requestingUserId = (req as any).userId;
+      if (userId === requestingUserId) {
+        return res.status(400).json({ message: "Cannot delete your own account" });
+      }
+      await pool.query(`DELETE FROM user_profiles WHERE user_id = $1`, [userId]);
+      const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
+      if (deleteError) throw deleteError;
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete user error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
@@ -4117,7 +4238,7 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
-  app.put("/api/capabilities/reorder", requireAuth, async (req: Request, res: Response) => {
+  app.put("/api/capabilities/reorder", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const { orderedIds } = req.body;
@@ -4132,7 +4253,7 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
-  app.put("/api/capabilities/:id", requireAuth, async (req: Request, res: Response) => {
+  app.put("/api/capabilities/:id", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const { name } = req.body;
