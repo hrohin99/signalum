@@ -90,31 +90,6 @@ export function WinLossCard({ entityId, userRole }: { entityId: string; userRole
 
   const countBadge = items.length > 0 ? `${wins}W · ${losses}L` : '0';
 
-  const FormFields = ({ onSave, onCancel, isPending }: { onSave: () => void; onCancel: () => void; isPending: boolean }) => (
-    <div style={formRowStyle}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <select data-testid="select-win-loss-outcome" value={form.outcome} onChange={e => setForm(f => ({ ...f, outcome: e.target.value }))} style={inputStyle}>
-          <option value="win">Win</option>
-          <option value="loss">Loss</option>
-          <option value="draw">Draw</option>
-        </select>
-        <input data-testid="input-win-loss-deal-name" placeholder="Deal or opportunity name *" value={form.deal_name} onChange={e => setForm(f => ({ ...f, deal_name: e.target.value }))} style={inputStyle} />
-      </div>
-      <textarea data-testid="input-win-loss-description" placeholder="What happened?" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-        <input data-testid="input-win-loss-quarter" placeholder="e.g. Q2 2024" value={form.quarter} onChange={e => setForm(f => ({ ...f, quarter: e.target.value }))} style={inputStyle} />
-        <input data-testid="input-win-loss-sector" placeholder="e.g. UK Gov, Financial" value={form.sector} onChange={e => setForm(f => ({ ...f, sector: e.target.value }))} style={inputStyle} />
-        <input data-testid="input-win-loss-est-arr" placeholder="e.g. £800K ARR" value={form.est_arr} onChange={e => setForm(f => ({ ...f, est_arr: e.target.value }))} style={inputStyle} />
-      </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button data-testid="button-cancel-win-loss" onClick={onCancel} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-        <button data-testid="button-save-win-loss" onClick={onSave} disabled={!formRef.current.deal_name || isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-          {isPending ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div data-testid="card-win-loss" style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
@@ -129,11 +104,28 @@ export function WinLossCard({ entityId, userRole }: { entityId: string; userRole
       </div>
 
       {showForm && canEdit && (
-        <FormFields
-          onSave={() => addMutation.mutate(formRef.current)}
-          onCancel={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-          isPending={addMutation.isPending}
-        />
+        <div style={formRowStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <select data-testid="select-win-loss-outcome" value={form.outcome} onChange={e => setForm(f => ({ ...f, outcome: e.target.value }))} style={inputStyle}>
+              <option value="win">Win</option>
+              <option value="loss">Loss</option>
+              <option value="draw">Draw</option>
+            </select>
+            <input data-testid="input-win-loss-deal-name" placeholder="Deal or opportunity name *" value={form.deal_name} onChange={e => setForm(f => ({ ...f, deal_name: e.target.value }))} style={inputStyle} />
+          </div>
+          <textarea data-testid="input-win-loss-description" placeholder="What happened?" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+            <input data-testid="input-win-loss-quarter" placeholder="e.g. Q2 2024" value={form.quarter} onChange={e => setForm(f => ({ ...f, quarter: e.target.value }))} style={inputStyle} />
+            <input data-testid="input-win-loss-sector" placeholder="e.g. UK Gov, Financial" value={form.sector} onChange={e => setForm(f => ({ ...f, sector: e.target.value }))} style={inputStyle} />
+            <input data-testid="input-win-loss-est-arr" placeholder="e.g. £800K ARR" value={form.est_arr} onChange={e => setForm(f => ({ ...f, est_arr: e.target.value }))} style={inputStyle} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button data-testid="button-cancel-win-loss" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
+            <button data-testid="button-save-win-loss" onClick={() => addMutation.mutate(formRef.current)} disabled={!form.deal_name || addMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+              {addMutation.isPending ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
       )}
 
       <div style={{ borderTop: '0.5px solid var(--color-border-tertiary, #e2e8f0)' }}>
@@ -147,11 +139,28 @@ export function WinLossCard({ entityId, userRole }: { entityId: string; userRole
           return (
             <div key={item.id}>
               {isEditing ? (
-                <FormFields
-                  onSave={() => editMutation.mutate({ id: item.id, data: formRef.current })}
-                  onCancel={() => { setEditingId(null); setForm(EMPTY_FORM); }}
-                  isPending={editMutation.isPending}
-                />
+                <div style={formRowStyle}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <select data-testid="select-win-loss-outcome" value={form.outcome} onChange={e => setForm(f => ({ ...f, outcome: e.target.value }))} style={inputStyle}>
+                      <option value="win">Win</option>
+                      <option value="loss">Loss</option>
+                      <option value="draw">Draw</option>
+                    </select>
+                    <input data-testid="input-win-loss-deal-name" placeholder="Deal or opportunity name *" value={form.deal_name} onChange={e => setForm(f => ({ ...f, deal_name: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <textarea data-testid="input-win-loss-description" placeholder="What happened?" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                    <input data-testid="input-win-loss-quarter" placeholder="e.g. Q2 2024" value={form.quarter} onChange={e => setForm(f => ({ ...f, quarter: e.target.value }))} style={inputStyle} />
+                    <input data-testid="input-win-loss-sector" placeholder="e.g. UK Gov, Financial" value={form.sector} onChange={e => setForm(f => ({ ...f, sector: e.target.value }))} style={inputStyle} />
+                    <input data-testid="input-win-loss-est-arr" placeholder="e.g. £800K ARR" value={form.est_arr} onChange={e => setForm(f => ({ ...f, est_arr: e.target.value }))} style={inputStyle} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button data-testid="button-cancel-win-loss" onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
+                    <button data-testid="button-save-win-loss" onClick={() => editMutation.mutate({ id: item.id, data: formRef.current })} disabled={!form.deal_name || editMutation.isPending} style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                      {editMutation.isPending ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div key={item.id} style={{ padding: '13px 18px', borderBottom: '0.5px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
