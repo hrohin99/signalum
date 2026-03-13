@@ -22,6 +22,9 @@ const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }
 
 const EMPTY_FORM = { product_name: '', description: '', status: 'ga', tags: '' };
 
+const formRowStyle = { padding: '14px 18px', background: 'var(--color-background-secondary, #f8fafc)', borderTop: '0.5px solid var(--color-border-tertiary, #e2e8f0)', display: 'flex', flexDirection: 'column' as const, gap: 8 };
+const inputStyle = { fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary, #cbd5e1)', borderRadius: 6, background: 'var(--color-background-primary, #fff)', color: 'var(--color-text-primary, #1e293b)' };
+
 export function ProductsCard({ entityId, userRole }: { entityId: string; userRole: string }) {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -67,34 +70,8 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/entities', entityId, 'products'] })
   });
 
-  const FormRow = ({ onSubmit, onCancel, saving }: { onSubmit: () => void; onCancel: () => void; saving: boolean }) => (
-    <div style={{ padding: '14px 18px', background: 'var(--color-background-secondary, #f8fafc)', borderTop: '0.5px solid var(--color-border-tertiary, #e2e8f0)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <input data-testid="input-product-name" placeholder="Product name *" value={form.product_name} onChange={e => setForm(f => ({ ...f, product_name: e.target.value }))}
-          style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary, #cbd5e1)', borderRadius: 6, background: 'var(--color-background-primary, #fff)', color: 'var(--color-text-primary, #1e293b)' }} />
-        <select data-testid="select-product-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-          style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary, #cbd5e1)', borderRadius: 6, background: 'var(--color-background-primary, #fff)', color: 'var(--color-text-primary, #1e293b)' }}>
-          <option value="ga">Generally Available</option>
-          <option value="beta">Beta</option>
-          <option value="deprecated">Deprecated</option>
-        </select>
-      </div>
-      <textarea data-testid="input-product-description" placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2}
-        style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary, #cbd5e1)', borderRadius: 6, background: 'var(--color-background-primary, #fff)', color: 'var(--color-text-primary, #1e293b)', resize: 'vertical', fontFamily: 'inherit' }} />
-      <input data-testid="input-product-tags" placeholder="Tags (comma separated, e.g. liveness, biometric)" value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-        style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid var(--color-border-secondary, #cbd5e1)', borderRadius: 6, background: 'var(--color-background-primary, #fff)', color: 'var(--color-text-primary, #1e293b)' }} />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <button data-testid="button-cancel-product" onClick={onCancel} style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
-        <button data-testid="button-save-product" onClick={onSubmit} disabled={!form.product_name || saving}
-          style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
-          {saving ? 'Saving...' : 'Save'}
-        </button>
-      </div>
-    </div>
-  );
-
   return (
-    <div data-testid="card-products-solutions" style={{ background: '#fff', border: '0.5px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+    <div data-testid="card-products-solutions" style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: '12px', overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 18px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary, #1e293b)' }}>Products & solutions</span>
@@ -107,11 +84,27 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
       </div>
 
       {showForm && canEdit && (
-        <FormRow
-          onSubmit={() => addMutation.mutate(form)}
-          onCancel={() => { setShowForm(false); setForm(EMPTY_FORM); }}
-          saving={addMutation.isPending}
-        />
+        <div style={formRowStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <input data-testid="input-product-name" placeholder="Product name *" value={form.product_name} onChange={e => setForm(f => ({ ...f, product_name: e.target.value }))} style={inputStyle} />
+            <select data-testid="select-product-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={inputStyle}>
+              <option value="ga">Generally Available</option>
+              <option value="beta">Beta</option>
+              <option value="deprecated">Deprecated</option>
+            </select>
+          </div>
+          <textarea data-testid="input-product-description" placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+          <input data-testid="input-product-tags" placeholder="Tags (comma separated, e.g. liveness, biometric)" value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} style={inputStyle} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button data-testid="button-cancel-product" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+              style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
+            <button data-testid="button-save-product" onClick={() => addMutation.mutate(form)} disabled={!form.product_name || addMutation.isPending}
+              style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+              {addMutation.isPending ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
       )}
 
       <div style={{ borderTop: '0.5px solid var(--color-border-tertiary, #e2e8f0)' }}>
@@ -126,11 +119,27 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
           return (
             <div key={p.id}>
               {isEditing ? (
-                <FormRow
-                  onSubmit={() => editMutation.mutate({ id: p.id, data: form })}
-                  onCancel={() => { setEditingId(null); setForm(EMPTY_FORM); }}
-                  saving={editMutation.isPending}
-                />
+                <div style={formRowStyle}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <input data-testid="input-product-name" placeholder="Product name *" value={form.product_name} onChange={e => setForm(f => ({ ...f, product_name: e.target.value }))} style={inputStyle} />
+                    <select data-testid="select-product-status" value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} style={inputStyle}>
+                      <option value="ga">Generally Available</option>
+                      <option value="beta">Beta</option>
+                      <option value="deprecated">Deprecated</option>
+                    </select>
+                  </div>
+                  <textarea data-testid="input-product-description" placeholder="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} rows={2}
+                    style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }} />
+                  <input data-testid="input-product-tags" placeholder="Tags (comma separated, e.g. liveness, biometric)" value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))} style={inputStyle} />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                    <button data-testid="button-cancel-product" onClick={() => { setEditingId(null); setForm(EMPTY_FORM); }}
+                      style={{ fontSize: 12, padding: '4px 14px', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 6, background: 'transparent', color: 'var(--color-text-secondary, #64748b)', cursor: 'pointer' }}>Cancel</button>
+                    <button data-testid="button-save-product" onClick={() => editMutation.mutate({ id: p.id, data: form })} disabled={!form.product_name || editMutation.isPending}
+                      style={{ fontSize: 12, padding: '4px 14px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
+                      {editMutation.isPending ? 'Saving...' : 'Save'}
+                    </button>
+                  </div>
+                </div>
               ) : (
                 <div data-testid={`card-product-${p.id}`} style={{ padding: '13px 18px', borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
