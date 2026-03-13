@@ -195,7 +195,8 @@ function contentSimilarity(a: string, b: string): number {
 export async function sendBriefingEmail(
   userId: string,
   toEmail: string,
-  briefingData: BriefingData
+  briefingData: BriefingData,
+  extraRecipients?: string[]
 ): Promise<{ success: boolean; error?: string }> {
   const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -341,16 +342,19 @@ export async function sendBriefingEmail(
   emailHtml = emailHtml.replace(/https?:\/\/youtu\.be\/[^\s"'<>]*/g, '[video link removed]');
   emailHtml = emailHtml.replace(/https?:\/\/(www\.)?youtube\.com\/shorts\/[^\s"'<>]*/g, '[video link removed]');
 
-  try {
-    await resend.emails.send({
-      from: "rohin@rohin.co",
-      to: toEmail,
-      subject,
-      html: emailHtml,
-    });
-    return { success: true };
-  } catch (err: any) {
-    console.error("[briefing] Email send failed:", err);
-    return { success: false, error: err.message };
+  const allRecipients = [...new Set([toEmail, ...(extraRecipients || [])].filter(Boolean))];
+
+  for (const recipient of allRecipients) {
+    try {
+      await resend.emails.send({
+        from: "rohin@rohin.co",
+        to: recipient,
+        subject,
+        html: emailHtml,
+      });
+    } catch (err: any) {
+      console.error(`[briefing] Failed to send to ${recipient}:`, err.message);
+    }
   }
+  return { success: true };
 }

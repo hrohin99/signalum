@@ -4913,7 +4913,15 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         return res.status(404).json({ message: "No recent captures found to generate a briefing" });
       }
 
-      const result = await sendBriefingEmail(userId, email, briefingData);
+      const wsRow = await pool.query(
+        `SELECT digest_recipients FROM workspaces WHERE user_id = $1::varchar LIMIT 1`,
+        [userId]
+      );
+      const digestRecipients = (wsRow.rows[0]?.digest_recipients || []).map((r: any) =>
+        typeof r === 'string' ? r : r.email
+      ).filter(Boolean);
+
+      const result = await sendBriefingEmail(userId, email, briefingData, digestRecipients);
       if (result.success) {
         await storage.updateBriefingLastSent(userId);
         return res.json({ success: true });
