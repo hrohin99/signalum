@@ -81,6 +81,8 @@ import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ProductsCard } from "@/components/ProductsCard";
 import { GeoPresenceCard, getRegionFlag } from "@/components/GeoPresenceCard";
+import { WinLossCard } from "@/components/WinLossCard";
+import { FundingCard, FundingOverviewPreview } from "@/components/FundingCard";
 import { CoachMarks } from "@/components/coach-marks";
 import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
 import { topicTourSteps } from "@/lib/tourConfig";
@@ -687,10 +689,7 @@ function TopicViewContent({
                   })
               }
             </div>
-            <div style={{ background: 'var(--color-background-primary)', border: '0.5px solid var(--color-border-tertiary)', borderRadius: 12, padding: '14px 18px' }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>Funding</div>
-              <div style={{ fontSize: 13, color: 'var(--color-text-tertiary)' }}>See Commercial tab to manage</div>
-            </div>
+            <FundingOverviewPreview entityId={entity.name} />
             <CertificationsCard entityId={entity.name} userRole={userRole} previewMode={true} />
           </div>
         </div>
@@ -724,10 +723,8 @@ function TopicViewContent({
       {isCompetitor && activeTab === 'commercial' && (
         <div className="space-y-6">
           <PricingCard entity={entity} />
-          <div style={{ background: 'var(--color-background-primary, #fff)', border: '0.5px solid var(--color-border-tertiary, #e2e8f0)', borderRadius: 12, padding: '24px 18px', textAlign: 'center' }} data-testid="card-win-loss-coming-soon">
-            <p style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-text-primary, #1e293b)', margin: '0 0 4px' }}>Win / loss tracker</p>
-            <p style={{ fontSize: 12, color: 'var(--color-text-tertiary, #94a3b8)', margin: 0 }}>Track wins and losses against this competitor — coming soon.</p>
-          </div>
+          <WinLossCard entityId={entity.name} userRole={userRole} />
+          <FundingCard entityId={entity.name} userRole={userRole} />
         </div>
       )}
 

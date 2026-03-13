@@ -287,5 +287,49 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring entity_geo_presence table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS entity_win_loss (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        deal_name TEXT NOT NULL,
+        description TEXT,
+        quarter TEXT,
+        sector TEXT,
+        est_arr TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[DBSafety] entity_win_loss table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_win_loss table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS entity_funding (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        total_raised TEXT,
+        stage TEXT,
+        founded TEXT,
+        status TEXT DEFAULT 'Private',
+        round_name TEXT,
+        round_amount TEXT,
+        round_lead TEXT,
+        round_year TEXT,
+        sort_order INTEGER DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log("[DBSafety] entity_funding table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_funding table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

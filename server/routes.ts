@@ -5216,6 +5216,200 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  // Win/Loss routes
+  app.get("/api/entities/:entityId/win-loss", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const result = await pool.query(
+        `SELECT * FROM entity_win_loss WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at DESC`,
+        [req.params.entityId, workspaceId]
+      );
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get win-loss error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/win-loss", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { outcome, deal_name, description, quarter, sector, est_arr } = req.body;
+      if (!outcome || !deal_name) return res.status(400).json({ error: 'outcome and deal_name are required' });
+      const result = await pool.query(
+        `INSERT INTO entity_win_loss (workspace_id, entity_id, outcome, deal_name, description, quarter, sector, est_arr)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [workspaceId, req.params.entityId, outcome, deal_name, description || null, quarter || null, sector || null, est_arr || null]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Create win-loss error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entities/:entityId/win-loss/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { outcome, deal_name, description, quarter, sector, est_arr } = req.body;
+      if (!outcome || !deal_name) return res.status(400).json({ error: 'outcome and deal_name are required' });
+      const result = await pool.query(
+        `UPDATE entity_win_loss SET outcome=$1, deal_name=$2, description=$3, quarter=$4, sector=$5, est_arr=$6
+         WHERE id=$7 AND workspace_id=$8 AND entity_id=$9 RETURNING *`,
+        [outcome, deal_name, description || null, quarter || null, sector || null, est_arr || null, req.params.id, workspaceId, req.params.entityId]
+      );
+      if (result.rowCount === 0) return res.status(404).json({ error: 'Win/loss entry not found' });
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update win-loss error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entities/:entityId/win-loss/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const deleted = await pool.query(
+        `DELETE FROM entity_win_loss WHERE id=$1 AND workspace_id=$2 AND entity_id=$3 RETURNING id`,
+        [req.params.id, workspaceId, req.params.entityId]
+      );
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Win/loss entry not found' });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete win-loss error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Funding routes
+  app.get("/api/entities/:entityId/funding", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const result = await pool.query(
+        `SELECT * FROM entity_funding WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at DESC`,
+        [req.params.entityId, workspaceId]
+      );
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get funding error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/funding", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { total_raised, stage, founded, status, round_name, round_amount, round_lead, round_year } = req.body;
+      const result = await pool.query(
+        `INSERT INTO entity_funding (workspace_id, entity_id, total_raised, stage, founded, status, round_name, round_amount, round_lead, round_year)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        [workspaceId, req.params.entityId, total_raised || null, stage || null, founded || null, status || 'Private', round_name || null, round_amount || null, round_lead || null, round_year || null]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Create funding error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entities/:entityId/funding/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { total_raised, stage, founded, status, round_name, round_amount, round_lead, round_year } = req.body;
+      const result = await pool.query(
+        `UPDATE entity_funding SET total_raised=$1, stage=$2, founded=$3, status=$4, round_name=$5, round_amount=$6, round_lead=$7, round_year=$8
+         WHERE id=$9 AND workspace_id=$10 AND entity_id=$11 RETURNING *`,
+        [total_raised || null, stage || null, founded || null, status || 'Private', round_name || null, round_amount || null, round_lead || null, round_year || null, req.params.id, workspaceId, req.params.entityId]
+      );
+      if (result.rowCount === 0) return res.status(404).json({ error: 'Funding entry not found' });
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update funding error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/entities/:entityId/funding/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const deleted = await pool.query(
+        `DELETE FROM entity_funding WHERE id=$1 AND workspace_id=$2 AND entity_id=$3 RETURNING id`,
+        [req.params.id, workspaceId, req.params.entityId]
+      );
+      if (deleted.rowCount === 0) return res.status(404).json({ error: 'Funding entry not found' });
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete funding error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/entities/:entityId/intelligence/:field", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
