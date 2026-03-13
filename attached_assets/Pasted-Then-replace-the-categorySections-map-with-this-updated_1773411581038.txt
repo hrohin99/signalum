@@ -1,0 +1,47 @@
+Then replace the categorySections map with this updated version that renders category → entity subsections:
+typescriptconst categorySections = Object.entries(grouped).map(([category, entityGroups]) => {
+  const colors = getCategoryColor(category);
+  const allEntityRows = Object.entries(entityGroups).map(([entityName, items]) => {
+    const itemRows = items.map(item => `
+      <tr>
+        <td style="padding: 8px 0; border-bottom: 1px solid #F8F8F6;">
+          <p style="margin: 0 0 3px 0; font-size: 13px; color: #1a1a2e; line-height: 1.5;">
+            ${(item.content || item.title || "").slice(0, 600)}
+          </p>
+          <p style="margin: 0; font-size: 11px; color: #888780;">
+            ${new Date(item.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          </p>
+        </td>
+      </tr>
+    `).join("");
+
+    return `
+      <tr>
+        <td style="padding: 10px 0 4px 0;">
+          <p style="margin: 0; font-size: 12px; font-weight: 600; color: ${colors.label};">${escapeHtml(entityName)}</p>
+        </td>
+      </tr>
+      ${itemRows}
+    `;
+  }).join("");
+
+  const totalItems = Object.values(entityGroups).reduce((sum, items) => sum + items.length, 0);
+
+  return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px; border-radius: 8px; overflow: hidden; border: 1px solid ${colors.border};">
+      <tr>
+        <td style="background: ${colors.bg}; padding: 10px 16px;">
+          <span style="font-size: 11px; font-weight: 700; color: ${colors.label}; text-transform: uppercase; letter-spacing: 0.06em;">${escapeHtml(category)}</span>
+          <span style="font-size: 11px; color: ${colors.label}; opacity: 0.7; margin-left: 8px;">${Object.keys(entityGroups).length} topics · ${totalItems} signals</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="background: #ffffff; padding: 4px 16px 12px 16px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            ${allEntityRows}
+          </table>
+        </td>
+      </tr>
+    </table>
+  `;
+}).join("");
