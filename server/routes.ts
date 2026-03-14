@@ -4954,7 +4954,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       const userId = (req as any).userId;
       const entityId = req.params.entityId;
       const ws = await pool.query(
-        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
         [userId]
       );
       const workspaceId = ws.rows[0]?.id;
@@ -4982,7 +4982,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         return res.status(403).json({ error: "Forbidden" });
       }
       const ws = await pool.query(
-        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
         [userId]
       );
       const workspaceId = ws.rows[0]?.id;
@@ -5016,7 +5016,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         return res.status(403).json({ error: "Forbidden" });
       }
       const ws = await pool.query(
-        `SELECT id FROM workspaces WHERE user_id = $1 OR id = (SELECT parent_workspace_id FROM workspaces WHERE user_id = $1) LIMIT 1`,
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
         [userId]
       );
       const workspaceId = ws.rows[0]?.id;

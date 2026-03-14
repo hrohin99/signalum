@@ -614,7 +614,7 @@ function TopicViewContent({
       )}
 
       {isCompetitor && (
-        <div style={{ display: 'flex', borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)', marginBottom: 20, marginTop: 16, gap: 0 }} data-testid="tab-bar-competitor">
+        <div style={{ display: 'flex', borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)', marginBottom: 20, marginTop: 16, gap: 0, overflowX: 'auto', whiteSpace: 'nowrap' }} data-testid="tab-bar-competitor">
           {(['overview','profile','commercial','competitive','strategic','updates'] as const).map(tab => (
             <div
               key={tab}
@@ -638,7 +638,7 @@ function TopicViewContent({
       {isCompetitor && activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Products & solutions</div>
