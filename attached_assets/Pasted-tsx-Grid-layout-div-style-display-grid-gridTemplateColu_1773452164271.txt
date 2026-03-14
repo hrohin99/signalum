@@ -1,0 +1,47 @@
+tsx// Grid layout
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+  {QUADRANTS.map(q => {
+    const isEditing = editingKey === q.key;
+    const text = swot?.[q.key] || '';
+    const bullets = text.split('\n').filter(Boolean);
+    return (
+      <div key={q.key} style={{ padding: '16px 18px', borderRight: q.key === 'strengths' || q.key === 'opportunities' ? '0.5px solid #e2e8f0' : 'none', borderBottom: q.key === 'strengths' || q.key === 'weaknesses' ? '0.5px solid #e2e8f0' : 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>{q.emoji}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: q.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{q.label}</span>
+          </div>
+          {canEdit && !isEditing && (
+            <button onClick={() => { setEditingKey(q.key); setEditText(text); }}
+              style={{ fontSize: 11, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 4, padding: '1px 7px', cursor: 'pointer', background: 'transparent' }}>Edit</button>
+          )}
+        </div>
+        {isEditing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={5}
+              style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid #cbd5e1', borderRadius: 6, resize: 'vertical', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}
+              placeholder="One point per line" />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+              <button onClick={() => setEditingKey(null)} style={{ fontSize: 11, padding: '3px 10px', border: '0.5px solid #e2e8f0', borderRadius: 5, background: 'transparent', cursor: 'pointer', color: '#64748b' }}>Cancel</button>
+              <button onClick={() => saveMutation.mutate({ ...swot, [q.key]: editText })}
+                style={{ fontSize: 11, padding: '3px 10px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>
+                {saveMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        ) : bullets.length > 0 ? (
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {bullets.map((b, i) => (
+              <li key={i} style={{ fontSize: 13, color: '#1e293b', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                <span style={{ color: q.color, fontWeight: 700, flexShrink: 0 }}>•</span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No data yet{canEdit ? ' — click Edit to add' : ''}</div>
+        )}
+      </div>
+    );
+  })}
+</div>

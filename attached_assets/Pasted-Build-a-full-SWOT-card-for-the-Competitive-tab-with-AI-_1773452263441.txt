@@ -1,0 +1,153 @@
+Build a full SWOT card for the Competitive tab with AI generation + manual editing. Five parts.
+Part 1 — DB table in server/dbSafety.ts (add after geo_presence block, use db.execute(sql\...`)`):
+typescriptawait db.execute(sql`
+  CREATE TABLE IF NOT EXISTS entity_swot (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL,
+    entity_id TEXT NOT NULL,
+    strengths TEXT,
+    weaknesses TEXT,
+    opportunities TEXT,
+    threats TEXT,
+    ai_generated BOOLEAN DEFAULT false,
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(workspace_id, entity_id)
+  )
+`);
+Also create it directly:
+bashpsql postgresql://postgres:password@helium/heliumdb -c "
+CREATE TABLE IF NOT EXISTS entity_swot (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  entity_id TEXT NOT NULL,
+  strengths TEXT,
+  weaknesses TEXT,
+  opportunities TEXT,
+  threats TEXT,
+  ai_generated BOOLEAN DEFAULT false,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(workspace_id, entity_id)
+);"
+Part 2 — API routes in server/routes.ts (add after geo-presence routes, standard auth + workspace + || 'admin' role pattern):
+typescript// GET
+app.get("/api/entities/:entityId/swot", requireAuth, async (req, res) => {
+  // SELECT * FROM entity_swot WHERE workspace_id=$1 AND entity_id=$2
+  // return row or {} if not found
+});
+
+// PUT (upsert)
+app.put("/api/entities/:entityId/swot", requireAuth, async (req, res) => {
+  // role check with || 'admin'
+  // INSERT INTO entity_swot ... ON CONFLICT (workspace_id, entity_id) DO UPDATE SET strengths=$3, weaknesses=$4, opportunities=$5, threats=$6, ai_generated=$7, updated_at=NOW()
+});
+
+// POST /regenerate — AI generates SWOT from captures
+app.post("/api/entities/:entityId/swot/regenerate", requireAuth, async (req, res) => {
+  // 1. Get workspace and recent captures for this entity (same pattern as so-what regenerate)
+  // 2. Get product context
+  // 3. Call Anthropic claude-haiku-4-5-20251001 with max_tokens: 1000
+  // 4. Prompt: generate SWOT as JSON with keys: strengths, weaknesses, opportunities, threats
+  //    Each value is a newline-separated list of bullet points (no bullet characters, just text)
+  //    Base it on the intelligence captures provided
+  // 5. Parse the JSON response and upsert to entity_swot with ai_generated=true
+  // 6. Return the saved SWOT record
+});
+For the regenerate prompt use this:
+typescriptcontent: `You are a competitive intelligence analyst. Based on the intelligence captures below about "${entityName}", generate a SWOT analysis from the perspective of a competing company (${prodContext?.productName || "our organisation"}).
+
+${focusContext ? `Our context: ${focusContext}\n` : ""}
+
+Captures:
+${contentSnippets}
+
+Respond ONLY with valid JSON in this exact format, no other text:
+{
+  "strengths": "point 1\npoint 2\npoint 3",
+  "weaknesses": "point 1\npoint 2\npoint 3",
+  "opportunities": "point 1\npoint 2\npoint 3",
+  "threats": "point 1\npoint 2\npoint 3"
+}
+
+Each value must be 2-4 concise bullet points separated by newlines. Be specific and evidence-based.`
+Part 3 — Create client/src/components/SwotCard.tsx
+Props: entityId: string, userRole: string
+Use apiRequest, useQuery/useMutation, staleTime: 0, gcTime: 0, refetchOnMount: true, retry: 2, retryDelay: 500.
+Quadrant config:
+typescriptconst QUADRANTS = [
+  { key: 'strengths',     label: 'Strengths',     emoji: '💪', bg: '#EAF3DE', color: '#27500A' },
+  { key: 'weaknesses',    label: 'Weaknesses',     emoji: '⚠️', bg: '#F5E6E6', color: '#7A1C1C' },
+  { key: 'opportunities', label: 'Opportunities',  emoji: '🚀', bg: '#EAF0FB', color: '#1E3A6E' },
+  { key: 'threats',       label: 'Threats',        emoji: '🎯', bg: '#FAEEDA', color: '#633806' },
+];
+Card header: "SWOT Analysis" title + "Regenerate" button (calls /regenerate endpoint, only visible to admin/sub_admin) + last updated timestamp if swot.ai_generated.
+Layout: 2×2 CSS grid. Each quadrant:
+
+Header: emoji + label in quadrant colour
+Content: render swot[key] split by \n as individual bullet points with • prefix
+If canEdit: clicking the quadrant body opens an inline <textarea> for that quadrant only (no modal) — pre-filled with current text, Save/Cancel buttons — Save calls PUT with full updated SWOT object
+Empty state per quadrant: "No data yet" in muted text
+
+tsx// Grid layout
+<div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+  {QUADRANTS.map(q => {
+    const isEditing = editingKey === q.key;
+    const text = swot?.[q.key] || '';
+    const bullets = text.split('\n').filter(Boolean);
+    return (
+      <div key={q.key} style={{ padding: '16px 18px', borderRight: q.key === 'strengths' || q.key === 'opportunities' ? '0.5px solid #e2e8f0' : 'none', borderBottom: q.key === 'strengths' || q.key === 'weaknesses' ? '0.5px solid #e2e8f0' : 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>{q.emoji}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: q.color, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{q.label}</span>
+          </div>
+          {canEdit && !isEditing && (
+            <button onClick={() => { setEditingKey(q.key); setEditText(text); }}
+              style={{ fontSize: 11, color: '#534AB7', border: '0.5px solid #AFA9EC', borderRadius: 4, padding: '1px 7px', cursor: 'pointer', background: 'transparent' }}>Edit</button>
+          )}
+        </div>
+        {isEditing ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <textarea value={editText} onChange={e => setEditText(e.target.value)} rows={5}
+              style={{ fontSize: 13, padding: '7px 10px', border: '0.5px solid #cbd5e1', borderRadius: 6, resize: 'vertical', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}
+              placeholder="One point per line" />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+              <button onClick={() => setEditingKey(null)} style={{ fontSize: 11, padding: '3px 10px', border: '0.5px solid #e2e8f0', borderRadius: 5, background: 'transparent', cursor: 'pointer', color: '#64748b' }}>Cancel</button>
+              <button onClick={() => saveMutation.mutate({ ...swot, [q.key]: editText })}
+                style={{ fontSize: 11, padding: '3px 10px', background: '#534AB7', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer' }}>
+                {saveMutation.isPending ? 'Saving...' : 'Save'}
+              </button>
+            </div>
+          </div>
+        ) : bullets.length > 0 ? (
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {bullets.map((b, i) => (
+              <li key={i} style={{ fontSize: 13, color: '#1e293b', display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                <span style={{ color: q.color, fontWeight: 700, flexShrink: 0 }}>•</span>
+                <span>{b}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic' }}>No data yet{canEdit ? ' — click Edit to add' : ''}</div>
+        )}
+      </div>
+    );
+  })}
+</div>
+State needed: editingKey: string | null, editText: string.
+Export as SwotCard.
+Part 4 — Mount in topic-view.tsx
+
+Import SwotCard
+In Competitive tab, add between SoWhatIntelCard and CapabilityMatrixCard:
+
+tsx<SwotCard entityId={entityId} userRole={userRole} />
+
+Add top-level pre-fetch query for swot (same pattern as partnerships pre-fetch, using supabase.auth.getSession() for auth):
+
+typescriptqueryKey: [`/api/entities/${entityId}/swot`]
+Part 5 — Also fix battlecard editing
+In client/src/pages/topic-view.tsx, find the Battlecard section in the Competitive tab. Add an "Edit" button next to "View Battlecard" visible only to admin/sub_admin. Clicking it opens an inline edit mode with a <textarea> pre-filled with the battlecard text and Save/Cancel buttons. On Save, call PUT /api/battlecard/:entityName or whatever the existing battlecard update route is.
+Run:
+bashgrep -n "battlecard\|Battlecard" server/routes.ts | grep -i "PUT\|POST\|update" | head -5
+Run npm run build, confirm no errors, Republish.
