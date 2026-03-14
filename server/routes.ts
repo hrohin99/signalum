@@ -5383,7 +5383,16 @@ Return ONLY the JSON object, no other text.`
         `SELECT * FROM strategic_pulse WHERE workspace_id = $1 ORDER BY generated_at DESC LIMIT 5`,
         [workspaceId]
       );
-      res.json(result.rows);
+      const rows = result.rows;
+      const parsedRows = rows.map((row: any) => ({
+        ...row,
+        big_shift: row.big_shift ? JSON.parse(row.big_shift) : null,
+        threat_radar: row.threat_radar ? JSON.parse(row.threat_radar) : null,
+        emerging_opportunities: row.emerging_opportunities ? JSON.parse(row.emerging_opportunities) : null,
+        competitor_moves: row.competitor_moves ? JSON.parse(row.competitor_moves) : null,
+        watch_list: row.watch_list ? JSON.parse(row.watch_list) : null,
+      }));
+      res.json(parsedRows);
     } catch (error: any) {
       console.error("Get strategic pulse error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
@@ -5459,7 +5468,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
 
       const insertResult = await db.execute(sql`
         INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, entity_count, capture_count)
-        VALUES (${workspaceId}, ${JSON.stringify(parsed.big_shift) || null}, ${JSON.stringify(parsed.threat_radar) || null}, ${JSON.stringify(parsed.emerging_opportunities) || null}, ${JSON.stringify(parsed.competitor_moves) || null}, ${JSON.stringify(parsed.watch_list) || null}, ${entityCount}, ${captureCount})
+        VALUES (${workspaceId}, ${parsed.big_shift ? JSON.stringify(parsed.big_shift) : null}, ${parsed.threat_radar ? JSON.stringify(parsed.threat_radar) : null}, ${parsed.emerging_opportunities ? JSON.stringify(parsed.emerging_opportunities) : null}, ${parsed.competitor_moves ? JSON.stringify(parsed.competitor_moves) : null}, ${parsed.watch_list ? JSON.stringify(parsed.watch_list) : null}, ${entityCount}, ${captureCount})
         RETURNING *
       `);
 
