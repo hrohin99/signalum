@@ -1,0 +1,486 @@
+Let me grab the current sidebar and app structure first so the prompt is precise:Good. Now the full self-contained prompt. Send this to Replit AI:
+
+---
+
+**Prompt for Replit AI:**
+
+Build the Strategic Pulse / Intelligence feature. Six parts. Do not modify any existing functionality.
+
+**Part 1 — DB table**
+
+In `server/dbSafety.ts`, add after the entity_swot block using `db.execute(sql\`...\`)`:
+
+```typescript
+try {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS strategic_pulse (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      workspace_id UUID NOT NULL,
+      generated_at TIMESTAMPTZ DEFAULT NOW(),
+      big_shift TEXT,
+      threat_radar TEXT,
+      emerging_opportunities TEXT,
+      competitor_moves TEXT,
+      watch_list TEXT,
+      entity_count INTEGER,
+      capture_count INTEGER
+    )
+  `);
+  console.log("[DBSafety] strategic_pulse table verified.");
+} catch (error: any) {
+  console.error("[DBSafety] Error ensuring strategic_pulse table:", error?.message || error);
+}
+```
+
+Also create directly in shell:
+```bash
+psql postgresql://postgres:password@helium/heliumdb -c "
+CREATE TABLE IF NOT EXISTS strategic_pulse (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL,
+  generated_at TIMESTAMPTZ DEFAULT NOW(),
+  big_shift TEXT,
+  threat_radar TEXT,
+  emerging_opportunities TEXT,
+  competitor_moves TEXT,
+  watch_list TEXT,
+  entity_count INTEGER,
+  capture_count INTEGER
+);"
+```
+
+**Part 2 — API routes in `server/routes.ts`**
+
+Add after SWOT routes. Standard auth + workspace pattern with `|| 'admin'` role fallback.
+
+```typescript
+// GET — last 5 pulses
+app.get("/api/strategic-pulse", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const wsResult = await pool.query(
+      `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+      [userId]
+    );
+    const workspaceId = wsResult.rows[0]?.id;
+    if (!workspaceId) return res.json([]);
+    const result = await pool.query(
+      `SELECT * FROM strategic_pulse WHERE workspace_id=$1 ORDER BY generated_at DESC LIMIT 5`,
+      [workspaceId]
+    );
+    res.json(result.rows);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /generate
+app.post("/api/strategic-pulse/generate", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).userId;
+    const wsResult = await pool.query(
+      `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+      [userId]
+    );
+    const workspaceId = wsResult.rows[0]?.id;
+    if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+
+    const wsProfileResult = await pool.query(`SELECT * FROM user_profiles WHERE user_id = $1`, [userId]);
+    const profileCtx = buildProfileContext(wsProfileResult.rows[0] || null);
+
+    const tenantId = "00000000-0000-0000-0000-000000000000";
+    const prodContext = await storage.getProductContext(tenantId);
+
+    const capturesResult = await pool.query(
+      `SELECT entity_id, content, created_at, signal_strength FROM captures
+       WHERE workspace_id=$1 AND created_at > NOW()-INTERVAL '6 months'
+       ORDER BY created_at DESC LIMIT 80`,
+      [workspaceId]
+    );
+    const captures = capturesResult.rows;
+    const captureCount = captures.length;
+
+    if (captureCount < 3) {
+      return res.status(400).json({ error: 'Not enough intelligence captured yet. Add more updates to generate a pulse.' });
+    }
+
+    const grouped: Record<string, string[]> = {};
+    for (const c of captures) {
+      if (!grouped[c.entity_id]) grouped[c.entity_id] = [];
+      if (grouped[c.entity_id].length < 10) grouped[c.entity_id].push((c.content || '').substring(0, 300));
+    }
+    const entityCount = Object.keys(grouped).length;
+    const capturesByEntity = Object.entries(grouped)
+      .map(([entity, items]) => `## ${entity}\n${items.map(i => `- ${i}`).join('\n')}`)
+      .join('\n\n');
+
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2500,
+      messages: [{
+        role: "user",
+        content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Your job is to synthesise raw intelligence into sharp strategic insight for the organisation described above.
+
+You are analysing ${entityCount} tracked entities over the last 6 months. ${captureCount} intelligence signals have been captured.
+
+INTELLIGENCE (grouped by entity):
+${capturesByEntity}
+
+Write a Strategic Pulse briefing. Use ONLY evidence from the intelligence above — do not invent or assume. Infer the industry and domain from the intelligence itself. Write as a trusted advisor to the leadership team of the organisation described in the workspace profile above.
+
+Respond ONLY with valid JSON, no other text, no markdown code fences:
+{
+  "big_shift": "6-8 sentences. What is the single most important pattern emerging across ALL the intelligence? Connect signals across multiple entities into one narrative. Name the shift explicitly. Explain why it matters now and what it signals about the next 6-12 months. Cite specific evidence from at least two entities. End with the implication if nothing changes.",
+  "threat_radar": "🔴 [Most urgent threat — timeframe]: [what it is, which signals triggered it, why urgent now]\n🟡 [Second threat — timeframe]: [what it is, evidence, implication]\n🟢 [Emerging threat — timeframe]: [early signal, what to watch]",
+  "emerging_opportunities": "1. [Specific opportunity growing in customer or industry importance] — [evidence from intelligence, why momentum is building, how to capitalise]\n2. [Next opportunity]\n3. [Next opportunity]",
+  "competitor_moves": "**[Entity name]:** [1-3 sentences: what their recent moves suggest about strategic intent, specific evidence, and one predicted next move]\n\n**[Next entity with significant activity]:** [same format — 1-3 sentences max]\n\n(only include entities with meaningful recent signals — skip quiet ones)",
+  "watch_list": "1. [Specific thing to monitor] — If [concrete trigger event], then [specific implication for our organisation]. Horizon: [timeframe]. Likelihood: [High/Medium/Low]\n2. [Next item]\n3. [Next item]\n4. [Next item]\n5. [Next item]"
+}`
+      }]
+    });
+
+    const raw = (message.content[0] as any).text || "";
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const parsed = JSON.parse(clean);
+
+    const insertResult = await pool.query(
+      `INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, entity_count, capture_count)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [workspaceId, parsed.big_shift, parsed.threat_radar, parsed.emerging_opportunities, parsed.competitor_moves, parsed.watch_list, entityCount, captureCount]
+    );
+
+    res.json(insertResult.rows[0]);
+  } catch (e: any) {
+    console.error("Strategic pulse generation error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+```
+
+**Part 3 — Weekly auto-generation**
+
+Find the weekly briefing cron/scheduler:
+```bash
+grep -n "cron\|schedule\|weekly\|Monday\|setInterval" server/briefingService.ts server/routes.ts 2>/dev/null | head -15
+```
+
+Inside the weekly trigger, after existing briefing logic, add a call to generate a pulse for each active workspace:
+```typescript
+// Auto-generate strategic pulse weekly
+try {
+  const workspaces = await pool.query(`SELECT DISTINCT workspace_id FROM captures WHERE created_at > NOW()-INTERVAL '6 months'`);
+  for (const ws of workspaces.rows) {
+    const captureCount = await pool.query(`SELECT COUNT(*) FROM captures WHERE workspace_id=$1 AND created_at > NOW()-INTERVAL '6 months'`, [ws.workspace_id]);
+    if (parseInt(captureCount.rows[0].count) >= 3) {
+      // Fire and forget — don't await, don't block briefing emails
+      fetch(`http://localhost:5000/api/strategic-pulse/generate`, {
+        method: 'POST',
+        headers: { 'x-internal-workspace': ws.workspace_id }
+      }).catch(() => {});
+    }
+  }
+} catch (e) { console.error('Weekly pulse generation error:', e); }
+```
+
+**Part 4 — Create `client/src/pages/intelligence.tsx`**
+
+Full page component. Exact visual design from the mockup — do not simplify. Every style must match precisely.
+
+```tsx
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+
+// Sub-components
+
+function ThreatLine({ line }: { line: string }) {
+  const chars = Array.from(line);
+  const emoji = chars[0] + (chars[1] || '');
+  const urgencyMap: Record<string, { bg: string; color: string; label: string }> = {
+    "🔴": { bg: "#FEE2E2", color: "#991B1B", label: "Urgent" },
+    "🟡": { bg: "#FEF9C3", color: "#854D0E", label: "Watch" },
+    "🟢": { bg: "#DCFCE7", color: "#166534", label: "Monitor" },
+  };
+  const style = urgencyMap[emoji] || { bg: "#F1F5F9", color: "#475569", label: "Note" };
+  const rest = line.slice(emoji.length).trim();
+  const colonIdx = rest.indexOf('):');
+  const header = colonIdx > -1 ? rest.slice(0, colonIdx + 1) : rest.split(':')[0];
+  const body = colonIdx > -1 ? rest.slice(colonIdx + 2).trim() : rest.slice(rest.indexOf(':') + 1).trim();
+  return (
+    <div style={{ display: 'flex', gap: 12, padding: '14px 0', borderBottom: '0.5px solid #F1F5F9', alignItems: 'flex-start' }}>
+      <span style={{ fontSize: 18, flexShrink: 0 }}>{emoji}</span>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: style.bg, color: style.color }}>{style.label}</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{header}</span>
+        </div>
+        <p style={{ margin: 0, fontSize: 13, color: '#475569', lineHeight: 1.6 }}>{body}</p>
+      </div>
+    </div>
+  );
+}
+
+function WatchItem({ line }: { line: string }) {
+  const match = line.match(/^(\d+)\.\s(.+?)\s—\s(.+?)\s+Horizon:\s(.+?)\.\s+Likelihood:\s(.+)$/);
+  if (!match) return <div style={{ padding: '10px 0', fontSize: 13, color: '#475569', borderBottom: '0.5px solid #FDE68A' }}>{line}</div>;
+  const [, num, title, implication, horizon, likelihood] = match;
+  const lhColors: Record<string, { bg: string; color: string }> = {
+    High: { bg: '#FEE2E2', color: '#991B1B' },
+    Medium: { bg: '#FEF9C3', color: '#854D0E' },
+    Low: { bg: '#F0FDF4', color: '#166534' },
+  };
+  const lh = lhColors[likelihood.trim()] || lhColors.Medium;
+  return (
+    <div style={{ padding: '16px 0', borderBottom: '0.5px solid #FDE68A' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: '#B45309', background: '#FEF3C7', borderRadius: 20, padding: '2px 8px' }}>#{num}</span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', flex: 1 }}>{title}</span>
+        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 20, background: lh.bg, color: lh.color, fontWeight: 600 }}>{likelihood.trim()}</span>
+      </div>
+      <p style={{ margin: '0 0 8px 0', fontSize: 13, color: '#475569', lineHeight: 1.5 }}>{implication}</p>
+      <span style={{ fontSize: 11, color: '#94a3b8', background: '#F8FAFC', border: '0.5px solid #E2E8F0', borderRadius: 4, padding: '2px 8px' }}>⏱ {horizon}</span>
+    </div>
+  );
+}
+
+function OpportunityItem({ line }: { line: string }) {
+  const match = line.match(/^(\d+)\.\s(.+?)\s—\s(.+)$/);
+  if (!match) return <div style={{ padding: '10px 0', fontSize: 13, color: '#475569', borderBottom: '0.5px solid #BBF7D0' }}>{line}</div>;
+  const [, num, title, detail] = match;
+  return (
+    <div style={{ padding: '14px 0', borderBottom: '0.5px solid #BBF7D0', display: 'flex', gap: 12 }}>
+      <span style={{ fontSize: 18, fontWeight: 700, color: '#16A34A', opacity: 0.4, flexShrink: 0, lineHeight: 1.2 }}>{num}</span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#14532D', marginBottom: 4 }}>{title}</div>
+        <div style={{ fontSize: 13, color: '#475569', lineHeight: 1.6 }}>{detail}</div>
+      </div>
+    </div>
+  );
+}
+
+function CompetitorMoves({ text }: { text: string }) {
+  const paras = text.split('\n\n').filter(Boolean);
+  return (
+    <>
+      {paras.map((para, i) => {
+        const html = para.replace(/\*\*(.+?)\*\*/g, '<span style="font-weight:700;color:#0369A1">$1</span>');
+        return (
+          <p key={i} style={{ fontSize: 13, color: '#1e293b', lineHeight: 1.7, marginBottom: 0, paddingBottom: 14, paddingTop: i > 0 ? 14 : 0, borderBottom: i < paras.length - 1 ? '0.5px solid #E0F2FE' : 'none' }}
+            dangerouslySetInnerHTML={{ __html: html }} />
+        );
+      })}
+    </>
+  );
+}
+
+// Main page
+
+export default function IntelligencePage() {
+  const qc = useQueryClient();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const { data: pulses = [], isLoading } = useQuery<any[]>({
+    queryKey: ['/api/strategic-pulse'],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/strategic-pulse");
+      const data = await res.json();
+      if (data.length > 0 && !selectedId) setSelectedId(data[0].id);
+      return data;
+    },
+    staleTime: 0, gcTime: 0, refetchOnMount: true, retry: 2, retryDelay: 500,
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/strategic-pulse/generate");
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Generation failed');
+      }
+      return res.json();
+    },
+    onSuccess: (newPulse) => {
+      qc.invalidateQueries({ queryKey: ['/api/strategic-pulse'] });
+      setSelectedId(newPulse.id);
+    }
+  });
+
+  const pulse = pulses.find((p: any) => p.id === selectedId) || pulses[0];
+
+  const formatDate = (d: string) => new Date(d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  const formatDateLong = (d: string) => new Date(d).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#F8FAFC' }}>
+
+      {/* Sticky header */}
+      <div style={{ background: '#fff', borderBottom: '1px solid #E2E8F0', padding: '20px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, position: 'sticky', top: 0, zIndex: 10 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 22 }}>🔭</span>
+            <span style={{ fontSize: 20, fontWeight: 700, color: '#1e293b', letterSpacing: '-0.02em' }}>Strategic Pulse</span>
+          </div>
+          {pulse && (
+            <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 3 }}>
+              {formatDateLong(pulse.generated_at)} · {pulse.entity_count} entities · {pulse.capture_count} signals analysed
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => generateMutation.mutate()}
+          disabled={generateMutation.isPending}
+          style={{ background: generateMutation.isPending ? '#E2E8F0' : '#534AB7', color: generateMutation.isPending ? '#94a3b8' : '#fff', border: 'none', borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 600, cursor: generateMutation.isPending ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, transition: 'opacity 0.2s' }}>
+          {generateMutation.isPending ? '⚡ Generating...' : '↻ Generate New Pulse'}
+        </button>
+      </div>
+
+      <div style={{ maxWidth: 860, margin: '0 auto', padding: '28px 24px' }}>
+
+        {/* How it works banner */}
+        <div style={{ background: '#F0EFFE', border: '1px solid #C8C3F0', borderRadius: 12, padding: '16px 20px', marginBottom: 24, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+          <span style={{ fontSize: 16, flexShrink: 0, marginTop: 1 }}>ℹ️</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#312e81', marginBottom: 3 }}>How this is generated</div>
+            <div style={{ fontSize: 13, color: '#4338CA', lineHeight: 1.6 }}>
+              The Strategic Pulse analyses all intelligence captures across your tracked entities from the last 6 months — competitor moves, industry signals, partnership announcements, product launches, and market shifts. It uses your workspace profile and focus areas to surface what matters most to your organisation specifically. Generated automatically every Monday, or manually on demand.
+            </div>
+          </div>
+        </div>
+
+        {/* History pills */}
+        {pulses.length > 1 && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+            {pulses.map((p: any) => (
+              <button key={p.id} onClick={() => setSelectedId(p.id)}
+                style={{ fontSize: 12, padding: '5px 14px', borderRadius: 20, border: `1px solid ${p.id === (selectedId || pulses[0]?.id) ? '#534AB7' : '#E2E8F0'}`, background: p.id === (selectedId || pulses[0]?.id) ? '#534AB7' : '#fff', color: p.id === (selectedId || pulses[0]?.id) ? '#fff' : '#64748b', cursor: 'pointer', fontWeight: 500, transition: 'all 0.15s' }}>
+                {formatDate(p.generated_at)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Generating state */}
+        {generateMutation.isPending && (
+          <div style={{ textAlign: 'center', padding: '60px 40px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0', marginBottom: 20 }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>⚡</div>
+            <div style={{ fontSize: 16, fontWeight: 600, color: '#1e293b', marginBottom: 6 }}>Analysing intelligence across all entities...</div>
+            <div style={{ fontSize: 13, color: '#94a3b8' }}>This takes 15–20 seconds. Sit tight.</div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!isLoading && !generateMutation.isPending && pulses.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '80px 40px', background: '#fff', borderRadius: 16, border: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>🔭</div>
+            <div style={{ fontSize: 18, fontWeight: 600, color: '#1e293b', marginBottom: 8 }}>No Strategic Pulse yet</div>
+            <div style={{ fontSize: 14, color: '#64748b', maxWidth: 400, margin: '0 auto 24px' }}>
+              Generate your first pulse to get a cross-entity strategic briefing based on all your captured intelligence.
+            </div>
+            <button onClick={() => generateMutation.mutate()}
+              style={{ background: '#534AB7', color: '#fff', border: 'none', borderRadius: 8, padding: '10px 24px', fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+              Generate First Pulse
+            </button>
+          </div>
+        )}
+
+        {/* Error state */}
+        {generateMutation.isError && (
+          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 12, padding: '16px 20px', marginBottom: 16, fontSize: 13, color: '#991B1B', display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span>⚠️</span>
+            <span>{(generateMutation.error as any)?.message || 'Generation failed. Make sure you have at least 3 captured updates.'}</span>
+          </div>
+        )}
+
+        {/* Pulse content */}
+        {pulse && !generateMutation.isPending && (
+          <>
+            {/* 1. Big Shift — dark indigo full width */}
+            <div style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)', borderRadius: 16, padding: '28px 32px', marginBottom: 20, position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: -20, right: -20, fontSize: 100, opacity: 0.06, pointerEvents: 'none', userSelect: 'none' }}>🌊</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <span style={{ fontSize: 16 }}>🌊</span>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: '#A5B4FC', textTransform: 'uppercase' }}>The Big Shift</span>
+              </div>
+              <p style={{ margin: 0, fontSize: 15, lineHeight: 1.85, color: '#E0E7FF', fontStyle: 'italic' }}>{pulse.big_shift}</p>
+            </div>
+
+            {/* 2. Emerging Opportunities — green, full width */}
+            {pulse.emerging_opportunities && (
+              <div style={{ background: '#fff', border: '1px solid #BBF7D0', borderRadius: 16, padding: '22px 28px', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 16 }}>🌱</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#16A34A', textTransform: 'uppercase' }}>Emerging Opportunities</span>
+                </div>
+                {pulse.emerging_opportunities.split('\n').filter(Boolean).map((line: string, i: number) => (
+                  <OpportunityItem key={i} line={line} />
+                ))}
+              </div>
+            )}
+
+            {/* 3. Threat Radar — red, full width */}
+            {pulse.threat_radar && (
+              <div style={{ background: '#fff', border: '1px solid #FECACA', borderRadius: 16, padding: '22px 28px', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 16 }}>🎯</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#DC2626', textTransform: 'uppercase' }}>Threat Radar</span>
+                </div>
+                {pulse.threat_radar.split('\n').filter(Boolean).map((line: string, i: number) => (
+                  <ThreatLine key={i} line={line} />
+                ))}
+              </div>
+            )}
+
+            {/* 4. Competitor Moves — blue, full width, at bottom */}
+            {pulse.competitor_moves && (
+              <div style={{ background: '#fff', border: '1px solid #BAE6FD', borderRadius: 16, padding: '22px 28px', marginBottom: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <span style={{ fontSize: 16 }}>🔍</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#0369A1', textTransform: 'uppercase' }}>Competitor Moves Decoded</span>
+                </div>
+                <CompetitorMoves text={pulse.competitor_moves} />
+              </div>
+            )}
+
+            {/* 5. Watch List — amber, full width, last */}
+            {pulse.watch_list && (
+              <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 16, padding: '22px 28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                  <span style={{ fontSize: 16 }}>🔭</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', color: '#B45309', textTransform: 'uppercase' }}>Watch List · Next 6 Months</span>
+                </div>
+                {pulse.watch_list.split('\n').filter(Boolean).map((line: string, i: number) => (
+                  <WatchItem key={i} line={line} />
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+```
+
+**Part 5 — Add route in `App.tsx`**
+
+```bash
+grep -n "import\|Route\|path.*briefings\|path.*workspace" client/src/App.tsx | head -20
+```
+
+Add:
+```tsx
+import IntelligencePage from "@/pages/intelligence";
+// Inside router, after existing routes:
+<Route path="/intelligence" component={IntelligencePage} />
+```
+
+**Part 6 — Add "Intelligence" to sidebar**
+
+Find the sidebar component:
+```bash
+grep -rn "Live Feed\|Briefings\|nav.*item\|sidebar" client/src/components/ --include="*.tsx" | head -10
+grep -rn "Live Feed\|Briefings" client/src/App.tsx | head -5
+```
+
+Add "Intelligence" nav item between "Live Feed" and "Briefings" using `Brain` icon from lucide-react, linking to `/intelligence`. Match the exact same style as the other nav items.
+
+Run `npm run build`, confirm no errors, Republish.
