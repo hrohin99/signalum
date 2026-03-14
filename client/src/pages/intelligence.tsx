@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Brain, Zap, Target, ShieldAlert, Swords, Eye, Loader2, Info, Sparkles, type LucideIcon } from "lucide-react";
+import { Brain, Zap, Target, ShieldAlert, Swords, Eye, Loader2, Info, Sparkles, Globe, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -24,6 +24,7 @@ interface StrategicPulse {
   threat_radar: PulseSection | null;
   competitor_moves: PulseSection | null;
   watch_list: PulseSection | null;
+  regional_intelligence: PulseSection | null;
   capture_count: number;
   model: string;
 }
@@ -81,6 +82,43 @@ function PulseSectionCard({
           <div key={i} className="pl-3 border-l-2 border-current/10">
             <p className="text-sm font-semibold">{item.title}</p>
             <p className="text-sm text-muted-foreground mt-0.5">{item.detail}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RegionalCard({ section }: { section: PulseSection | null }) {
+  if (!section || !section.items || section.items.length === 0) {
+    return (
+      <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 p-5" data-testid="section-regional-intelligence">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+            <Globe className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+          </div>
+          <h3 className="text-base font-semibold">Regional Intelligence</h3>
+        </div>
+        <p className="text-sm text-muted-foreground mt-3 italic">No data generated for this section.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/30 p-5" data-testid="section-regional-intelligence">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-900 flex items-center justify-center">
+          <Globe className="w-5 h-5 text-slate-700 dark:text-slate-300" />
+        </div>
+        <h3 className="text-base font-semibold">Regional Intelligence</h3>
+      </div>
+      {section.headline && (
+        <p className="text-sm font-medium text-foreground/80 mb-4 italic">{section.headline}</p>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        {(section.items || []).map((item, i) => (
+          <div key={i} className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-1">{item.title}</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">{item.detail}</p>
           </div>
         ))}
       </div>
@@ -250,6 +288,7 @@ export default function IntelligencePage() {
           <PulseSectionCard icon={ShieldAlert} title="Threat Radar" color="red" section={selectedPulse.threat_radar} />
           <PulseSectionCard icon={Swords} title="Competitor Moves Decoded" color="purple" section={selectedPulse.competitor_moves} />
           <PulseSectionCard icon={Eye} title="Watch List" color="amber" section={selectedPulse.watch_list} />
+          <RegionalCard section={selectedPulse.regional_intelligence ?? null} />
         </div>
       )}
     </div>

@@ -5389,6 +5389,7 @@ Return ONLY the JSON object, no other text.`
         emerging_opportunities: row.emerging_opportunities ? JSON.parse(row.emerging_opportunities) : null,
         competitor_moves: row.competitor_moves ? JSON.parse(row.competitor_moves) : null,
         watch_list: row.watch_list ? JSON.parse(row.watch_list) : null,
+        regional_intelligence: row.regional_intelligence ? JSON.parse(row.regional_intelligence) : null,
       }));
       res.json(rows);
     } catch (error: any) {
@@ -5398,6 +5399,11 @@ Return ONLY the JSON object, no other text.`
   });
 
   app.post("/api/strategic-pulse/generate", requireAuth, async (req: Request, res: Response) => {
+    // Ensure regional_intelligence column exists
+    try {
+      await db.execute(sql`ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS regional_intelligence text`);
+    } catch (_) {}
+
     try {
       const userId = (req as any).userId;
       const wsResult = await pool.query(
@@ -5471,7 +5477,8 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
   "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
   "threat_radar": { "headline": "One sentence on the threat landscape", "items": [{"title": "🔴 Threat — timeframe", "detail": "What it is, evidence, why urgent"}, {"title": "🟡 Threat — timeframe", "detail": "..."}, {"title": "🟢 Threat — timeframe", "detail": "..."}] },
   "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move"}] },
-  "watch_list": { "headline": "Key things to monitor over the next 6 months", "items": [{"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
+  "watch_list": { "headline": "Key things to monitor over the next 6 months", "items": [{"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
+  "regional_intelligence": { "headline": "One sentence summarising the global geographic picture", "items": [{"title": "North America", "detail": "Key regulatory, competitive and market developments. If no signals, say: No signals captured for this region."}, {"title": "United Kingdom", "detail": "..."}, {"title": "European Union", "detail": "..."}, {"title": "EMEA", "detail": "..."}, {"title": "APAC", "detail": "..."}, {"title": "South America", "detail": "..."}] }
 }`
         }]
       });
@@ -5482,8 +5489,8 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
 
       const insertResult = await db.execute(sql`
-        INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, entity_count, capture_count)
-        VALUES (${workspaceId}, ${parsed.big_shift ? JSON.stringify(parsed.big_shift) : null}, ${parsed.threat_radar ? JSON.stringify(parsed.threat_radar) : null}, ${parsed.emerging_opportunities ? JSON.stringify(parsed.emerging_opportunities) : null}, ${parsed.competitor_moves ? JSON.stringify(parsed.competitor_moves) : null}, ${parsed.watch_list ? JSON.stringify(parsed.watch_list) : null}, ${entityCount}, ${captureCount})
+        INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, regional_intelligence, entity_count, capture_count)
+        VALUES (${workspaceId}, ${parsed.big_shift ? JSON.stringify(parsed.big_shift) : null}, ${parsed.threat_radar ? JSON.stringify(parsed.threat_radar) : null}, ${parsed.emerging_opportunities ? JSON.stringify(parsed.emerging_opportunities) : null}, ${parsed.competitor_moves ? JSON.stringify(parsed.competitor_moves) : null}, ${parsed.watch_list ? JSON.stringify(parsed.watch_list) : null}, ${parsed.regional_intelligence ? JSON.stringify(parsed.regional_intelligence) : null}, ${entityCount}, ${captureCount})
         RETURNING *
       `);
 
