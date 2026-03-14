@@ -1,0 +1,30 @@
+{
+  "big_shift": "6-8 sentences. What is the single most important pattern emerging across ALL the intelligence? Connect signals across multiple entities into one narrative. Name the shift explicitly. Explain why it matters now and what it signals about the next 6-12 months. Cite specific evidence from at least two entities. End with the implication if nothing changes.",
+  "threat_radar": "🔴 [Most urgent threat — timeframe]: [what it is, which signals triggered it, why urgent now]\n🟡 [Second threat — timeframe]: [what it is, evidence, implication]\n🟢 [Emerging threat — timeframe]: [early signal, what to watch]",
+  "emerging_opportunities": "1. [Specific opportunity growing in customer or industry importance] — [evidence from intelligence, why momentum is building, how to capitalise]\n2. [Next opportunity]\n3. [Next opportunity]",
+  "competitor_moves": "**[Entity name]:** [1-3 sentences: what their recent moves suggest about strategic intent, specific evidence, and one predicted next move]\n\n**[Next entity with significant activity]:** [same format — 1-3 sentences max]\n\n(only include entities with meaningful recent signals — skip quiet ones)",
+  "watch_list": "1. [Specific thing to monitor] — If [concrete trigger event], then [specific implication for our organisation]. Horizon: [timeframe]. Likelihood: [High/Medium/Low]\n2. [Next item]\n3. [Next item]\n4. [Next item]\n5. [Next item]"
+}`
+      }]
+    });
+
+    const raw = (message.content[0] as any).text || "{}";
+    const clean = raw.replace(/```json|```/g, "").trim();
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
+
+    const insertResult = await pool.query(
+      `INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, entity_count, capture_count)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [workspaceId, parsed.big_shift || null, parsed.threat_radar || null, parsed.emerging_opportunities || null, parsed.competitor_moves || null, parsed.watch_list || null, entityCount, captureCount]
+    );
+
+    res.json(insertResult.rows[0]);
+  } catch (e: any) {
+    console.error("Strategic pulse generation error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+After making changes verify only one generate route exists:
+bashgrep -n "strategic-pulse/generate" server/routes.ts
+Run npm run build, confirm no errors, Republish.
