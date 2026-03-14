@@ -491,7 +491,7 @@ function TopicViewContent({
   const showWebsiteBanner = entity.entity_type_detected === "local_business" && !entity.website_url && !websiteBannerDismissed;
 
   return (
-    <div className="p-4 md:px-8 md:py-6 max-w-7xl mx-auto">
+    <div className="p-4 md:px-8 md:py-6 max-w-7xl mx-auto overflow-x-hidden w-full">
       <TopBar
         entity={entity}
         categoryName={categoryName}
