@@ -5407,8 +5407,8 @@ Return ONLY the JSON object, no other text.`
       const prodContext = await storage.getProductContext(tenantId);
 
       const capturesResult = await pool.query(
-        `SELECT entity_id, content, created_at FROM captures WHERE workspace_id=$1 AND created_at > NOW()-INTERVAL '6 months' ORDER BY created_at DESC LIMIT 80`,
-        [workspaceId]
+        `SELECT matched_entity, content, created_at FROM captures WHERE user_id=$1 AND created_at > NOW()-INTERVAL '6 months' ORDER BY created_at DESC LIMIT 80`,
+        [userId]
       );
       const captures = capturesResult.rows;
       const captureCount = captures.length;
@@ -5418,7 +5418,7 @@ Return ONLY the JSON object, no other text.`
       }
       const grouped: Record<string, string[]> = {};
       for (const c of captures) {
-        const key = c.entity_id || 'Unknown';
+        const key = c.matched_entity || 'Unknown';
         if (!grouped[key]) grouped[key] = [];
         if (grouped[key].length < 10) grouped[key].push((c.content || '').substring(0, 300));
       }
