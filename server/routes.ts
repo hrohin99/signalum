@@ -523,22 +523,16 @@ Return ONLY the JSON object, no other text.`
     parsed = {};
   }
 
-  const result = await pool.query(
-    `INSERT INTO strategic_pulse (workspace_id, big_shift, emerging_opportunities, threat_radar, competitor_moves, watch_list, capture_count, model)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-    [
-      workspaceId,
-      JSON.stringify(parsed.big_shift || null),
-      JSON.stringify(parsed.emerging_opportunities || null),
-      JSON.stringify(parsed.threat_radar || null),
-      JSON.stringify(parsed.competitor_moves || null),
-      JSON.stringify(parsed.watch_list || null),
-      capturesResult.rows.length,
-      "claude-sonnet-4-20250514"
-    ]
+  const captureCount = capturesResult.rows.length;
+  const entityCount = new Set(capturesResult.rows.map((r: any) => r.matched_entity).filter(Boolean)).size;
+
+  const insertResult = await pool.query(
+    `INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, entity_count, capture_count)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [workspaceId, parsed.big_shift, parsed.threat_radar, parsed.emerging_opportunities, parsed.competitor_moves, parsed.watch_list, entityCount, captureCount]
   );
 
-  return result.rows[0];
+  return insertResult.rows[0];
 }
 
 export async function registerRoutes(
