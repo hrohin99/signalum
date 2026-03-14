@@ -5413,48 +5413,66 @@ Return ONLY the JSON object, no other text.`
       const tenantId = "00000000-0000-0000-0000-000000000000";
       const prodContext = await storage.getProductContext(tenantId);
 
-      const capturesResult = await pool.query(
-        `SELECT matched_entity, content, created_at FROM captures WHERE user_id=$1 AND created_at > NOW()-INTERVAL '6 months' ORDER BY created_at DESC LIMIT 80`,
-        [userId]
-      );
-      const captures = capturesResult.rows;
+      const capturesResult = await db.execute(sql`
+        SELECT matched_entity, content, created_at FROM captures 
+        WHERE user_id = ${userId} AND created_at > NOW() - INTERVAL '6 months'
+        ORDER BY created_at DESC
+      `);
+      const captures = capturesResult.rows as any[];
       const captureCount = captures.length;
 
       if (captureCount < 3) {
         return res.status(400).json({ error: 'Not enough intelligence captured yet. Add more updates to generate a pulse.' });
       }
+
       const grouped: Record<string, string[]> = {};
       for (const c of captures) {
         const key = c.matched_entity || 'Unknown';
         if (!grouped[key]) grouped[key] = [];
-        if (grouped[key].length < 10) grouped[key].push((c.content || '').substring(0, 300));
+        grouped[key].push((c.content || '').substring(0, 400));
       }
       const entityCount = Object.keys(grouped).length;
-      const capturesByEntity = Object.entries(grouped)
-        .map(([entity, items]) => `## ${entity}\n${items.map(i => `- ${i}`).join('\n')}`)
-        .join('\n\n');
 
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+      const entitySummaries = await Promise.all(
+        Object.entries(grouped).map(async ([entity, items]) => {
+          const captureText = items.map((c, i) => `${i + 1}. ${c}`).join('\n');
+          const msg = await anthropic.messages.create({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 400,
+            messages: [{
+              role: "user",
+              content: `You are a competitive intelligence analyst. Summarise the following ${items.length} intelligence signals about "${entity}" into a concise 150-200 word briefing. Cover: recent activity, strategic direction, notable moves, and any emerging patterns. Be specific and factual — only use what is in the signals below.\n\nSIGNALS:\n${captureText}\n\nRespond with only the summary paragraph, no headers or preamble.`
+            }]
+          });
+          const summary = (msg.content[0] as any).text || '';
+          return `## ${entity} (${items.length} signals)\n${summary}`;
+        })
+      );
+
+      const consolidatedContext = entitySummaries.join('\n\n');
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-20250514",
         max_tokens: 2500,
         messages: [{
           role: "user",
-          content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Your job is to synthesise raw intelligence into sharp strategic insight for the organisation described above.
+          content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Your job is to synthesise intelligence summaries into sharp strategic insight for the organisation described above.
 
-You are analysing ${entityCount} tracked entities over the last 6 months. ${captureCount} intelligence signals have been captured.
+You are analysing ${entityCount} tracked entities. ${captureCount} total intelligence signals have been captured over the last 6 months and summarised below.
 
-INTELLIGENCE (grouped by entity):
-${capturesByEntity}
-Write a Strategic Pulse briefing. Use ONLY evidence from the intelligence above — do not invent or assume. Infer the industry and domain from the intelligence itself. Write as a trusted advisor to the leadership team of the organisation described in the workspace profile above.
+ENTITY SUMMARIES:
+${consolidatedContext}
+
+Write a Strategic Pulse briefing. Use ONLY evidence from the summaries above. Write as a trusted advisor to the leadership team.
 
 Respond ONLY with valid JSON, no other text, no markdown code fences:
 {
-  "big_shift": { "headline": "One sharp sentence summarising the shift", "items": [{"title": "Point 1", "detail": "2-3 sentence elaboration"}, {"title": "Point 2", "detail": "2-3 sentence elaboration"}, {"title": "Point 3", "detail": "2-3 sentence elaboration"}] },
-  "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise"}, {"title": "Opportunity name", "detail": "Evidence and how to capitalise"}, {"title": "Opportunity name", "detail": "Evidence and how to capitalise"}] },
-  "threat_radar": { "headline": "One sentence on the threat landscape", "items": [{"title": "🔴 Threat name — timeframe", "detail": "What it is, evidence, why urgent"}, {"title": "🟡 Threat name — timeframe", "detail": "What it is, evidence, implication"}, {"title": "🟢 Threat name — timeframe", "detail": "Early signal, what to watch"}] },
-  "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "What their moves suggest, evidence, predicted next move"}] },
-  "watch_list": { "headline": "Key things to monitor over the next 6 months", "items": [{"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}] }
+  "big_shift": { "headline": "One sharp sentence summarising the single most important pattern", "items": [{"title": "Point 1", "detail": "2-3 sentence elaboration with specific evidence"}, {"title": "Point 2", "detail": "..."}, {"title": "Point 3", "detail": "..."}] },
+  "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
+  "threat_radar": { "headline": "One sentence on the threat landscape", "items": [{"title": "🔴 Threat — timeframe", "detail": "What it is, evidence, why urgent"}, {"title": "🟡 Threat — timeframe", "detail": "..."}, {"title": "🟢 Threat — timeframe", "detail": "..."}] },
+  "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move"}] },
+  "watch_list": { "headline": "Key things to monitor over the next 6 months", "items": [{"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
 }`
         }]
       });
