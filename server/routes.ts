@@ -5445,7 +5445,7 @@ Return ONLY the JSON object, no other text.`
       for (const [entity, items] of Object.entries(grouped)) {
         const captureText = items.map((c, i) => `${i + 1}. ${c}`).join('\n');
         const msg = await anthropic.messages.create({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 400,
           messages: [{
             role: "user",
@@ -5458,7 +5458,7 @@ Return ONLY the JSON object, no other text.`
 
       const consolidatedContext = entitySummaries.join('\n\n');
       const message = await anthropic.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 2500,
         messages: [{
           role: "user",
