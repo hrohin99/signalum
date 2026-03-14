@@ -5435,21 +5435,20 @@ Return ONLY the JSON object, no other text.`
 
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-      const entitySummaries = await Promise.all(
-        Object.entries(grouped).map(async ([entity, items]) => {
-          const captureText = items.map((c, i) => `${i + 1}. ${c}`).join('\n');
-          const msg = await anthropic.messages.create({
-            model: "claude-sonnet-4-20250514",
-            max_tokens: 400,
-            messages: [{
-              role: "user",
-              content: `You are a competitive intelligence analyst. Summarise the following ${items.length} intelligence signals about "${entity}" into a concise 150-200 word briefing. Cover: recent activity, strategic direction, notable moves, and any emerging patterns. Be specific and factual — only use what is in the signals below.\n\nSIGNALS:\n${captureText}\n\nRespond with only the summary paragraph, no headers or preamble.`
-            }]
-          });
-          const summary = (msg.content[0] as any).text || '';
-          return `## ${entity} (${items.length} signals)\n${summary}`;
-        })
-      );
+      const entitySummaries: string[] = [];
+      for (const [entity, items] of Object.entries(grouped)) {
+        const captureText = items.map((c, i) => `${i + 1}. ${c}`).join('\n');
+        const msg = await anthropic.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 400,
+          messages: [{
+            role: "user",
+            content: `You are a competitive intelligence analyst. Summarise the following ${items.length} intelligence signals about "${entity}" into a concise 150-200 word briefing. Cover: recent activity, strategic direction, notable moves, and any emerging patterns. Be specific and factual — only use what is in the signals below.\n\nSIGNALS:\n${captureText}\n\nRespond with only the summary paragraph, no headers or preamble.`
+          }]
+        });
+        const summary = (msg.content[0] as any).text || '';
+        entitySummaries.push(`## ${entity} (${items.length} signals)\n${summary}`);
+      }
 
       const consolidatedContext = entitySummaries.join('\n\n');
       const message = await anthropic.messages.create({

@@ -216,7 +216,9 @@ export default function IntelligencePage() {
       <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50 border border-border" data-testid="info-banner">
         <Info className="w-4 h-4 text-muted-foreground shrink-0" />
         <p className="text-xs text-muted-foreground">
-          This briefing synthesises {selectedPulse?.capture_count || 0} intelligence signals from the last 6 months. Generated weekly or on demand.
+          {selectedPulse
+            ? `This briefing synthesises ${selectedPulse.capture_count ?? '—'} intelligence signals from the last 6 months. Generated weekly or on demand.`
+            : "Generated weekly or on demand. Hit Generate New Pulse to create your first briefing."}
         </p>
       </div>
 
