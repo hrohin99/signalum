@@ -86,6 +86,8 @@ export function PartnershipsCard({
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: true,
+    retry: 2,
+    retryDelay: 500,
   });
 
   const partnerships = data?.partnerships || [];
