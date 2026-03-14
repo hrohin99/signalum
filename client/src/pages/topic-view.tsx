@@ -77,6 +77,7 @@ import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Batt
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { PartnershipsCard } from "@/components/PartnershipsCard";
 import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
+import { SwotCard } from "@/components/SwotCard";
 import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ProductsCard } from "@/components/ProductsCard";
@@ -338,6 +339,27 @@ function TopicViewContent({
         credentials: 'include'
       });
       if (!res.ok) return { partnerships: [] };
+      return res.json();
+    },
+    enabled: !!entityId,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: 500
+  });
+
+  useQuery<Record<string, any> | null>({
+    queryKey: ["/api/entities", entityId, "swot"],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return null;
+      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/swot`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include'
+      });
+      if (!res.ok) return null;
       return res.json();
     },
     enabled: !!entityId,
@@ -752,6 +774,7 @@ function TopicViewContent({
       {isCompetitor && activeTab === 'competitive' && (
         <div className="space-y-6">
           <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
+          <SwotCard entityId={entity.name} userRole={userRole} />
           <CapabilityMatrixCard entityId={entity.name} userRole={userRole} previewMode={false} onSwitchToProfile={() => setActiveTab('profile')} />
           <div className="space-y-4">
             <BattlecardCollapsedHeader
@@ -2205,6 +2228,11 @@ function BattlecardCollapsedHeader({
   onToggle: () => void;
 }) {
   const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
+  const [editingBattlecard, setEditingBattlecard] = useState(false);
+  const [battlecardEditText, setBattlecardEditText] = useState("");
+
   const { data: bcData, isLoading } = useQuery<{ battlecard: Battlecard | null }>({
     queryKey: ["/api/battlecard", entity.name],
     queryFn: async () => {
@@ -2231,9 +2259,56 @@ function BattlecardCollapsedHeader({
     },
   });
 
+  const editMutation = useMutation({
+    mutationFn: async (text: string) => {
+      const sections: Record<string, string[]> = { whatTheyDo: [], strengths: [], weaknesses: [], howToBeat: [] };
+      let currentSection = "whatTheyDo";
+      for (const line of text.split("\n")) {
+        const trimmed = line.trim();
+        const lower = trimmed.toLowerCase().replace(/[:#\-*]/g, "").trim();
+        if (lower === "what they do") { currentSection = "whatTheyDo"; continue; }
+        if (lower === "strengths") { currentSection = "strengths"; continue; }
+        if (lower === "weaknesses") { currentSection = "weaknesses"; continue; }
+        if (lower === "how to beat") { currentSection = "howToBeat"; continue; }
+        if (trimmed) sections[currentSection].push(trimmed);
+      }
+      const res = await apiRequest("PUT", `/api/battlecard/${encodeURIComponent(entity.name)}`, {
+        whatTheyDo: sections.whatTheyDo.join("\n"),
+        strengths: sections.strengths,
+        weaknesses: sections.weaknesses,
+        howToBeat: sections.howToBeat,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/battlecard", entity.name] });
+      toast({ title: "Battlecard updated." });
+      setEditingBattlecard(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Failed to save", description: err.message, variant: "destructive" });
+    },
+  });
+
   const bc = bcData?.battlecard;
   const firstStrength = (bc?.strengths as string[])?.[0] || null;
   const hasBattlecard = !!(bc?.whatTheyDo || firstStrength || (bc?.weaknesses as string[])?.length || (bc?.howToBeat as string[])?.length);
+
+  function buildEditText() {
+    const parts: string[] = [];
+    parts.push("## What They Do");
+    parts.push(bc?.whatTheyDo || "");
+    parts.push("");
+    parts.push("## Strengths");
+    if ((bc?.strengths as string[])?.length) parts.push(...(bc!.strengths as string[]));
+    parts.push("");
+    parts.push("## Weaknesses");
+    if ((bc?.weaknesses as string[])?.length) parts.push(...(bc!.weaknesses as string[]));
+    parts.push("");
+    parts.push("## How To Beat");
+    if ((bc?.howToBeat as string[])?.length) parts.push(...(bc!.howToBeat as string[]));
+    return parts.join("\n");
+  }
 
   return (
     <Card className="min-h-[80px]" data-testid="widget-battlecard-header">
@@ -2276,6 +2351,17 @@ function BattlecardCollapsedHeader({
                 )}
               </Button>
             )}
+            {isEditor && !editingBattlecard && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs border-[#1e3a5f]/30 text-[#1e3a5f] hover:bg-[#1e3a5f]/5"
+                onClick={() => { setBattlecardEditText(buildEditText()); setEditingBattlecard(true); }}
+                data-testid="button-edit-battlecard"
+              >
+                <Pencil className="w-3 h-3 mr-1" />Edit
+              </Button>
+            )}
             <Button
               size="sm"
               className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white text-xs"
@@ -2289,6 +2375,37 @@ function BattlecardCollapsedHeader({
         <p className="text-xs text-muted-foreground mt-1 truncate" data-testid="text-battlecard-preview">
           {isLoading ? "Loading..." : firstStrength || "No battlecard yet"}
         </p>
+        {editingBattlecard && (
+          <div className="mt-3 space-y-2">
+            <textarea
+              value={battlecardEditText}
+              onChange={(e) => setBattlecardEditText(e.target.value)}
+              rows={8}
+              className="w-full text-sm border border-slate-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[#1e3a5f]/30 resize-vertical font-inherit"
+              data-testid="textarea-battlecard-edit"
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-xs"
+                onClick={() => setEditingBattlecard(false)}
+                data-testid="button-cancel-battlecard-edit"
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white text-xs"
+                onClick={() => editMutation.mutate(battlecardEditText)}
+                disabled={editMutation.isPending}
+                data-testid="button-save-battlecard-edit"
+              >
+                {editMutation.isPending ? "Saving..." : "Save"}
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

@@ -5231,6 +5231,144 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     }
   });
 
+  // SWOT Analysis routes
+  app.get("/api/entities/:entityId/swot", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const result = await pool.query(
+        `SELECT * FROM entity_swot WHERE entity_id = $1 AND workspace_id = $2 LIMIT 1`,
+        [req.params.entityId, workspaceId]
+      );
+      res.json(result.rows[0] || {});
+    } catch (error: any) {
+      console.error("Get SWOT error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entities/:entityId/swot", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (!["admin", "sub_admin"].includes(role)) return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { strengths, weaknesses, opportunities, threats } = req.body;
+
+      const existing = await pool.query(
+        `SELECT * FROM entity_swot WHERE workspace_id = $1 AND entity_id = $2`,
+        [workspaceId, req.params.entityId]
+      );
+
+      let result;
+      if (existing.rows.length > 0) {
+        const current = existing.rows[0];
+        result = await pool.query(
+          `UPDATE entity_swot SET strengths=$1, weaknesses=$2, opportunities=$3, threats=$4, ai_generated=false, updated_at=NOW()
+           WHERE workspace_id=$5 AND entity_id=$6 RETURNING *`,
+          [
+            strengths !== undefined ? strengths : current.strengths,
+            weaknesses !== undefined ? weaknesses : current.weaknesses,
+            opportunities !== undefined ? opportunities : current.opportunities,
+            threats !== undefined ? threats : current.threats,
+            workspaceId, req.params.entityId
+          ]
+        );
+      } else {
+        result = await pool.query(
+          `INSERT INTO entity_swot (workspace_id, entity_id, strengths, weaknesses, opportunities, threats, ai_generated, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, false, NOW()) RETURNING *`,
+          [workspaceId, req.params.entityId, strengths || "", weaknesses || "", opportunities || "", threats || ""]
+        );
+      }
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update SWOT error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/swot/regenerate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || 'admin';
+      if (!["admin", "sub_admin"].includes(role)) return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+
+      const entityName = req.params.entityId;
+      const allCaptures = await storage.getCapturesByUserId(userId);
+      const entityCaptures = allCaptures.filter((c: any) => c.matchedEntity === entityName);
+      const contentSnippets = entityCaptures
+        .slice(0, 15)
+        .map((c: any, i: number) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
+        .join("\n\n");
+
+      const anthropic = getAnthropicClient();
+      const message = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: `You are a competitive intelligence analyst. Analyse the following intelligence captures about "${entityName}" and produce a SWOT analysis.
+
+Intelligence captures:
+${contentSnippets || "No captures available yet. Generate a reasonable SWOT based on general knowledge of this entity."}
+
+Return ONLY valid JSON with exactly these keys: strengths, weaknesses, opportunities, threats.
+Each value should be a string of newline-separated bullet points (each bullet on its own line, no bullet character prefix needed).
+Example:
+{
+  "strengths": "Strong brand recognition\\nLarge customer base\\nInnovative R&D",
+  "weaknesses": "High pricing\\nLimited geographic reach",
+  "opportunities": "Emerging markets expansion\\nNew product categories",
+  "threats": "Aggressive competitors\\nRegulatory changes"
+}
+
+Return ONLY the JSON object, no other text.`
+        }]
+      });
+
+      const textContent = message.content.find((b: any) => b.type === "text");
+      const rawText = textContent ? (textContent as any).text : "{}";
+      let parsed: any;
+      try {
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+      } catch {
+        parsed = { strengths: "", weaknesses: "", opportunities: "", threats: "" };
+      }
+
+      const result = await pool.query(
+        `INSERT INTO entity_swot (workspace_id, entity_id, strengths, weaknesses, opportunities, threats, ai_generated, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, true, NOW())
+         ON CONFLICT (workspace_id, entity_id) DO UPDATE SET strengths=$3, weaknesses=$4, opportunities=$5, threats=$6, ai_generated=true, updated_at=NOW()
+         RETURNING *`,
+        [workspaceId, entityName, parsed.strengths || "", parsed.weaknesses || "", parsed.opportunities || "", parsed.threats || ""]
+      );
+      res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Regenerate SWOT error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   // Win/Loss routes
   app.get("/api/entities/:entityId/win-loss", requireAuth, async (req: Request, res: Response) => {
     try {

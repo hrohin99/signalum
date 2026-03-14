@@ -333,5 +333,25 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring entity_funding table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS entity_swot (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        strengths TEXT,
+        weaknesses TEXT,
+        opportunities TEXT,
+        threats TEXT,
+        ai_generated BOOLEAN DEFAULT false,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(workspace_id, entity_id)
+      )
+    `);
+    console.log("[DBSafety] entity_swot table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_swot table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
