@@ -5379,12 +5379,10 @@ Return ONLY the JSON object, no other text.`
       const workspaceId = wsResult.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ error: "Workspace not found" });
 
-      const result = await pool.query(
-        `SELECT * FROM strategic_pulse WHERE workspace_id = $1 ORDER BY generated_at DESC LIMIT 5`,
-        [workspaceId]
-      );
-      const rows = result.rows;
-      const parsedRows = rows.map((row: any) => ({
+      const result = await db.execute(sql`
+        SELECT * FROM strategic_pulse WHERE workspace_id = ${workspaceId} ORDER BY generated_at DESC LIMIT 5
+      `);
+      const rows = result.rows.map((row: any) => ({
         ...row,
         big_shift: row.big_shift ? JSON.parse(row.big_shift) : null,
         threat_radar: row.threat_radar ? JSON.parse(row.threat_radar) : null,
@@ -5392,7 +5390,7 @@ Return ONLY the JSON object, no other text.`
         competitor_moves: row.competitor_moves ? JSON.parse(row.competitor_moves) : null,
         watch_list: row.watch_list ? JSON.parse(row.watch_list) : null,
       }));
-      res.json(parsedRows);
+      res.json(rows);
     } catch (error: any) {
       console.error("Get strategic pulse error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
