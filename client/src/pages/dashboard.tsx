@@ -16,6 +16,7 @@ import BriefingsPage from "./briefings";
 import SettingsPage from "./settings";
 import TopicViewPage from "./topic-view";
 import AdminPage from "./admin";
+import IntelligencePage from "./intelligence";
 
 export default function Dashboard() {
   console.log("WORKSPACE RENDERED");
@@ -56,6 +57,7 @@ export default function Dashboard() {
               <Route path="/capture" component={CapturePage} />
               <Route path="/inbox" component={InboxPage} />
               <Route path="/map" component={MapPage} />
+              <Route path="/intelligence" component={IntelligencePage} />
               <Route path="/briefings" component={BriefingsPage} />
               <Route path="/brief">{() => <Redirect to="/briefings" />}</Route>
               <Route path="/settings/briefing">{() => <Redirect to="/briefings" />}</Route>

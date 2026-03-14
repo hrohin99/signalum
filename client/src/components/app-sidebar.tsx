@@ -23,12 +23,14 @@ import {
   Settings,
   LogOut,
   Lock,
+  Brain,
 } from "lucide-react";
 
 const navItems = [
   { title: "My Workspace", url: "/", icon: Network },
   { title: "Capture", url: "/capture", icon: PenLine, requiresWrite: true },
   { title: "Live Feed", url: "/inbox", icon: Inbox },
+  { title: "Intelligence", url: "/intelligence", icon: Brain },
   { title: "Briefings", url: "/briefings", icon: Newspaper },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

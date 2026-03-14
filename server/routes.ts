@@ -456,6 +456,91 @@ async function processPendingSeedUrls(userId: string): Promise<void> {
   }
 }
 
+export async function generateStrategicPulseForWorkspace(workspace: any): Promise<any | null> {
+  const workspaceId = workspace.id;
+
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+  const capturesResult = await pool.query(
+    `SELECT content, type, matched_entity, created_at FROM captures WHERE workspace_id = $1 AND created_at >= $2 ORDER BY created_at DESC`,
+    [workspaceId, sixMonthsAgo.toISOString()]
+  );
+
+  if (capturesResult.rows.length < 3) {
+    return null;
+  }
+
+  const maxContentChars = 150000;
+  let totalChars = 0;
+  const snippets: string[] = [];
+  for (let i = 0; i < capturesResult.rows.length; i++) {
+    const c = capturesResult.rows[i];
+    const snippet = `[${i + 1}] (${c.type || "note"}) Entity: ${c.matched_entity || "general"} — ${(c.content || "").slice(0, 600)}`;
+    totalChars += snippet.length;
+    if (totalChars > maxContentChars) {
+      snippets.push(`[... and ${capturesResult.rows.length - i} more captures summarised above]`);
+      break;
+    }
+    snippets.push(snippet);
+  }
+  const captureSnippets = snippets.join("\n\n");
+
+  const profileCtx = buildProfileContext(workspace);
+
+  const anthropic = getAnthropicClient();
+  const message = await anthropic.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 4000,
+    messages: [{
+      role: "user",
+      content: `You are a senior strategic intelligence analyst. Analyse ALL of the following intelligence captures and produce a Strategic Pulse briefing.
+
+${profileCtx}
+
+Intelligence captures from the last 6 months (${capturesResult.rows.length} total):
+${captureSnippets}
+
+Produce a JSON object with exactly these five keys. Each key's value must be an object with "headline" (string, one punchy sentence) and "items" (array of objects each with "title" and "detail"):
+
+1. "big_shift" — The single most important macro-level change across all signals.
+2. "emerging_opportunities" — 2-4 opportunities the organisation should act on.
+3. "threat_radar" — 2-4 threats or risks that need monitoring or action.
+4. "competitor_moves" — 2-4 notable competitor actions or positioning changes.
+5. "watch_list" — 2-3 signals that are too early to act on but worth watching.
+
+Return ONLY the JSON object, no other text.`
+    }]
+  });
+
+  const textContent = message.content.find((b: any) => b.type === "text");
+  const rawText = textContent ? (textContent as any).text : "{}";
+  let parsed: any;
+  try {
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch ? jsonMatch[0] : rawText);
+  } catch {
+    parsed = {};
+  }
+
+  const result = await pool.query(
+    `INSERT INTO strategic_pulse (workspace_id, big_shift, emerging_opportunities, threat_radar, competitor_moves, watch_list, capture_count, model)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+    [
+      workspaceId,
+      JSON.stringify(parsed.big_shift || null),
+      JSON.stringify(parsed.emerging_opportunities || null),
+      JSON.stringify(parsed.threat_radar || null),
+      JSON.stringify(parsed.competitor_moves || null),
+      JSON.stringify(parsed.watch_list || null),
+      capturesResult.rows.length,
+      "claude-sonnet-4-20250514"
+    ]
+  );
+
+  return result.rows[0];
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
@@ -5365,6 +5450,52 @@ Return ONLY the JSON object, no other text.`
       res.json(result.rows[0]);
     } catch (error: any) {
       console.error("Regenerate SWOT error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/strategic-pulse", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const result = await pool.query(
+        `SELECT * FROM strategic_pulse WHERE workspace_id = $1 ORDER BY generated_at DESC LIMIT 5`,
+        [workspaceId]
+      );
+      res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get strategic pulse error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/strategic-pulse/generate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role || "admin";
+      if (!["admin", "sub_admin"].includes(role)) return res.status(403).json({ error: "Forbidden" });
+
+      const wsResult = await pool.query(
+        `SELECT * FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspace = wsResult.rows[0];
+      if (!workspace) return res.status(404).json({ error: "Workspace not found" });
+
+      const result = await generateStrategicPulseForWorkspace(workspace);
+      if (!result) {
+        return res.status(400).json({ error: "At least 3 captures from the last 6 months are required to generate a strategic pulse." });
+      }
+      res.json(result);
+    } catch (error: any) {
+      console.error("Generate strategic pulse error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

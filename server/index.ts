@@ -213,6 +213,40 @@ app.use((req, res, next) => {
         } catch (error) {
           console.error("[cron] Weekly digest failed:", error);
         }
+
+        try {
+          const { pool: cronPool } = await import("./storage");
+          const { generateStrategicPulseForWorkspace } = await import("./routes");
+
+          const sixMonthsAgo = new Date();
+          sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+          const activeWorkspaces = await cronPool.query(
+            `SELECT w.* FROM workspaces w
+             WHERE (SELECT COUNT(*) FROM captures c WHERE c.workspace_id = w.id AND c.created_at >= $1) >= 3`,
+            [sixMonthsAgo.toISOString()]
+          );
+
+          log(`Strategic Pulse: found ${activeWorkspaces.rows.length} workspace(s) with >= 3 captures`, "cron");
+
+          for (const workspace of activeWorkspaces.rows) {
+            generateStrategicPulseForWorkspace(workspace)
+              .then((result) => {
+                if (result) {
+                  log(`Strategic Pulse generated for workspace ${workspace.id}`, "cron");
+                } else {
+                  log(`Strategic Pulse skipped for workspace ${workspace.id}: insufficient captures`, "cron");
+                }
+              })
+              .catch((err) => {
+                console.error(`[cron] Strategic Pulse failed for workspace ${workspace.id}:`, err);
+              });
+          }
+
+          log(`Strategic Pulse cron dispatched`, "cron");
+        } catch (pulseError) {
+          console.error("[cron] Strategic Pulse cron failed:", pulseError);
+        }
       }, {
         timezone: "UTC",
       });

@@ -353,5 +353,25 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring entity_swot table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS strategic_pulse (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        generated_at TIMESTAMPTZ DEFAULT NOW(),
+        big_shift JSONB,
+        emerging_opportunities JSONB,
+        threat_radar JSONB,
+        competitor_moves JSONB,
+        watch_list JSONB,
+        capture_count INTEGER DEFAULT 0,
+        model TEXT DEFAULT 'claude-sonnet-4-20250514'
+      )
+    `);
+    console.log("[DBSafety] strategic_pulse table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring strategic_pulse table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
