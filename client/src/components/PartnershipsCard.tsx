@@ -83,6 +83,9 @@ export function PartnershipsCard({
       return res.json();
     },
     enabled: open,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
   });
 
   const partnerships = data?.partnerships || [];
