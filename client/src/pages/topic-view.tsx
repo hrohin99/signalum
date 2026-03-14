@@ -327,6 +327,27 @@ function TopicViewContent({
     retryDelay: 500
   });
 
+  const { data: partnershipsData } = useQuery<{ partnerships: any[] }>({
+    queryKey: ["/api/entities", entityId, "partnerships"],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return { partnerships: [] };
+      const res = await fetch(`/api/entities/${encodeURIComponent(entityId)}/partnerships`, {
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include'
+      });
+      if (!res.ok) return { partnerships: [] };
+      return res.json();
+    },
+    enabled: !!entityId,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: true,
+    retry: 2,
+    retryDelay: 500
+  });
+
   useEffect(() => {
     if (extractionStatus?.extraction?.status === "completed" && extractionStatus?.extraction?.noDataFound) {
       setExtractionNoData(true);
