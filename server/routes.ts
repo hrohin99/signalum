@@ -4369,7 +4369,7 @@ Return only the bullet points, no JSON, no headers.`
       const fromAddress = process.env.EMAIL_FROM || "noreply@example.com";
       const { Resend } = await import("resend");
       const resendClient = new Resend(process.env.RESEND_API_KEY);
-      const loginUrl = "https://watchloom.rohin.co/signin";
+      const loginUrl = "https://signalum.rohin.co/signin";
       await resendClient.emails.send({
         from: fromAddress,
         to: email,
