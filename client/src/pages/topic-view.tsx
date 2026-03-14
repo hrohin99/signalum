@@ -2746,7 +2746,7 @@ function CaptureSourceIndicator({ capture }: { capture: Capture }) {
         href={sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={`inline-flex items-center gap-1 text-[11px] mt-2 transition-colors ${isHiringSignal ? "text-amber-600 hover:text-amber-800" : "text-slate-500 hover:text-[#1e3a5f]"} hover:underline`}
+        className={`inline-flex items-center gap-1 text-[11px] mt-2 transition-colors max-w-full overflow-hidden break-all ${isHiringSignal ? "text-amber-600 hover:text-amber-800" : "text-slate-500 hover:text-[#1e3a5f]"} hover:underline`}
         data-testid={`source-link-${capture.id}`}
       >
         <SourceIcon className={`w-3 h-3 ${isHiringSignal ? "text-amber-600" : "text-[#1e3a5f]"}`} />
@@ -2938,7 +2938,7 @@ function UpdatesFeedWidget({
               const effectiveStrength = strength ?? "medium";
               const styles = getSignalCardStyles(effectiveStrength);
               const cardEl = (
-                <Card className={`relative ${styles.cardClass}`} data-testid={`card-update-${cap.id}`}>
+                <Card className={`relative overflow-hidden max-w-full ${styles.cardClass}`} data-testid={`card-update-${cap.id}`}>
                   {effectiveStrength === "high" && (
                     <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-[#c9a84c]/15 text-[#c9a84c] border border-[#c9a84c]/30 text-[9px] font-medium" data-testid={`signal-pill-${cap.id}`}>
                       High Signal
@@ -2974,7 +2974,7 @@ function UpdatesFeedWidget({
                 </Card>
               );
               return styles.wrapperClass ? (
-                <div key={cap.id} className={styles.wrapperClass}>{cardEl}</div>
+                <div key={cap.id} className={`${styles.wrapperClass} max-w-full overflow-hidden`}>{cardEl}</div>
               ) : cardEl;
             })}
           </div>
