@@ -5457,11 +5457,11 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
       const jsonMatch = clean.match(/\{[\s\S]*\}/);
       const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
 
-      const insertResult = await pool.query(
-        `INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, entity_count, capture_count)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-        [workspaceId, parsed.big_shift || null, parsed.threat_radar || null, parsed.emerging_opportunities || null, parsed.competitor_moves || null, parsed.watch_list || null, entityCount, captureCount]
-      );
+      const insertResult = await db.execute(sql`
+        INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, entity_count, capture_count)
+        VALUES (${workspaceId}, ${JSON.stringify(parsed.big_shift) || null}, ${JSON.stringify(parsed.threat_radar) || null}, ${JSON.stringify(parsed.emerging_opportunities) || null}, ${JSON.stringify(parsed.competitor_moves) || null}, ${JSON.stringify(parsed.watch_list) || null}, ${entityCount}, ${captureCount})
+        RETURNING *
+      `);
 
       res.json(insertResult.rows[0]);
     } catch (e: any) {
