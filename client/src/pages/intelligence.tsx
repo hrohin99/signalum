@@ -90,7 +90,7 @@ function PulseSectionCard({
 
 export default function IntelligencePage() {
   const { toast } = useToast();
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedPulseIndex, setSelectedPulseIndex] = useState<number>(0);
 
   const { data: pulses = [], isLoading, isError, error, refetch } = useQuery<StrategicPulse[]>({
     queryKey: ["/api/strategic-pulse"],
@@ -103,7 +103,7 @@ export default function IntelligencePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/strategic-pulse"] });
-      setSelectedIndex(0);
+      setSelectedPulseIndex(0);
       toast({ title: "Strategic Pulse generated", description: "Your new intelligence briefing is ready." });
     },
     onError: (error: any) => {
@@ -121,7 +121,7 @@ export default function IntelligencePage() {
     },
   });
 
-  const selectedPulse = pulses[selectedIndex] || null;
+  const selectedPulse = pulses[selectedPulseIndex] || null;
 
   if (isLoading) {
     return (
@@ -221,25 +221,23 @@ export default function IntelligencePage() {
       </div>
 
       {pulses.length > 1 && (
-        <div className="flex items-center gap-2 flex-wrap" data-testid="history-pills">
-          {pulses.map((pulse, i) => (
-            <button
-              key={pulse.id}
-              onClick={() => setSelectedIndex(i)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                i === selectedIndex
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
-              }`}
-              data-testid={`pill-pulse-${i}`}
-            >
-              {new Date(pulse.generated_at).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })}
-            </button>
-          ))}
+        <div className="flex items-center gap-3" data-testid="history-selector">
+          <label className="text-sm text-muted-foreground whitespace-nowrap">Viewing pulse from:</label>
+          <select
+            className="text-sm border border-border rounded-md px-3 py-1.5 bg-background text-foreground cursor-pointer"
+            value={selectedPulseIndex}
+            onChange={(e) => setSelectedPulseIndex(Number(e.target.value))}
+            data-testid="select-pulse-history"
+          >
+            {pulses.map((p, i) => (
+              <option key={p.id} value={i}>
+                {new Date(p.generated_at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                {" "}
+                {new Date(p.generated_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                {i === 0 ? " (latest)" : ""}
+              </option>
+            ))}
+          </select>
         </div>
       )}
 
