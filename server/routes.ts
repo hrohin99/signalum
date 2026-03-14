@@ -5439,7 +5439,6 @@ You are analysing ${entityCount} tracked entities over the last 6 months. ${capt
 
 INTELLIGENCE (grouped by entity):
 ${capturesByEntity}
-
 Write a Strategic Pulse briefing. Use ONLY evidence from the intelligence above — do not invent or assume. Infer the industry and domain from the intelligence itself. Write as a trusted advisor to the leadership team of the organisation described in the workspace profile above.
 
 Respond ONLY with valid JSON, no other text, no markdown code fences:
@@ -5463,6 +5462,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
         [workspaceId, parsed.big_shift || null, parsed.threat_radar || null, parsed.emerging_opportunities || null, parsed.competitor_moves || null, parsed.watch_list || null, entityCount, captureCount]
       );
+
       res.json(insertResult.rows[0]);
     } catch (e: any) {
       console.error("Strategic pulse generation error:", e);
