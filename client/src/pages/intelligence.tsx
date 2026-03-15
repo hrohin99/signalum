@@ -194,6 +194,21 @@ export default function IntelligencePage() {
     }
     y += 2;
   };
+  const stripEmoji = (text: string) => {
+    if (!text) return '';
+    return text
+      .replace(/🔴/g, '[HIGH]')
+      .replace(/🟡/g, '[MED]')
+      .replace(/🟢/g, '[LOW]')
+      .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
+      .replace(/\u2014/g, '-')
+      .replace(/\u2013/g, '-')
+      .replace(/\u2019/g, "'")
+      .replace(/\u201C/g, '"')
+      .replace(/\u201D/g, '"')
+      .replace(/[^\x00-\x7F]/g, '')
+      .trim();
+  };
   const addSection = (title: string, section: any, r: number, g: number, b: number) => {
     if (!section) return;
     y += 5;
@@ -203,11 +218,11 @@ export default function IntelligencePage() {
     doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
     doc.text(title, margin + 3, y + 1);
     y += 10;
-    if (section.headline) addText(section.headline, margin, 9, false, 80, 80, 80);
+    if (section.headline) addText(stripEmoji(section.headline), margin, 9, false, 80, 80, 80);
     for (const item of (section.items || [])) {
       if (y > 265) { doc.addPage(); y = 20; }
-      addText('• ' + (item.title || ''), margin + 2, 9, true, 30, 30, 30);
-      addText(item.detail || '', margin + 5, 8, false, 60, 60, 60);
+      addText('• ' + stripEmoji(item.title || ''), margin + 2, 9, true, 30, 30, 30);
+      addText(stripEmoji(item.detail || ''), margin + 5, 8, false, 60, 60, 60);
     }
   };
   doc.setFillColor(30, 40, 80);
