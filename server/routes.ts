@@ -5424,11 +5424,10 @@ Return ONLY the JSON object, no other text.`
       const workspaceId = wsResult.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
 
-      const wsProfileResult = await pool.query(`SELECT * FROM user_profiles WHERE user_id = $1`, [userId]);
+      const wsProfileResult = await pool.query(`SELECT * FROM workspaces WHERE user_id = $1`, [userId]);
       const profileCtx = buildProfileContext(wsProfileResult.rows[0] || null);
 
-      const tenantId = "00000000-0000-0000-0000-000000000000";
-      const prodContext = await storage.getProductContext(tenantId);
+      const prodContext = await storage.getProductContext(workspaceId);
 
       const capturesResult = await db.execute(sql`
         SELECT matched_entity, content, created_at FROM captures 
