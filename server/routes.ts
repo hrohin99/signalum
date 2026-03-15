@@ -2044,8 +2044,8 @@ Do not use em dashes. Do not repeat yourself. Do not hedge. Return only the stru
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const { categoryName, entityName, topic_type, priority } = req.body;
@@ -2350,8 +2350,8 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const { entityName, categoryName, website_url } = req.body;
@@ -2927,8 +2927,8 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const { entityId } = req.params;
@@ -2967,8 +2967,8 @@ Return ONLY a JSON array of 3 strings, e.g. ["insight 1", "insight 2", "insight 
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const { entityId } = req.params;
@@ -3489,8 +3489,8 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const tenantId = "00000000-0000-0000-0000-000000000000";
@@ -3542,8 +3542,8 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const wsResult = await pool.query(
@@ -3611,8 +3611,8 @@ Rules:
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const tenantId = "00000000-0000-0000-0000-000000000000";
@@ -3808,8 +3808,8 @@ Return only the bullet points, no JSON, no headers.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const tenantId = "00000000-0000-0000-0000-000000000000";
@@ -3846,8 +3846,8 @@ Return only the bullet points, no JSON, no headers.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const tenantId = "00000000-0000-0000-0000-000000000000";
@@ -4532,8 +4532,8 @@ Return only the bullet points, no JSON, no headers.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const tenantId = "00000000-0000-0000-0000-000000000000";
@@ -4971,8 +4971,8 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const ws = await pool.query(
@@ -5005,8 +5005,8 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       const profileResult = await pool.query(
         `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
       );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
         return res.status(403).json({ error: "Forbidden" });
       }
       const ws = await pool.query(
@@ -5053,7 +5053,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5081,7 +5081,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5110,7 +5110,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5151,7 +5151,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5179,7 +5179,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5208,7 +5208,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5250,7 +5250,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (!["admin", "sub_admin"].includes(role)) return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5297,7 +5297,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (!["admin", "sub_admin"].includes(role)) return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5538,7 +5538,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5564,7 +5564,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5591,7 +5591,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5636,7 +5636,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5661,7 +5661,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5687,7 +5687,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5731,7 +5731,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5759,7 +5759,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5826,7 +5826,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5851,7 +5851,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5876,7 +5876,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5916,7 +5916,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
@@ -5941,7 +5941,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     try {
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role || 'admin';
+      const role = profileResult.rows[0]?.role;
       if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
       const wsResult = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
