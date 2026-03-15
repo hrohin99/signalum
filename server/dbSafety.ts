@@ -164,6 +164,9 @@ export async function ensureDatabaseSchema(): Promise<void> {
     await db.execute(sql`
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS digest_recipients JSONB DEFAULT '[]'
     `);
+    await db.execute(sql`
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS capture_token TEXT;
+    `);
     console.log("[DBSafety] digest_recipients column verified.");
   } catch (error: any) {
     console.error("[DBSafety] Error ensuring digest_recipients column:", error?.message || error);
