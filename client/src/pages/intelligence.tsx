@@ -162,22 +162,75 @@ export default function IntelligencePage() {
   const selectedPulse = pulses[selectedPulseIndex] || null;
 
   const exportPDF = async () => {
-    const raw = localStorage.getItem('sb-fwcwijjargbdyjwyapwz-auth-token');
-    if (!raw) return;
-    const token = JSON.parse(raw).access_token;
-    const res = await fetch('/api/strategic-pulse/export-pdf', {
-      headers: { 'Authorization': 'Bearer ' + token }
-    });
-    if (!res.ok) return;
-    const html = await res.text();
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Strategic-Pulse-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.html`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const raw = localStorage.getItem('sb-fwcwijjargbdyjwyapwz-auth-token');
+  if (!raw) return;
+  const token = JSON.parse(raw).access_token;
+  const res = await fetch('/api/strategic-pulse', { headers: { 'Authorization': 'Bearer ' + token } });
+  const data = await res.json();
+  const pulse = data[0];
+  if (!pulse) return;
+  await new Promise<void>((resolve, reject) => {
+    if ((window as any).jspdf) { resolve(); return; }
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error('Failed to load jsPDF'));
+    document.head.appendChild(s);
+  });
+  const { jsPDF } = (window as any).jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const margin = 15;
+  const contentW = 180;
+  let y = 35;
+  const addText = (text: string, x: number, size: number, bold: boolean, r: number, g: number, b: number) => {
+    doc.setFontSize(size);
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setTextColor(r, g, b);
+    const lines = doc.splitTextToSize(String(text || ''), contentW - (x - margin));
+    for (const line of lines) {
+      if (y > 272) { doc.addPage(); y = 20; }
+      doc.text(line, x, y);
+      y += size * 0.45;
+    }
+    y += 2;
   };
+  const addSection = (title: string, section: any, r: number, g: number, b: number) => {
+    if (!section) return;
+    y += 5;
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFillColor(r, g, b);
+    doc.rect(margin, y - 4, contentW, 8, 'F');
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+    doc.text(title, margin + 3, y + 1);
+    y += 10;
+    if (section.headline) addText(section.headline, margin, 9, false, 80, 80, 80);
+    for (const item of (section.items || [])) {
+      if (y > 265) { doc.addPage(); y = 20; }
+      addText('• ' + (item.title || ''), margin + 2, 9, true, 30, 30, 30);
+      addText(item.detail || '', margin + 5, 8, false, 60, 60, 60);
+    }
+  };
+  doc.setFillColor(30, 40, 80);
+  doc.rect(0, 0, 210, 25, 'F');
+  doc.setFontSize(16); doc.setFont('helvetica', 'bold'); doc.setTextColor(255, 255, 255);
+  doc.text('Strategic Pulse', margin, 12);
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  const date = new Date(pulse.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  doc.text('Generated ' + date + '  ·  ' + pulse.capture_count + ' signals  ·  Signalum', margin, 20);
+  addSection('The Big Shift', pulse.big_shift, 59, 130, 246);
+  addSection('Emerging Opportunities', pulse.emerging_opportunities, 16, 185, 129);
+  addSection('Threat Radar', pulse.threat_radar, 239, 68, 68);
+  addSection('Competitor Moves Decoded', pulse.competitor_moves, 139, 92, 246);
+  addSection('Watch List', pulse.watch_list, 245, 158, 11);
+  addSection('Regional Intelligence', pulse.regional_intelligence, 100, 116, 139);
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8); doc.setTextColor(150, 150, 150);
+    doc.text('Signalum · Confidential · Page ' + i + ' of ' + pageCount, margin, 290);
+  }
+  doc.save('Strategic-Pulse-' + date + '.pdf');
+};
 
   if (isLoading) {
     return (
