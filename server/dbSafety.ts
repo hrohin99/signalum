@@ -171,6 +171,17 @@ export async function ensureDatabaseSchema(): Promise<void> {
 
   try {
     await db.execute(sql`
+      ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS regional_intelligence text;
+      ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS entity_count integer;
+      ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS capture_count integer;
+    `);
+    console.log("[DBSafety] strategic_pulse columns verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring strategic_pulse columns:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS entity_partnerships (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         workspace_id UUID NOT NULL,
