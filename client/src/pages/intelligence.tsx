@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Brain, Zap, Target, ShieldAlert, Swords, Eye, Loader2, Info, Sparkles, Globe, type LucideIcon } from "lucide-react";
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+import { Brain, Zap, Target, ShieldAlert, Swords, Eye, Loader2, Info, Sparkles, Globe, Download, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -161,6 +163,30 @@ export default function IntelligencePage() {
 
   const selectedPulse = pulses[selectedPulseIndex] || null;
 
+  const exportPDF = async () => {
+    const element = document.querySelector('[data-testid="page-intelligence"]') as HTMLElement;
+    if (!element) return;
+    const canvas = await html2canvas(element, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth;
+    const imgHeight = (canvas.height * pageWidth) / canvas.width;
+    let heightLeft = imgHeight;
+    let position = 0;
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= pageHeight;
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+    }
+    const date = selectedPulse ? new Date(selectedPulse.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'pulse';
+    pdf.save(`Strategic-Pulse-${date}.pdf`);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full" data-testid="loading-intelligence">
@@ -230,24 +256,36 @@ export default function IntelligencePage() {
               <p className="text-xs text-muted-foreground">AI-powered intelligence briefing</p>
             </div>
           </div>
-          <Button
-            onClick={() => generateMutation.mutate()}
-            disabled={generateMutation.isPending}
-            size="sm"
-            data-testid="button-generate-new-pulse"
-          >
-            {generateMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Analysing all signals...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 mr-2" />
-                Generate New Pulse
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={exportPDF}
+              variant="outline"
+              size="sm"
+              data-testid="button-export-pdf"
+              disabled={!selectedPulse}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              Export PDF
+            </Button>
+            <Button
+              onClick={() => generateMutation.mutate()}
+              disabled={generateMutation.isPending}
+              size="sm"
+              data-testid="button-generate-new-pulse"
+            >
+              {generateMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analysing all signals...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Generate New Pulse
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
