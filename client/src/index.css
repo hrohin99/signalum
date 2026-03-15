@@ -299,15 +299,14 @@
 }
 
 @media print {
-  nav, aside, [data-testid="nav-my-workspace"], [data-testid="nav-capture"],
-  [data-testid="nav-live-feed"], [data-testid="nav-intelligence"],
-  [data-testid="nav-briefings"], [data-testid="nav-settings"],
-  button, .sticky { display: none !important; }
-
+  body { margin: 0; }
+  nav, aside, header, footer,
+  [class*="sidebar"], [class*="Sidebar"],
+  button { display: none !important; }
+  main { margin: 0 !important; padding: 0 !important; }
+  * { overflow: visible !important; height: auto !important; }
   [data-testid="page-intelligence"] {
-    display: block !important;
-    width: 100% !important;
-    margin: 0 !important;
-    padding: 16px !important;
+    max-width: 100% !important;
+    padding: 20px !important;
   }
 }

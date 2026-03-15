@@ -161,58 +161,8 @@ export default function IntelligencePage() {
 
   const selectedPulse = pulses[selectedPulseIndex] || null;
 
-  const exportPDF = async () => {
-    const element = document.querySelector('[data-testid="page-intelligence"]') as HTMLElement;
-    if (!element) return;
-
-    const originalStyle = element.style.cssText;
-    element.style.maxHeight = 'none';
-    element.style.overflow = 'visible';
-
-    try {
-      const { default: html2canvas } = await import('html2canvas');
-      const { default: jsPDF } = await import('jspdf');
-
-      const canvas = await html2canvas(element, {
-        scale: 1.5,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        windowWidth: element.scrollWidth,
-        windowHeight: element.scrollHeight,
-        scrollY: 0,
-        height: element.scrollHeight,
-        width: element.scrollWidth,
-      });
-
-      const imgData = canvas.toDataURL('image/jpeg', 0.85);
-      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth - 20;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-      let heightLeft = imgHeight;
-      let position = 10;
-
-      pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight);
-      heightLeft -= (pageHeight - 20);
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight + 10;
-        pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight);
-        heightLeft -= (pageHeight - 20);
-      }
-
-      const date = selectedPulse
-        ? new Date(selectedPulse.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
-        : 'pulse';
-      pdf.save(`Strategic-Pulse-${date}.pdf`);
-    } catch (err) {
-      console.error('PDF export failed:', err);
-    } finally {
-      element.style.cssText = originalStyle;
-    }
+  const exportPDF = () => {
+    window.print();
   };
 
   if (isLoading) {
