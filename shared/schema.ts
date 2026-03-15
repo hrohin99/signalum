@@ -431,3 +431,17 @@ export const ambientSearchLogs = pgTable("ambient_search_logs", {
   errors: integer("errors").notNull().default(0),
   completedAt: timestamp("completed_at").defaultNow().notNull(),
 });
+
+export const strategicPulse = pgTable("strategic_pulse", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: uuid("workspace_id").notNull(),
+  generatedAt: timestamp("generated_at", { withTimezone: true }).defaultNow(),
+  bigShift: text("big_shift"),
+  emergingOpportunities: text("emerging_opportunities"),
+  threatRadar: text("threat_radar"),
+  competitorMoves: text("competitor_moves"),
+  watchList: text("watch_list"),
+  regionalIntelligence: text("regional_intelligence"),
+  entityCount: integer("entity_count"),
+  captureCount: integer("capture_count"),
+});
