@@ -3166,13 +3166,7 @@ Rules:
   app.put("/api/workspace/profile", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const profileResult = await pool.query(
-        `SELECT role FROM user_profiles WHERE user_id = $1`, [userId]
-      );
-      const role = profileResult.rows[0]?.role || 'admin';
-      if (!role || !["admin", "sub_admin"].includes(role)) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
+      // Any authenticated user can update their own workspace profile
 
       const fieldMap: Record<string, string> = {
         trackingIntent: "tracking_intent",
