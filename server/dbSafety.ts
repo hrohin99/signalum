@@ -175,6 +175,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
       ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS entity_count integer;
       ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS capture_count integer;
     `);
+    await pool.query(`ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS regional_intelligence text`);
     console.log("[DBSafety] strategic_pulse columns verified.");
   } catch (error: any) {
     console.error("[DBSafety] Error ensuring strategic_pulse columns:", error?.message || error);
