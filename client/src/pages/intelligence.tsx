@@ -162,7 +162,7 @@ export default function IntelligencePage() {
   const selectedPulse = pulses[selectedPulseIndex] || null;
 
   const exportPDF = () => {
-    window.print();
+    setTimeout(() => window.print(), 100);
   };
 
   if (isLoading) {
