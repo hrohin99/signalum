@@ -5459,7 +5459,7 @@ Return ONLY the JSON object, no other text.`
       const consolidatedContext = entitySummaries.join('\n\n');
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 2500,
+        max_tokens: 4000,
         messages: [{
           role: "user",
           content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Your job is to synthesise intelligence summaries into sharp strategic insight for the organisation described above.
@@ -5485,8 +5485,25 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
 
       const raw = (message.content[0] as any).text || "{}";
       const clean = raw.replace(/```json|```/g, "").trim();
-      const jsonMatch = clean.match(/\{[\s\S]*\}/);
-      const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : clean);
+      const jsonMatch = clean.match(/\{[\s\S]*/);
+      let parsed: any = {};
+      try {
+        const jsonStr = jsonMatch ? jsonMatch[0] : clean;
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        // Attempt to fix truncated JSON by closing open structures
+        try {
+          const jsonStr = (jsonMatch ? jsonMatch[0] : clean)
+            .replace(/,\s*$/, '')
+            .replace(/\}\s*$/, '}}')
+            + ']}]}]}]}]}';
+          const fixed = jsonStr.match(/\{[\s\S]*/)?.[0] || '{}';
+          parsed = JSON.parse(fixed);
+        } catch {
+          console.error('[pulse] Could not parse Claude response, using empty object');
+          parsed = {};
+        }
+      }
 
       const insertResult = await db.execute(sql`
         INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, regional_intelligence, entity_count, capture_count)
