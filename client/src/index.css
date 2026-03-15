@@ -297,3 +297,12 @@
     inset: -1px;
   }
 }
+
+@media print {
+  body > * { display: none; }
+  main { display: block !important; }
+  .sticky { position: static !important; }
+  button { display: none !important; }
+  [data-testid="page-intelligence"] { display: block !important; }
+  nav, aside, header { display: none !important; }
+}
