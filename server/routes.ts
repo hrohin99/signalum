@@ -5459,7 +5459,7 @@ Return ONLY the JSON object, no other text.`
       const consolidatedContext = entitySummaries.join('\n\n');
       const message = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 4000,
+        max_tokens: 6000,
         messages: [{
           role: "user",
           content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Your job is to synthesise intelligence summaries into sharp strategic insight for the organisation described above.
@@ -5470,6 +5470,7 @@ ENTITY SUMMARIES:
 ${consolidatedContext}
 
 Write a Strategic Pulse briefing. Use ONLY evidence from the summaries above. Write as a trusted advisor to the leadership team.
+Be concise. Each section headline must be 1 sentence. Each item title must be under 8 words. Each item detail must be 2 sentences maximum. The regional_intelligence items must be 2 sentences each. Total response must fit within 5000 tokens.
 
 Respond ONLY with valid JSON, no other text, no markdown code fences:
 {
