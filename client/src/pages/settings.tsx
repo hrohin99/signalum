@@ -149,6 +149,153 @@ function AccountSection() {
   );
 }
 
+function IntelligenceProfileForm() {
+  const { toast } = useToast();
+  const { role: userRole } = useRole();
+  const isEditor = userRole === "admin" || userRole === "sub_admin";
+  const [userPerspective, setUserPerspective] = useState("");
+  const [orgDescription, setOrgDescription] = useState("");
+  const [orgGeographies, setOrgGeographies] = useState("");
+  const [trackingTypes, setTrackingTypes] = useState("");
+  const [competitors, setCompetitors] = useState("");
+  const [winFactors, setWinFactors] = useState("");
+  const [vulnerability, setVulnerability] = useState("");
+  const [earlyWarningSignal, setEarlyWarningSignal] = useState("");
+
+  const { data: profileData } = useQuery<any>({
+    queryKey: ["/api/workspace/profile"],
+  });
+
+  useEffect(() => {
+    if (profileData) {
+      setUserPerspective(profileData.user_perspective || "");
+      setOrgDescription(profileData.org_description || "");
+      const geos = Array.isArray(profileData.org_geographies)
+        ? profileData.org_geographies.join(", ")
+        : (profileData.org_geographies || "");
+      setOrgGeographies(geos);
+      const types = Array.isArray(profileData.tracking_types)
+        ? profileData.tracking_types.join(", ")
+        : (profileData.tracking_types || "");
+      setTrackingTypes(types);
+      const comps = Array.isArray(profileData.competitors)
+        ? profileData.competitors.filter(Boolean).join(", ")
+        : (typeof profileData.competitors === "string"
+            ? profileData.competitors.replace(/^\{|\}$/g, "").replace(/"/g, "")
+            : "");
+      setCompetitors(comps);
+      setWinFactors(profileData.win_factors || "");
+      setVulnerability(profileData.vulnerability || "");
+      setEarlyWarningSignal(profileData.early_warning_signal || "");
+    }
+  }, [profileData]);
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", "/api/workspace/profile", {
+        userPerspective: userPerspective,
+        orgDescription: orgDescription,
+        orgGeographies: orgGeographies.split(",").map((s: string) => s.trim()).filter(Boolean),
+        trackingTypes: trackingTypes.split(",").map((s: string) => s.trim()).filter(Boolean),
+        competitors: competitors,
+        winFactors: winFactors,
+        vulnerability: vulnerability,
+        earlyWarningSignal: earlyWarningSignal,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspace/profile"] });
+      toast({
+        title: "Intelligence profile saved",
+        className: "bg-green-50 border-green-200 text-green-800",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Your perspective</Label>
+        {isEditor ? (
+          <input value={userPerspective} onChange={e => setUserPerspective(e.target.value)}
+            placeholder="e.g. vendor, analyst, government" style={inputStyle}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{userPerspective || "—"}</p>}
+      </div>
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Organisation description</Label>
+        {isEditor ? (
+          <textarea value={orgDescription} onChange={e => setOrgDescription(e.target.value)}
+            placeholder="Describe your organisation" rows={2}
+            style={{ ...inputStyle, resize: "vertical" as const }}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{orgDescription || "—"}</p>}
+      </div>
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Target geographies</Label>
+        {isEditor ? (
+          <input value={orgGeographies} onChange={e => setOrgGeographies(e.target.value)}
+            placeholder="e.g. United Kingdom, North America (comma separated)" style={inputStyle}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{orgGeographies || "—"}</p>}
+      </div>
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">What you're tracking</Label>
+        {isEditor ? (
+          <input value={trackingTypes} onChange={e => setTrackingTypes(e.target.value)}
+            placeholder="e.g. competitors, regulations, standards (comma separated)" style={inputStyle}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{trackingTypes || "—"}</p>}
+      </div>
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Competitors</Label>
+        {isEditor ? (
+          <input value={competitors} onChange={e => setCompetitors(e.target.value)}
+            placeholder="e.g. iProov, Paravision, Mitek (comma separated)" style={inputStyle}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{competitors || "—"}</p>}
+      </div>
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">We win on</Label>
+        {isEditor ? (
+          <textarea value={winFactors} onChange={e => setWinFactors(e.target.value)}
+            placeholder="What gives you a competitive edge?" rows={2}
+            style={{ ...inputStyle, resize: "vertical" as const }}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{winFactors || "—"}</p>}
+      </div>
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">We're vulnerable on</Label>
+        {isEditor ? (
+          <textarea value={vulnerability} onChange={e => setVulnerability(e.target.value)}
+            placeholder="Where could competitors attack you?" rows={2}
+            style={{ ...inputStyle, resize: "vertical" as const }}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{vulnerability || "—"}</p>}
+      </div>
+      <div>
+        <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Early warning signal</Label>
+        {isEditor ? (
+          <textarea value={earlyWarningSignal} onChange={e => setEarlyWarningSignal(e.target.value)}
+            placeholder="What event should trigger an immediate alert?" rows={2}
+            style={{ ...inputStyle, resize: "vertical" as const }}
+            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+        ) : <p className="text-sm text-gray-700">{earlyWarningSignal || "—"}</p>}
+      </div>
+      {isEditor && (
+        <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}
+          className="w-full text-white" style={{ background: "#534AB7", borderRadius: "8px" }}>
+          {saveMutation.isPending ? "Saving..." : "Save Intelligence Profile"}
+        </Button>
+      )}
+    </div>
+  );
+}
+
 function ProductSection() {
   const { toast } = useToast();
   const { role: userRole } = useRole();
@@ -212,6 +359,7 @@ function ProductSection() {
   }
 
   return (
+    <>
     <div style={cardStyle}>
       <div className="p-6">
         <h3 className="text-base font-semibold mb-1" data-testid="text-my-product-header">My Product</h3>
@@ -316,6 +464,15 @@ function ProductSection() {
         )}
       </div>
     </div>
+
+    <div style={{...cardStyle, marginTop: "16px"}}>
+      <div className="p-6">
+        <h3 className="text-base font-semibold mb-1">Intelligence Profile</h3>
+        <p className="text-sm text-gray-500 mb-5">This context personalises every insight, briefing, and analysis Signalum generates for you. These were set during onboarding and can be updated here.</p>
+        <IntelligenceProfileForm />
+      </div>
+    </div>
+    </>
   );
 }
 

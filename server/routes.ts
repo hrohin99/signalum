@@ -499,11 +499,11 @@ export async function registerRoutes(
         return res.status(400).json({ message: error.message });
       }
 
-      if (data.user?.id && (role || trackingText)) {
+      if (data.user?.id) {
         try {
           await storage.createUserProfile({
             userId: data.user.id,
-            role: role || null,
+            role: 'admin',
             onboardingContext: trackingText || null,
           });
         } catch (profileError: any) {
