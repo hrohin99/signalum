@@ -633,11 +633,15 @@ function MapPageInner() {
     const entitiesToSearch: { name: string; categoryName: string; topicType: string }[] = [];
     for (const cat of categories) {
       for (const entity of cat.entities) {
-        const hasWebSearchCaptures = captures.some(
-          (c) => c.matchedEntity === entity.name && c.type === "web_search"
-        );
         const searchKey = `${cat.name}::${entity.name}`;
-        if (!hasWebSearchCaptures && !searchTriggeredRef.current.has(searchKey)) {
+        if (searchTriggeredRef.current.has(searchKey)) continue;
+
+        // Only search if aiSummary is stale (older than 24 hours) or has never been set
+        const lastUpdated = entity.aiSummaryUpdatedAt ? new Date(entity.aiSummaryUpdatedAt).getTime() : 0;
+        const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+        const isStale = lastUpdated < twentyFourHoursAgo;
+
+        if (isStale) {
           entitiesToSearch.push({
             name: entity.name,
             categoryName: cat.name,
