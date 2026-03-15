@@ -467,7 +467,7 @@ export async function registerRoutes(
     try {
       await pool.query(`UPDATE user_profiles SET role = 'admin' WHERE user_id = $1`, [userId]);
       await pool.query(`INSERT INTO product_context (tenant_id, product_name, description, target_customer, strengths, weaknesses)
-        SELECT w.id, 'Entrust Identity', 'End-to-end identity verification platform', 'Government agencies and enterprises', 'Incumbent MSP, strong compliance', 'Third-party liveness dependency'
+        SELECT w.id::uuid, 'Entrust Identity', 'End-to-end identity verification platform', 'Government agencies and enterprises', 'Incumbent MSP, strong compliance', 'Third-party liveness dependency'
         FROM workspaces w WHERE w.user_id = $1
         ON CONFLICT (tenant_id) DO UPDATE SET product_name = EXCLUDED.product_name`, [userId]);
       const check = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
