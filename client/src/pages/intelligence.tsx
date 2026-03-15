@@ -162,25 +162,21 @@ export default function IntelligencePage() {
   const selectedPulse = pulses[selectedPulseIndex] || null;
 
   const exportPDF = async () => {
-    try {
-      const { getAuthHeaders } = await import('@/lib/queryClient');
-      const headers = await getAuthHeaders();
-      const res = await fetch('/api/strategic-pulse/export-pdf', { headers });
-      if (!res.ok) throw new Error('Failed to generate PDF');
-      const html = await res.text();
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      const win = window.open(url, '_blank');
-      if (win) {
-        win.onload = () => {
-          setTimeout(() => {
-            win.print();
-          }, 500);
-        };
-      }
-    } catch (err) {
-      console.error('Export failed:', err);
-    }
+    const raw = localStorage.getItem('sb-fwcwijjargbdyjwyapwz-auth-token');
+    if (!raw) return;
+    const token = JSON.parse(raw).access_token;
+    const res = await fetch('/api/strategic-pulse/export-pdf', {
+      headers: { 'Authorization': 'Bearer ' + token }
+    });
+    if (!res.ok) return;
+    const html = await res.text();
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Strategic-Pulse-${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   if (isLoading) {
