@@ -5409,6 +5409,95 @@ Return ONLY the JSON object, no other text.`
     }
   });
 
+  app.get("/api/strategic-pulse/export-pdf", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`, [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const result = await db.execute(sql`
+        SELECT * FROM strategic_pulse WHERE workspace_id = ${workspaceId} ORDER BY generated_at DESC LIMIT 1
+      `);
+      const row = result.rows[0] as any;
+      if (!row) return res.status(404).json({ error: "No pulse found" });
+
+      const parse = (val: any) => {
+        try { return typeof val === 'string' ? JSON.parse(val) : val; } catch { return null; }
+      };
+
+      const pulse = {
+        generated_at: row.generated_at,
+        big_shift: parse(row.big_shift),
+        emerging_opportunities: parse(row.emerging_opportunities),
+        threat_radar: parse(row.threat_radar),
+        competitor_moves: parse(row.competitor_moves),
+        watch_list: parse(row.watch_list),
+        regional_intelligence: parse(row.regional_intelligence),
+        capture_count: row.capture_count,
+      };
+
+      const date = new Date(pulse.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+      const sectionHtml = (title: string, color: string, section: any) => {
+        if (!section) return '';
+        const items = (section.items || []).map((item: any) => `
+          <div style="margin-bottom:12px;padding-left:12px;border-left:3px solid ${color}">
+            <div style="font-weight:600;font-size:13px;color:#111">${item.title || ''}</div>
+            <div style="font-size:12px;color:#444;margin-top:3px;line-height:1.5">${item.detail || ''}</div>
+          </div>`).join('');
+        return `
+          <div style="margin-bottom:24px;padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa">
+            <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:6px">${title}</div>
+            ${section.headline ? `<div style="font-size:12px;color:#555;font-style:italic;margin-bottom:12px">${section.headline}</div>` : ''}
+            ${items}
+          </div>`;
+      };
+
+      const regionalHtml = (section: any) => {
+        if (!section?.items?.length) return '';
+        const grid = (section.items || []).map((item: any) => `
+          <div style="padding:10px;border:1px solid #e5e7eb;border-radius:6px;background:#fff">
+            <div style="font-weight:600;font-size:12px;color:#111;margin-bottom:4px">${item.title}</div>
+            <div style="font-size:11px;color:#555;line-height:1.4">${item.detail}</div>
+          </div>`).join('');
+        return `
+          <div style="margin-bottom:24px;padding:16px;border:1px solid #e5e7eb;border-radius:8px;background:#fafafa">
+            <div style="font-size:15px;font-weight:700;color:#111;margin-bottom:6px">Regional Intelligence</div>
+            ${section.headline ? `<div style="font-size:12px;color:#555;font-style:italic;margin-bottom:12px">${section.headline}</div>` : ''}
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${grid}</div>
+          </div>`;
+      };
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Strategic Pulse — ${date}</title>
+        <style>
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 32px; color: #111; max-width: 800px; }
+          h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+          .meta { font-size: 12px; color: #888; margin-bottom: 24px; }
+          @media print { body { padding: 20px; } }
+        </style>
+      </head><body>
+        <h1>Strategic Pulse</h1>
+        <div class="meta">Generated ${date} · ${pulse.capture_count} intelligence signals · Signalum</div>
+        ${sectionHtml('The Big Shift', '#3b82f6', pulse.big_shift)}
+        ${sectionHtml('Emerging Opportunities', '#10b981', pulse.emerging_opportunities)}
+        ${sectionHtml('Threat Radar', '#ef4444', pulse.threat_radar)}
+        ${sectionHtml('Competitor Moves Decoded', '#8b5cf6', pulse.competitor_moves)}
+        ${sectionHtml('Watch List', '#f59e0b', pulse.watch_list)}
+        ${regionalHtml(pulse.regional_intelligence)}
+      </body></html>`;
+
+      res.setHeader('Content-Type', 'text/html');
+      res.setHeader('Content-Disposition', `inline; filename="Strategic-Pulse-${date}.html"`);
+      res.send(html);
+    } catch (e: any) {
+      res.status(500).json({ error: e.message });
+    }
+  });
+
   app.post("/api/strategic-pulse/generate", requireAuth, async (req: Request, res: Response) => {
     // Ensure regional_intelligence column exists
     try {

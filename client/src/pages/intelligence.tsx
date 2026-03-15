@@ -162,7 +162,7 @@ export default function IntelligencePage() {
   const selectedPulse = pulses[selectedPulseIndex] || null;
 
   const exportPDF = () => {
-    window.print();
+    window.open('/api/strategic-pulse/export-pdf', '_blank');
   };
 
   if (isLoading) {
