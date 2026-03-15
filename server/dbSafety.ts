@@ -385,5 +385,37 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring strategic_pulse table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS product_context (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        tenant_id UUID NOT NULL UNIQUE,
+        product_name TEXT,
+        description TEXT,
+        target_customer TEXT,
+        strengths TEXT,
+        weaknesses TEXT,
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    console.log("[DBSafety] product_context table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring product_context table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS workspace_capabilities (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        workspace_id UUID NOT NULL,
+        capability_name TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW() NOT NULL
+      )
+    `);
+    console.log("[DBSafety] workspace_capabilities table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring workspace_capabilities table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
