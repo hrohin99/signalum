@@ -3185,6 +3185,7 @@ Rules:
       // Any authenticated user can update their own workspace profile
 
       const fieldMap: Record<string, string> = {
+        displayName: "display_name",
         trackingIntent: "tracking_intent",
         userPerspective: "user_perspective",
         trackingTypes: "tracking_types",

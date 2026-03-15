@@ -55,8 +55,8 @@ function AccountSection() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("PUT", "/api/workspace/profile", {
-        display_name: displayName,
-        user_perspective: role,
+        displayName: displayName,
+        userPerspective: role,
       });
       return res.json();
     },

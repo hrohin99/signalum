@@ -114,6 +114,7 @@ export async function ensureDatabaseSchema(): Promise<void> {
 
   try {
     await db.execute(sql`
+      ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS display_name TEXT;
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS user_perspective TEXT;
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS tracking_types TEXT[];
       ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS tracking_intent TEXT;
