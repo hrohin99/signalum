@@ -1,0 +1,59 @@
+The PDF content is actually great — it mentions Entrust specifically and the analysis is personalised! But you're right it only captures page 1. The window.print() approach captures whatever is visible/scrolled, not the full page.
+The better approach is to generate the PDF server-side from the pulse data directly, which gives full control over multi-page layout. But that's more complex.
+Quick client-side fix — use a proper multi-page approach. Paste this into Replit:
+
+In client/src/pages/intelligence.tsx, replace the exportPDF function with:
+typescriptconst exportPDF = async () => {
+  const element = document.querySelector('[data-testid="page-intelligence"]') as HTMLElement;
+  if (!element) return;
+  
+  // Temporarily expand element to full height for capture
+  const originalStyle = element.style.cssText;
+  element.style.maxHeight = 'none';
+  element.style.overflow = 'visible';
+  
+  try {
+    const { default: html2canvas } = await import('html2canvas');
+    const { default: jsPDF } = await import('jspdf');
+    
+    const canvas = await html2canvas(element, { 
+      scale: 1.5, 
+      useCORS: true, 
+      backgroundColor: '#ffffff',
+      windowWidth: element.scrollWidth,
+      windowHeight: element.scrollHeight,
+      scrollY: 0,
+      height: element.scrollHeight,
+      width: element.scrollWidth,
+    });
+    
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pageWidth - 20;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    
+    let heightLeft = imgHeight;
+    let position = 10;
+    
+    pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight);
+    heightLeft -= (pageHeight - 20);
+    
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight + 10;
+      pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 10, position, imgWidth, imgHeight);
+      heightLeft -= (pageHeight - 20);
+    }
+    
+    const date = selectedPulse 
+      ? new Date(selectedPulse.generated_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+      : 'pulse';
+    pdf.save(`Strategic-Pulse-${date}.pdf`);
+  } catch (err) {
+    console.error('PDF export failed:', err);
+  } finally {
+    element.style.cssText = originalStyle;
+  }
+};
