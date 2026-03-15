@@ -221,9 +221,16 @@ function IntelligenceProfileForm() {
       <div>
         <Label className="text-xs text-gray-500 uppercase tracking-wide mb-1.5 block">Your perspective</Label>
         {isEditor ? (
-          <input value={userPerspective} onChange={e => setUserPerspective(e.target.value)}
-            placeholder="e.g. vendor, analyst, government" style={inputStyle}
-            className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30" />
+          <select value={userPerspective} onChange={e => setUserPerspective(e.target.value)}
+            style={inputStyle} className="w-full outline-none focus:ring-1 focus:ring-[#534AB7]/30">
+            <option value="">Select your perspective</option>
+            <option value="vendor">Product or Technology Vendor</option>
+            <option value="business_owner">Business Owner</option>
+            <option value="government">Government or Public Sector</option>
+            <option value="analyst">Analyst or Consultant</option>
+            <option value="sales">Sales or BD</option>
+            <option value="legal_compliance">Legal or Compliance</option>
+          </select>
         ) : <p className="text-sm text-gray-700">{userPerspective || "—"}</p>}
       </div>
       <div>
