@@ -47,7 +47,12 @@ Only include information you are confident about. Use null for unknown fields. R
   const data = await response.json();
   const content = data?.choices?.[0]?.message?.content || '';
   try {
-    return JSON.parse(content);
+    const cleanedText = content
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    return JSON.parse(cleanedText);
   } catch (err) {
     console.error(`[research] Failed to parse response for ${entity.name}:`, err);
     return null;
