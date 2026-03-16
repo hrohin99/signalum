@@ -89,6 +89,157 @@ import { ContextualTopicBanner } from "@/components/contextual-topic-banner";
 import { topicTourSteps } from "@/lib/tourConfig";
 import { Eye, Crosshair, Compass, Star, MapPin, Phone, Clock } from "lucide-react";
 
+function CapabilityMatrix({ entityName, entityId }: { entityName: string; entityId: string }) {
+  const [entrustStatus, setEntrustStatus] = useState<Record<string, string>>({});
+  const [assessments, setAssessments] = useState<Record<string, string>>({});
+  const [, navigate] = useLocation();
+
+  const { data: capsData } = useQuery<{ capabilities: Array<{ id: string; name: string }> }>({
+    queryKey: ["/api/capabilities"],
+  });
+
+  const { data: compCapData } = useQuery<{ competitorCapabilities: Array<{ capabilityId: string; status: string; evidence: string }> }>({
+    queryKey: ["/api/competitor-capabilities", entityId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/competitor-capabilities/${encodeURIComponent(entityId)}`);
+      return res.json();
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ capabilityId, status }: { capabilityId: string; status: string }) => {
+      const res = await apiRequest("PUT", `/api/competitor-capabilities/${encodeURIComponent(entityId)}`, {
+        capabilityId,
+        status,
+        evidence: null,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/competitor-capabilities", entityId] });
+    },
+  });
+
+  const capabilities = capsData?.capabilities || [];
+  const competitorCaps = compCapData?.competitorCapabilities || [];
+
+  const COMPETITOR_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
+  const ENTRUST_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
+  const ASSESSMENT_CYCLE: Record<string, string> = { "Advantage": "Parity", "Parity": "Gap risk", "Gap risk": "Behind", "Behind": "Advantage" };
+
+  const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
+    yes: { bg: "#1a3a1a", color: "#4ade80", label: "✓" },
+    partial: { bg: "#3a2e00", color: "#fbbf24", label: "~" },
+    no: { bg: "#2a2a2a", color: "#94a3b8", label: "—" },
+    unknown: { bg: "#2a2a2a", color: "#94a3b8", label: "—" },
+  };
+
+  const ASSESSMENT_STYLES_MAP: Record<string, { bg: string; color: string }> = {
+    "Advantage": { bg: "#14532d", color: "#86efac" },
+    "Parity": { bg: "#1e3a4a", color: "#94a3b8" },
+    "Gap risk": { bg: "#431407", color: "#fdba74" },
+    "Behind": { bg: "#450a0a", color: "#fca5a5" },
+  };
+
+  const getCompetitorStatus = (capId: string) => {
+    const found = competitorCaps.find(cc => cc.capabilityId === capId);
+    return found?.status || "unknown";
+  };
+
+  const cycleCompetitorStatus = (capId: string) => {
+    const current = getCompetitorStatus(capId);
+    const next = COMPETITOR_CYCLE[current] || "yes";
+    updateMutation.mutate({ capabilityId: capId, status: next });
+  };
+
+  const cycleEntrustStatus = (capId: string) => {
+    const current = entrustStatus[capId] || "unknown";
+    setEntrustStatus(prev => ({ ...prev, [capId]: ENTRUST_CYCLE[current] || "yes" }));
+  };
+
+  const cycleAssessment = (capId: string) => {
+    const current = assessments[capId] || "Advantage";
+    setAssessments(prev => ({ ...prev, [capId]: ASSESSMENT_CYCLE[current] || "Advantage" }));
+  };
+
+  if (capabilities.length === 0) {
+    return (
+      <div style={{ background: "#1e2d3d", borderRadius: 12, padding: 16 }} data-testid="card-capability-matrix-new">
+        <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 12 }}>Capability Matrix</div>
+        <p style={{ fontSize: 13, color: "#64748b", textAlign: "center" as const, padding: "20px 0" }}>
+          No capabilities defined yet. Add them in Settings → Capabilities.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ background: "#1e2d3d", borderRadius: 12, padding: 16 }} data-testid="card-capability-matrix-new">
+      <table style={{ width: "100%", borderCollapse: "collapse" as const }}>
+        <thead>
+          <tr>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "left" as const }}>Capability</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>{entityName.toUpperCase()}</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Entrust</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "right" as const }}>Assessment</th>
+          </tr>
+        </thead>
+        <tbody>
+          {capabilities.map((cap) => {
+            const competitorSt = getCompetitorStatus(cap.id);
+            const entrustSt = entrustStatus[cap.id] || "unknown";
+            const assessment = assessments[cap.id] || "Advantage";
+            const compStyle = STATUS_STYLES[competitorSt] || STATUS_STYLES.unknown;
+            const entrustStyle = STATUS_STYLES[entrustSt] || STATUS_STYLES.unknown;
+            const assessStyle = ASSESSMENT_STYLES_MAP[assessment] || ASSESSMENT_STYLES_MAP["Advantage"];
+            return (
+              <tr key={cap.id} style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }} data-testid={`row-capmatrix-${cap.id}`}>
+                <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{cap.name}</td>
+                <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
+                  <button
+                    onClick={() => cycleCompetitorStatus(cap.id)}
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: compStyle.bg, color: compStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
+                    data-testid={`button-competitor-status-${cap.id}`}
+                  >
+                    {compStyle.label}
+                  </button>
+                </td>
+                <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
+                  <button
+                    onClick={() => cycleEntrustStatus(cap.id)}
+                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: entrustStyle.bg, color: entrustStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
+                    data-testid={`button-entrust-status-${cap.id}`}
+                  >
+                    {entrustStyle.label}
+                  </button>
+                </td>
+                <td style={{ padding: "10px 8px", textAlign: "right" as const }}>
+                  <button
+                    onClick={() => cycleAssessment(cap.id)}
+                    style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20, background: assessStyle.bg, color: assessStyle.color, border: "none", cursor: "pointer" }}
+                    data-testid={`button-assessment-${cap.id}`}
+                  >
+                    {assessment}
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: 4, paddingTop: 10 }}>
+        <button
+          onClick={() => navigate("/settings?section=capabilities")}
+          style={{ fontSize: 12, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
+          data-testid="button-add-capability-row"
+        >
+          <Plus style={{ width: 14, height: 14 }} /> Add capability row
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function detectMultipleEntities(name: string): string[] | null {
   if (!name.includes(",")) return null;
   const parts = name.split(",").map((s) => s.trim()).filter(Boolean);
@@ -846,7 +997,7 @@ function TopicViewContent({
         <div className="space-y-6">
           <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
           <SwotCard entityId={entity.name} userRole={userRole} />
-          <CapabilityMatrixCard entityId={entity.name} userRole={userRole} previewMode={false} onSwitchToProfile={() => setActiveTab('profile')} />
+          <CapabilityMatrix entityName={entity.name} entityId={entity.name} />
           <div className="space-y-4">
             <BattlecardCollapsedHeader
               entity={entity}
