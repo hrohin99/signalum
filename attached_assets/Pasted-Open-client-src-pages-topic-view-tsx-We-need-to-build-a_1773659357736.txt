@@ -1,0 +1,52 @@
+Open client/src/pages/topic-view.tsx
+
+We need to build an editable Capability Matrix component in the Competitive tab.
+
+STEP 1 — Find the existing capability matrix section in the Competitive tab (it currently shows "No capabilities defined yet"). Replace its entire contents with a new inline CapabilityMatrix component defined below.
+
+STEP 2 — Add this CapabilityMatrix component as an inline function inside topic-view.tsx (not a separate file), defined before the main page component. It takes these props:
+  - entityName: string (the competitor name, e.g. "iProov")
+  - entityId: string
+
+STEP 3 — The component should:
+
+A) FETCH DATA using useQuery with the existing auth pattern in this file:
+  - GET /api/capabilities → returns { capabilities: Array<{ id: string, name: string }> }
+  - GET /api/competitor-capabilities/:entityId → returns { competitorCapabilities: Array<{ capabilityId: string, status: string, evidence: string }> }
+
+B) RENDER a dark-themed table:
+  - Container: dark navy background (#1e2d3d), rounded-xl, padding 16px
+  - Header row: "CAPABILITY" | entityName.toUpperCase() | "ENTRUST" | "ASSESSMENT" — all caps, small font, muted color
+  - One row per capability from /api/capabilities
+  - Row separator: subtle border
+
+C) STATUS ICONS — render as a circular button that cycles on click: yes → partial → no → yes
+  - "yes" → dark green circle with ✓
+  - "partial" → yellow/amber circle with ~
+  - "no" → dark grey circle with —
+  - "unknown" → dark grey circle with —
+
+D) ASSESSMENT BADGE — clickable, cycles through on click:
+  "Advantage" (green pill) → "Parity" (grey pill) → "Gap risk" (orange pill) → "Behind" (red pill) → back to "Advantage"
+  Store assessment separately in local state (not saved to backend — frontend only for now)
+
+E) SAVE STATUS CHANGES via useMutation:
+  PUT /api/competitor-capabilities/:entityId
+  Body: { capabilityId: string, status: string, evidence: null }
+  Use the same Authorization header pattern as other mutations in this file
+  Call invalidateQueries on /api/competitor-capabilities/:entityId after success
+
+F) BOTTOM ROW: "+ Add capability row" button that links/navigates to /settings?section=capabilities
+
+G) EMPTY STATE: if no capabilities exist, show "No capabilities defined yet. Add them in Settings → Capabilities."
+
+STEP 4 — The Entrust column status should be read from a separate local state map (capabilityId → status), defaulting to "unknown", and also cycle on click. It does NOT need to be saved to the backend for now.
+
+STEP 5 — Match the visual style from this mockup:
+  - Dark navy card background
+  - White text for capability names, bold
+  - Muted grey subtitle if capability has a description field
+  - Tight rows, no excessive padding
+  - Assessment badge as small rounded pill, right-aligned
+
+Do not add any new imports that are not already in the file. Do not modify any existing component or function.
