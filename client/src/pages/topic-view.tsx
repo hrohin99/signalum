@@ -135,10 +135,10 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
   };
 
   const ASSESSMENT_STYLES_MAP: Record<string, { bg: string; color: string }> = {
-    "Advantage": { bg: "#14532d", color: "#86efac" },
-    "Parity": { bg: "#1e3a4a", color: "#94a3b8" },
-    "Gap risk": { bg: "#431407", color: "#fdba74" },
-    "Behind": { bg: "#450a0a", color: "#fca5a5" },
+    "Advantage": { bg: "#dcfce7", color: "#166534" },
+    "Parity": { bg: "#f1f5f9", color: "#475569" },
+    "Gap risk": { bg: "#fff7ed", color: "#c2410c" },
+    "Behind": { bg: "#fef2f2", color: "#dc2626" },
   };
 
   const getCompetitorStatus = (capId: string) => {
@@ -164,7 +164,7 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
 
   if (capabilities.length === 0) {
     return (
-      <div style={{ background: "#1e2d3d", borderRadius: 12, padding: 16 }} data-testid="card-capability-matrix-new">
+      <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }} data-testid="card-capability-matrix-new">
         <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", marginBottom: 12 }}>Capability Matrix</div>
         <p style={{ fontSize: 13, color: "#64748b", textAlign: "center" as const, padding: "20px 0" }}>
           No capabilities defined yet. Add them in Settings → Capabilities.
@@ -174,7 +174,7 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
   }
 
   return (
-    <div style={{ background: "#1e2d3d", borderRadius: 12, padding: 16 }} data-testid="card-capability-matrix-new">
+    <div style={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 16 }} data-testid="card-capability-matrix-new">
       <table style={{ width: "100%", borderCollapse: "collapse" as const }}>
         <thead>
           <tr>
@@ -193,8 +193,8 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
             const entrustStyle = STATUS_STYLES[entrustSt] || STATUS_STYLES.unknown;
             const assessStyle = ASSESSMENT_STYLES_MAP[assessment] || ASSESSMENT_STYLES_MAP["Advantage"];
             return (
-              <tr key={cap.id} style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }} data-testid={`row-capmatrix-${cap.id}`}>
-                <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{cap.name}</td>
+              <tr key={cap.id} style={{ borderTop: "1px solid #f1f5f9" }} data-testid={`row-capmatrix-${cap.id}`}>
+                <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{cap.name}</td>
                 <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
                   <button
                     onClick={() => cycleCompetitorStatus(cap.id)}
@@ -214,20 +214,24 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
                   </button>
                 </td>
                 <td style={{ padding: "10px 8px", textAlign: "right" as const }}>
-                  <button
-                    onClick={() => cycleAssessment(cap.id)}
-                    style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20, background: assessStyle.bg, color: assessStyle.color, border: "none", cursor: "pointer" }}
-                    data-testid={`button-assessment-${cap.id}`}
+                  <select
+                    value={assessment}
+                    onChange={e => setAssessments(prev => ({ ...prev, [cap.id]: e.target.value }))}
+                    style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20, background: assessStyle.bg, color: assessStyle.color, border: "none", cursor: "pointer", outline: "none", appearance: "none" as const }}
+                    data-testid={`select-assessment-${cap.id}`}
                   >
-                    {assessment}
-                  </button>
+                    <option value="Advantage">Advantage</option>
+                    <option value="Parity">Parity</option>
+                    <option value="Gap risk">Gap risk</option>
+                    <option value="Behind">Behind</option>
+                  </select>
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", marginTop: 4, paddingTop: 10 }}>
+      <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 4, paddingTop: 10 }}>
         <button
           onClick={() => navigate("/settings?section=capabilities")}
           style={{ fontSize: 12, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
