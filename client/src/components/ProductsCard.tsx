@@ -58,13 +58,21 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
 
   const editMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof EMPTY_FORM }) => {
-      const res = await apiRequest("PUT", `/api/entities/${encodeURIComponent(entityId)}/products/${encodeURIComponent(id)}`, data);
+      const isPerplexity = id.startsWith("perplexity-");
+      const method = isPerplexity ? "POST" : "PUT";
+      const url = isPerplexity
+        ? `/api/entities/${encodeURIComponent(entityId)}/products`
+        : `/api/entities/${encodeURIComponent(entityId)}/products/${encodeURIComponent(id)}`;
+      const res = await apiRequest(method, url, data);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/products`] });
       setEditingId(null);
       setForm(EMPTY_FORM);
+    },
+    onError: (error: any) => {
+      console.error("[ProductsCard] Failed to save product:", error?.message ?? error);
     }
   });
 
