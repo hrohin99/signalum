@@ -96,6 +96,10 @@ export interface ExtractedEntity {
   website_url?: string;
   soWhatText?: string;
   soWhatGeneratedAt?: string;
+  funding?: any;
+  geo_presence?: any;
+  products?: any;
+  last_researched_at?: string;
 }
 
 export interface ExtractionResult {

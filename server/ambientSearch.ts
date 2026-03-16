@@ -7,6 +7,53 @@ import {
 } from "./perplexityService";
 import type { ExtractedCategory, ExtractedEntity, InsertNotification } from "@shared/schema";
 
+async function researchEntity(entity: { name: string }): Promise<{ funding: any; geo_presence: string[]; products: any[] } | null> {
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey) return null;
+  const systemPrompt = 'You are a competitive intelligence researcher. Return only valid JSON with no prose, no markdown, no code fences.';
+  const userPrompt = `Research the company "${entity.name}" and return a JSON object with exactly this structure:
+{
+  "funding": {
+    "total_raised": "string or null",
+    "latest_round": "string or null",
+    "latest_round_date": "string or null",
+    "key_investors": ["array of investor name strings"]
+  },
+  "geo_presence": ["array of country or region name strings"],
+  "products": [
+    { "name": "string", "description": "one sentence string" }
+  ]
+}
+Only include information you are confident about. Use null for unknown fields. Return JSON only.`;
+  const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'sonar',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 1000,
+    }),
+  });
+  if (!response.ok) {
+    console.error(`[research] Perplexity error for ${entity.name}: ${response.status}`);
+    return null;
+  }
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content || '';
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    console.error(`[research] Failed to parse response for ${entity.name}:`, err);
+    return null;
+  }
+}
+
 class RateLimiter {
   private timestamps: number[] = [];
   private maxCalls: number;
@@ -160,6 +207,20 @@ export async function runAmbientSearchForUser(
             }
           }
         }
+        const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+        const needsResearch = !entity.last_researched_at ||
+          (Date.now() - new Date(entity.last_researched_at).getTime()) > THIRTY_DAYS_MS;
+        if (entity.topic_type === 'competitor' && needsResearch) {
+          await perplexityRateLimiter.waitForSlot();
+          const researchResult = await researchEntity(entity);
+          if (researchResult !== null) {
+            entity.funding = researchResult.funding;
+            entity.geo_presence = researchResult.geo_presence;
+            entity.products = researchResult.products;
+            entity.last_researched_at = new Date().toISOString();
+            console.log(`[research] Enriched ${entity.name} with funding/geo/products`);
+          }
+        }
       } catch (entityError) {
         console.error(
           `[ambient-search] Error searching entity ${entity.name}:`,
@@ -168,6 +229,7 @@ export async function runAmbientSearchForUser(
         result.errors++;
       }
     }
+    await storage.updateWorkspaceCategories(userId, categories);
   }
 
   await storage.createAmbientSearchLog({

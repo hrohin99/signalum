@@ -760,6 +760,73 @@ function TopicViewContent({
 
           {/* Geographic Presence */}
           <GeoPresenceCard entityId={entity.name} userRole={userRole} />
+
+          {/* Ambient Research Enrichment */}
+          {(() => {
+            const funding = entity.funding ? (typeof entity.funding === 'string' ? JSON.parse(entity.funding) : entity.funding) : null;
+            const geoPresenceResearch = entity.geo_presence ? (typeof entity.geo_presence === 'string' ? JSON.parse(entity.geo_presence) : entity.geo_presence) : null;
+            const productsResearch = entity.products ? (typeof entity.products === 'string' ? JSON.parse(entity.products) : entity.products) : null;
+            if (!funding && !geoPresenceResearch && !productsResearch) return null;
+            return (
+              <div className="space-y-4">
+                {funding && (
+                  <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Funding Intelligence</div>
+                    {funding.total_raised && (
+                      <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Total raised</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.total_raised}</span>
+                      </div>
+                    )}
+                    {funding.latest_round && (
+                      <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Latest round</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.latest_round}</span>
+                      </div>
+                    )}
+                    {funding.latest_round_date && (
+                      <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Round date</span>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.latest_round_date}</span>
+                      </div>
+                    )}
+                    {funding.key_investors && funding.key_investors.length > 0 && (
+                      <div style={{ display: 'flex', gap: 8, padding: '5px 0' }}>
+                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Key investors</span>
+                        <span style={{ fontSize: 13, color: '#1e293b' }}>{funding.key_investors.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {geoPresenceResearch && geoPresenceResearch.length > 0 && (
+                  <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Market Footprint</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {geoPresenceResearch.map((region: string, i: number) => (
+                        <span key={i} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: '#f1f5f9', color: '#475569', border: '0.5px solid #e2e8f0' }}>{region}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {productsResearch && productsResearch.length > 0 && (
+                  <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Products (Auto-researched)</div>
+                    {productsResearch.map((p: { name: string; description: string }, i: number) => (
+                      <div key={i} style={{ padding: '6px 0', borderBottom: i < productsResearch.length - 1 ? '0.5px solid #f1f5f9' : 'none' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{p.name}</div>
+                        {p.description && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.description}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {entity.last_researched_at && (
+                  <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right' }}>
+                    Last researched: {new Date(entity.last_researched_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       )}
 
