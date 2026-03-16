@@ -5059,6 +5059,33 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         `SELECT * FROM entity_products WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
         [req.params.entityId, workspaceId]
       );
+      if (result.rows.length > 0) {
+        return res.json(result.rows);
+      }
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (workspace) {
+        const categories = workspace.categories as ExtractedCategory[];
+        let foundEntity: any = null;
+        for (const cat of categories) {
+          const match = cat.entities.find((e: any) => e.name === req.params.entityId);
+          if (match) { foundEntity = match; break; }
+        }
+        if (foundEntity?.products && Array.isArray(foundEntity.products) && foundEntity.products.length > 0) {
+          const mapped = foundEntity.products.map((p: any, i: number) => ({
+            id: `perplexity-${i}`,
+            workspace_id: workspaceId,
+            entity_id: req.params.entityId,
+            product_name: p.name,
+            description: p.description ?? null,
+            status: 'ga',
+            tags: null,
+            sort_order: i,
+            created_at: null,
+            source: 'perplexity',
+          }));
+          return res.json(mapped);
+        }
+      }
       res.json(result.rows);
     } catch (error: any) {
       console.error("Get products error:", error);
@@ -5157,6 +5184,34 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         `SELECT * FROM entity_geo_presence WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
         [req.params.entityId, workspaceId]
       );
+      if (result.rows.length > 0) {
+        return res.json(result.rows);
+      }
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (workspace) {
+        const categories = workspace.categories as ExtractedCategory[];
+        let foundEntity: any = null;
+        for (const cat of categories) {
+          const match = cat.entities.find((e: any) => e.name === req.params.entityId);
+          if (match) { foundEntity = match; break; }
+        }
+        if (foundEntity?.geo_presence && Array.isArray(foundEntity.geo_presence) && foundEntity.geo_presence.length > 0) {
+          const mapped = foundEntity.geo_presence.map((region: string, i: number) => ({
+            id: `perplexity-${i}`,
+            workspace_id: workspaceId,
+            entity_id: req.params.entityId,
+            region,
+            iso_code: null,
+            presence_type: 'active',
+            channels: null,
+            notes: null,
+            sort_order: i,
+            created_at: null,
+            source: 'perplexity',
+          }));
+          return res.json(mapped);
+        }
+      }
       res.json(result.rows);
     } catch (error: any) {
       console.error("Get geo-presence error:", error);
@@ -5730,6 +5785,38 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
         `SELECT * FROM entity_funding WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at DESC`,
         [req.params.entityId, workspaceId]
       );
+      if (result.rows.length > 0) {
+        return res.json(result.rows);
+      }
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (workspace) {
+        const categories = workspace.categories as ExtractedCategory[];
+        let foundEntity: any = null;
+        for (const cat of categories) {
+          const match = cat.entities.find((e: any) => e.name === req.params.entityId);
+          if (match) { foundEntity = match; break; }
+        }
+        if (foundEntity?.funding && typeof foundEntity.funding === 'object') {
+          const f = foundEntity.funding;
+          const mapped = [{
+            id: 'perplexity-0',
+            workspace_id: workspaceId,
+            entity_id: req.params.entityId,
+            total_raised: f.total_raised ?? null,
+            stage: f.latest_round ?? null,
+            founded: null,
+            status: 'Private',
+            round_name: f.latest_round ?? null,
+            round_amount: null,
+            round_lead: Array.isArray(f.key_investors) && f.key_investors.length > 0 ? f.key_investors[0] : null,
+            round_year: f.latest_round_date ?? null,
+            sort_order: 0,
+            created_at: null,
+            source: 'perplexity',
+          }];
+          return res.json(mapped);
+        }
+      }
       res.json(result.rows);
     } catch (error: any) {
       console.error("Get funding error:", error);
