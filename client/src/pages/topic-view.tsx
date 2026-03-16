@@ -154,6 +154,7 @@ export default function TopicViewPage({ params }: { params: { category: string; 
   const categories = wsData?.workspace?.categories ?? [];
   const category = categories.find((c) => c.name === categoryName);
   const entity = category?.entities.find((e) => e.name === entityName);
+  console.log('[debug] entity object:', JSON.stringify(entity));
   const entityCaptures = captures.filter((c) => c.matchedEntity === entityName);
   const allTopics = categories.flatMap((c) => c.entities.map((e) => ({ ...e, categoryName: c.name })));
 
