@@ -5123,6 +5123,9 @@ Return ONLY a JSON array of 3 strings. No explanation.`
 
   app.put("/api/entities/:entityId/products/:productId", requireAuth, async (req: Request, res: Response) => {
     try {
+      if (req.params.productId.startsWith("perplexity-")) {
+        return res.status(400).json({ message: "Perplexity-sourced products must be edited by re-running research. Manual edits to auto-populated products are not supported via this endpoint." });
+      }
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
       const role = profileResult.rows[0]?.role;
