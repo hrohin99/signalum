@@ -1696,7 +1696,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
     }
   });
 
-  app.put("/api/categories/:name", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
+  app.put("/api/categories/:name", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const oldName = decodeURIComponent(req.params.name);
