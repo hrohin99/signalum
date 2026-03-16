@@ -1723,7 +1723,9 @@ Return only the summary paragraphs, no JSON, no formatting.`
         category.name = trimmedName;
       }
 
+      console.log('[focus-debug] Saving categories, focus values:', categories.map(c => ({ name: c.name, focus: c.focus || 'NOT SET' })));
       await storage.updateWorkspaceCategories(userId, categories);
+      console.log('[focus-debug] Save complete');
       return res.json({ success: true, category });
     } catch (error: any) {
       console.error("Update category error:", error);
