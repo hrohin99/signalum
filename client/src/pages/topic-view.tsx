@@ -1988,6 +1988,9 @@ function WidgetsSection({
             return <QuickStatsWidget key={widgetName} entity={entity} captures={captures} allCaptures={allCaptures} />;
           }
         }
+        if (widgetName === "swot" || widgetName === "product_comparison") {
+          return null;
+        }
         return (
           <Card key={widgetName} className="bg-gray-50 border-gray-200" data-testid={`widget-placeholder-${widgetName}`}>
             <CardContent className="p-6 flex flex-col items-center justify-center text-center min-h-[100px]">
