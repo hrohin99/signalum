@@ -137,6 +137,8 @@ export default function TopicViewPage({ params }: { params: { category: string; 
   const { data: wsData, isLoading: wsLoading } = useQuery<{ exists: boolean; workspace?: { categories: ExtractedCategory[] } }>({
     queryKey: ["/api/workspace", user?.id],
     enabled: !!user,
+    staleTime: 0,
+    refetchOnMount: true,
   });
 
   const { data: captures = [], isLoading: capLoading } = useQuery<Capture[]>({
