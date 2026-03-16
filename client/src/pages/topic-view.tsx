@@ -138,7 +138,8 @@ export default function TopicViewPage({ params }: { params: { category: string; 
     queryKey: ["/api/workspace", user?.id],
     enabled: !!user,
     staleTime: 0,
-    refetchOnMount: true,
+    gcTime: 0,
+    refetchOnMount: "always",
   });
 
   const { data: captures = [], isLoading: capLoading } = useQuery<Capture[]>({
