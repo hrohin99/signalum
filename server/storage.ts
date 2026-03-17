@@ -2,7 +2,7 @@ import { randomUUID, randomBytes } from "crypto";
 import { eq, desc, and, lt, gte, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, competitorPricing, strategicDirections, entitySeoData, entrustCapabilities, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability, type InsertCompetitorPricing, type CompetitorPricing, type InsertStrategicDirection, type StrategicDirection, type InsertEntitySeoData, type EntitySeoData, type EntrustCapability } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, competitorPricing, strategicDirections, entitySeoData, entrustCapabilities, ourProductCapabilities, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability, type InsertCompetitorPricing, type CompetitorPricing, type InsertStrategicDirection, type StrategicDirection, type InsertEntitySeoData, type EntitySeoData, type EntrustCapability, type OurProductCapability } from "@shared/schema";
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -81,6 +81,8 @@ export interface IStorage {
   upsertEntitySeoData(userId: string, entityId: string, data: Partial<InsertEntitySeoData>): Promise<EntitySeoData>;
   getEntrustCapabilities(workspaceId: string, entityId: string): Promise<EntrustCapability[]>;
   upsertEntrustCapability(workspaceId: string, entityId: string, capabilityId: string, status: string): Promise<EntrustCapability>;
+  getOurProductCapabilities(workspaceId: string): Promise<OurProductCapability[]>;
+  upsertOurProductCapability(workspaceId: string, capabilityId: string, status: string): Promise<OurProductCapability>;
   getBriefingSettings(userId: string): Promise<{ briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string | null; briefingLastSent: Date | null }>;
   saveBriefingSettings(userId: string, settings: { briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string }): Promise<void>;
   getWorkspacesWithBriefingEnabled(): Promise<Array<{ userId: string; briefingDay: string; briefingTime: string; briefingEmail: string; briefingLastSent: Date | null }>>;
@@ -864,6 +866,41 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db
         .insert(entrustCapabilities)
         .values({ workspaceId, entityId, capabilityId, status })
+        .returning();
+      return created;
+    }
+  }
+
+  async getOurProductCapabilities(workspaceId: string): Promise<OurProductCapability[]> {
+    return db
+      .select()
+      .from(ourProductCapabilities)
+      .where(eq(ourProductCapabilities.workspaceId, workspaceId));
+  }
+
+  async upsertOurProductCapability(workspaceId: string, capabilityId: string, status: string): Promise<OurProductCapability> {
+    const existing = await db
+      .select()
+      .from(ourProductCapabilities)
+      .where(and(
+        eq(ourProductCapabilities.workspaceId, workspaceId),
+        eq(ourProductCapabilities.capabilityId, capabilityId)
+      ));
+
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(ourProductCapabilities)
+        .set({ status, updatedAt: new Date() })
+        .where(and(
+          eq(ourProductCapabilities.workspaceId, workspaceId),
+          eq(ourProductCapabilities.capabilityId, capabilityId)
+        ))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(ourProductCapabilities)
+        .values({ workspaceId, capabilityId, status })
         .returning();
       return created;
     }

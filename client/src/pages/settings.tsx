@@ -483,6 +483,15 @@ function ProductSection() {
   );
 }
 
+const STATUS_STYLES_SETTINGS: Record<string, { bg: string; color: string; label: string; title: string }> = {
+  yes: { bg: "#1a3a1a", color: "#4ade80", label: "✓", title: "Has this capability" },
+  partial: { bg: "#3a2e00", color: "#fbbf24", label: "~", title: "Partial capability" },
+  no: { bg: "#2a2a2a", color: "#94a3b8", label: "—", title: "Does not have this capability" },
+  unknown: { bg: "#f1f5f9", color: "#94a3b8", label: "·", title: "Not set" },
+};
+
+const STATUS_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "unknown", unknown: "yes" };
+
 function CapabilitiesSection() {
   const { toast } = useToast();
   const { role: userRole } = useRole();
@@ -492,12 +501,43 @@ function CapabilitiesSection() {
   const [editingName, setEditingName] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [localStatuses, setLocalStatuses] = useState<Record<string, string>>({});
   const addInputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const { data: capData, isLoading } = useQuery<{ capabilities: WorkspaceCapability[] }>({
     queryKey: ["/api/capabilities"],
   });
+
+  const { data: ourCapData } = useQuery<{ ourProductCapabilities: Array<{ capabilityId: string; status: string }> }>({
+    queryKey: ["/api/our-product-capabilities"],
+  });
+
+  const updateOurCapMutation = useMutation({
+    mutationFn: async ({ capabilityId, status }: { capabilityId: string; status: string }) => {
+      const res = await apiRequest("PUT", "/api/our-product-capabilities", { capabilityId, status });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/our-product-capabilities"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const getOurStatus = (capId: string) => {
+    if (localStatuses[capId] !== undefined) return localStatuses[capId];
+    const found = ourCapData?.ourProductCapabilities?.find(c => c.capabilityId === capId);
+    return found?.status || "unknown";
+  };
+
+  const cycleOurStatus = (capId: string) => {
+    const current = getOurStatus(capId);
+    const next = STATUS_CYCLE[current] || "yes";
+    setLocalStatuses(prev => ({ ...prev, [capId]: next }));
+    updateOurCapMutation.mutate({ capabilityId: capId, status: next });
+  };
 
   const { data: suggestionsData, isLoading: suggestionsLoading } = useQuery<{ suggestions: string[] }>({
     queryKey: ["/api/capabilities/suggest"],
@@ -596,7 +636,12 @@ function CapabilitiesSection() {
     <div style={cardStyle}>
       <div className="p-6">
         <h3 className="text-base font-semibold mb-1" data-testid="text-capabilities-header">Capabilities</h3>
-        <p className="text-sm text-gray-500 mb-5">Define the capabilities that matter in your market. Signalum will track these across all your competitors.</p>
+        <p className="text-sm text-gray-500 mb-3">Define the capabilities that matter in your market. Click the status icon to set whether your product has each capability.</p>
+        <div className="flex items-center gap-3 mb-1 px-6" style={{ paddingLeft: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", flex: 1 }}>Capability</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.06em", width: 80, textAlign: "center" }}>Our Product</div>
+          {isEditor && <div style={{ width: 56 }} />}
+        </div>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-6">
@@ -631,58 +676,72 @@ function CapabilitiesSection() {
               </div>
             )}
 
-            {capabilities.map((cap, index) => (
-              <div
-                key={cap.id}
-                draggable
-                onDragStart={() => handleDragStart(index)}
-                onDragOver={(e) => handleDragOver(e, index)}
-                onDrop={() => handleDrop(index)}
-                onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
-                className={`flex items-center gap-2 py-2.5 group transition-colors ${
-                  dragOverIndex === index ? "bg-[#EEEDFE]/50" : ""
-                }`}
-                style={{ borderBottom: "0.5px solid #f3f4f6" }}
-                data-testid={`row-capability-${cap.id}`}
-              >
-                <GripVertical className="w-4 h-4 text-gray-300 cursor-grab flex-shrink-0" />
-                {editingId === cap.id ? (
-                  <input
-                    ref={editInputRef}
-                    value={editingName}
-                    onChange={(e) => setEditingName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleEditSave();
-                      if (e.key === "Escape") setEditingId(null);
-                    }}
-                    onBlur={handleEditSave}
-                    style={{ ...inputStyle, height: "28px", fontSize: "13px" }}
-                    className="flex-1 outline-none focus:ring-1 focus:ring-[#534AB7]/30"
-                    data-testid="input-edit-capability"
-                  />
-                ) : (
-                  <span className="text-sm text-gray-700 flex-1" data-testid={`text-capability-name-${cap.id}`}>{cap.name}</span>
-                )}
-                {isEditor && (
-                  <button
-                    onClick={() => { setEditingId(cap.id); setEditingName(cap.name); }}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#534AB7] transition-opacity"
-                    data-testid={`button-edit-capability-${cap.id}`}
-                  >
-                    <Pencil className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                {isEditor && (
-                  <button
-                    onClick={() => deleteMutation.mutate(cap.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
-                    data-testid={`button-delete-capability-${cap.id}`}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            ))}
+            {capabilities.map((cap, index) => {
+              const ourStatus = getOurStatus(cap.id);
+              const ourStyle = STATUS_STYLES_SETTINGS[ourStatus] || STATUS_STYLES_SETTINGS.unknown;
+              return (
+                <div
+                  key={cap.id}
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragOver={(e) => handleDragOver(e, index)}
+                  onDrop={() => handleDrop(index)}
+                  onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                  className={`flex items-center gap-2 py-2.5 group transition-colors ${
+                    dragOverIndex === index ? "bg-[#EEEDFE]/50" : ""
+                  }`}
+                  style={{ borderBottom: "0.5px solid #f3f4f6" }}
+                  data-testid={`row-capability-${cap.id}`}
+                >
+                  <GripVertical className="w-4 h-4 text-gray-300 cursor-grab flex-shrink-0" />
+                  {editingId === cap.id ? (
+                    <input
+                      ref={editInputRef}
+                      value={editingName}
+                      onChange={(e) => setEditingName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleEditSave();
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      onBlur={handleEditSave}
+                      style={{ ...inputStyle, height: "28px", fontSize: "13px" }}
+                      className="flex-1 outline-none focus:ring-1 focus:ring-[#534AB7]/30"
+                      data-testid="input-edit-capability"
+                    />
+                  ) : (
+                    <span className="text-sm text-gray-700 flex-1" data-testid={`text-capability-name-${cap.id}`}>{cap.name}</span>
+                  )}
+                  <div style={{ width: 80, display: "flex", justifyContent: "center" }}>
+                    <button
+                      onClick={() => cycleOurStatus(cap.id)}
+                      title={ourStyle.title}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: ourStyle.bg, color: ourStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
+                      data-testid={`button-our-status-${cap.id}`}
+                    >
+                      {ourStyle.label}
+                    </button>
+                  </div>
+                  {isEditor && (
+                    <button
+                      onClick={() => { setEditingId(cap.id); setEditingName(cap.name); }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-[#534AB7] transition-opacity"
+                      data-testid={`button-edit-capability-${cap.id}`}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  {isEditor && (
+                    <button
+                      onClick={() => deleteMutation.mutate(cap.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-opacity"
+                      data-testid={`button-delete-capability-${cap.id}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
 
             {isEditor && (
               <div className="flex items-center gap-2 mt-4">

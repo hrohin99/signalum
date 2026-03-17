@@ -4710,6 +4710,53 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
+  app.get("/api/our-product-capabilities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const caps = await storage.getOurProductCapabilities(workspaceId);
+      return res.json({ ourProductCapabilities: caps });
+    } catch (error: any) {
+      console.error("Get our product capabilities error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/our-product-capabilities", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { capabilityId, status } = req.body;
+      if (!capabilityId || !status) {
+        return res.status(400).json({ message: "capabilityId and status are required" });
+      }
+      const validStatuses = ["yes", "no", "partial", "unknown"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: "Invalid status. Must be: yes, no, partial, or unknown" });
+      }
+      const result = await storage.upsertOurProductCapability(workspaceId, capabilityId, status);
+      return res.json({ ourProductCapability: result });
+    } catch (error: any) {
+      console.error("Upsert our product capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/capabilities/suggest", requireAuth, async (req: Request, res: Response) => {
     try {
       const tenantId = "00000000-0000-0000-0000-000000000000";

@@ -447,6 +447,25 @@ export const insertEntrustCapabilitySchema = createInsertSchema(entrustCapabilit
 export type InsertEntrustCapability = z.infer<typeof insertEntrustCapabilitySchema>;
 export type EntrustCapability = typeof entrustCapabilities.$inferSelect;
 
+export const ourProductCapabilities = pgTable("our_product_capabilities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: varchar("workspace_id", { length: 255 }).notNull(),
+  capabilityId: uuid("capability_id").notNull(),
+  status: text("status").notNull().default("unknown"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  unique("our_product_capabilities_workspace_capability").on(table.workspaceId, table.capabilityId),
+  index("our_product_capabilities_workspace_id_idx").on(table.workspaceId),
+]);
+
+export const insertOurProductCapabilitySchema = createInsertSchema(ourProductCapabilities).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertOurProductCapability = z.infer<typeof insertOurProductCapabilitySchema>;
+export type OurProductCapability = typeof ourProductCapabilities.$inferSelect;
+
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull(),

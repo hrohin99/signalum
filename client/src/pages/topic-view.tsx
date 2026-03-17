@@ -94,7 +94,6 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
   const [localComments, setLocalComments] = useState<Record<string, string>>({});
   const [localAssessments, setLocalAssessments] = useState<Record<string, string>>({});
   const [localCompStatus, setLocalCompStatus] = useState<Record<string, string>>({});
-  const [localEntrustStatus, setLocalEntrustStatus] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
 
   const { data: capsData } = useQuery<{ capabilities: Array<{ id: string; name: string }> }>({
@@ -109,12 +108,8 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     },
   });
 
-  const { data: entrustCapData } = useQuery<{ entrustCapabilities: Array<{ capabilityId: string; status: string }> }>({
-    queryKey: ["/api/entrust-capabilities", entityId],
-    queryFn: async () => {
-      const res = await apiRequest("GET", `/api/entrust-capabilities/${encodeURIComponent(entityId)}`);
-      return res.json();
-    },
+  const { data: ourProductCapData } = useQuery<{ ourProductCapabilities: Array<{ capabilityId: string; status: string }> }>({
+    queryKey: ["/api/our-product-capabilities"],
   });
 
   const updateMutation = useMutation({
@@ -135,25 +130,11 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     },
   });
 
-  const updateEntrustMutation = useMutation({
-    mutationFn: async ({ capabilityId, status }: { capabilityId: string; status: string }) => {
-      const res = await apiRequest("PUT", `/api/entrust-capabilities/${encodeURIComponent(entityId)}`, {
-        capabilityId,
-        status,
-      });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/entrust-capabilities", entityId] });
-    },
-  });
-
   const capabilities = capsData?.capabilities || [];
   const competitorCaps = compCapData?.competitorCapabilities || [];
-  const entrustCaps = entrustCapData?.entrustCapabilities || [];
+  const ourProductCaps = ourProductCapData?.ourProductCapabilities || [];
 
   const COMPETITOR_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
-  const ENTRUST_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
 
   const STATUS_STYLES: Record<string, { bg: string; color: string; label: string; title: string }> = {
     yes: { bg: "#1a3a1a", color: "#4ade80", label: "✓", title: "Has this capability" },
@@ -175,9 +156,8 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     return found?.status || "unknown";
   };
 
-  const getEntrustStatus = (capId: string) => {
-    if (localEntrustStatus[capId] !== undefined) return localEntrustStatus[capId];
-    const found = entrustCaps.find(ec => ec.capabilityId === capId);
+  const getOurProductStatus = (capId: string) => {
+    const found = ourProductCaps.find(ec => ec.capabilityId === capId);
     return found?.status || "unknown";
   };
 
@@ -198,13 +178,6 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     const next = COMPETITOR_CYCLE[current] || "yes";
     setLocalCompStatus(prev => ({ ...prev, [capId]: next }));
     updateMutation.mutate({ capabilityId: capId, status: next });
-  };
-
-  const cycleEntrustStatus = (capId: string) => {
-    const current = getEntrustStatus(capId);
-    const next = ENTRUST_CYCLE[current] || "yes";
-    setLocalEntrustStatus(prev => ({ ...prev, [capId]: next }));
-    updateEntrustMutation.mutate({ capabilityId: capId, status: next });
   };
 
   const saveAssessment = (capId: string, value: string) => {
@@ -237,7 +210,10 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
           <tr>
             <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "left" as const }}>Capability</th>
             <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>{entityName.toUpperCase()}</th>
-            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Our Capability</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>
+              Our Capability
+              <span style={{ display: "block", fontSize: 9, fontWeight: 400, color: "#94a3b8", textTransform: "none", letterSpacing: 0 }}>from settings</span>
+            </th>
             <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Assessment</th>
             <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Notes</th>
           </tr>
@@ -245,11 +221,11 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
         <tbody>
           {capabilities.map((cap) => {
             const competitorSt = getCompetitorStatus(cap.id);
-            const entrustSt = getEntrustStatus(cap.id);
+            const ourSt = getOurProductStatus(cap.id);
             const assessment = getAssessment(cap.id);
             const comment = getComment(cap.id);
             const compStyle = STATUS_STYLES[competitorSt] || STATUS_STYLES.unknown;
-            const entrustStyle = STATUS_STYLES[entrustSt] || STATUS_STYLES.unknown;
+            const entrustStyle = STATUS_STYLES[ourSt] || STATUS_STYLES.unknown;
             const assessStyle = ASSESSMENT_STYLES_MAP[assessment] || ASSESSMENT_STYLES_MAP["Advantage"];
             const isCommentOpen = expandedComment === cap.id;
             return (
@@ -267,14 +243,13 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
                     </button>
                   </td>
                   <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
-                    <button
-                      onClick={() => cycleEntrustStatus(cap.id)}
-                      title={entrustStyle.title}
-                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: entrustStyle.bg, color: entrustStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
-                      data-testid={`button-entrust-status-${cap.id}`}
+                    <span
+                      title={entrustStyle.title + " (set in Settings → Capabilities)"}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: entrustStyle.bg, color: entrustStyle.color, fontSize: 12, fontWeight: 700 }}
+                      data-testid={`status-our-capability-${cap.id}`}
                     >
                       {entrustStyle.label}
-                    </button>
+                    </span>
                   </td>
                   <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
                     <select
