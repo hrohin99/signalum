@@ -11,7 +11,7 @@ export function FundingOverviewPreview({ entityId }: { entityId: string }) {
     },
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: true,
+    refetchOnMount: "always",
     retry: 2,
     retryDelay: 500,
   });
@@ -79,7 +79,7 @@ export function FundingCard({ entityId, userRole }: { entityId: string; userRole
     },
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: true,
+    refetchOnMount: "always",
     retry: 2,
     retryDelay: 500,
   });

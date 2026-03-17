@@ -461,7 +461,7 @@ function TopicViewContent({
     enabled: !!entityId,
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: true,
+    refetchOnMount: "always",
     retry: 2,
     retryDelay: 500
   });
@@ -482,7 +482,7 @@ function TopicViewContent({
     enabled: !!entityId,
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: true,
+    refetchOnMount: "always",
     retry: 2,
     retryDelay: 500
   });
