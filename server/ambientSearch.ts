@@ -7,11 +7,11 @@ import {
 } from "./perplexityService";
 import type { ExtractedCategory, ExtractedEntity, InsertNotification } from "@shared/schema";
 
-async function researchEntity(entity: { name: string }): Promise<{ funding: any; geo_presence: string[]; products: any[] } | null> {
+async function researchEntity(entity: { name: string }, categoryContext: string = ''): Promise<{ funding: any; geo_presence: string[]; products: any[] } | null> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) return null;
   const systemPrompt = 'You are a competitive intelligence researcher. Return only valid JSON with no prose, no markdown, no code fences.';
-  const userPrompt = `Research the company "${entity.name}" and return a JSON object with exactly this structure:
+  const userPrompt = `Research the company "${entity.name}" and return a JSON object with exactly this structure:${categoryContext ? ` Context: ${categoryContext}.` : ''}
 {
   "funding": {
     "total_raised": "string or null",
@@ -147,7 +147,7 @@ export async function runAmbientSearchForUser(
         const isCommodity = entityType === "commodity";
         const isRegulation = entityType === "regulation";
 
-        const categoryFocus = category.focus || undefined;
+        const categoryFocus = category.focus || category.description || undefined;
 
         let findings;
         if (isCommodity) {
@@ -217,7 +217,7 @@ export async function runAmbientSearchForUser(
           (Date.now() - new Date(entity.last_researched_at).getTime()) > THIRTY_DAYS_MS;
         if (entity.topic_type === 'competitor' && needsResearch) {
           await perplexityRateLimiter.waitForSlot();
-          const researchResult = await researchEntity(entity);
+          const researchResult = await researchEntity(entity, category.focus || category.description || '');
           if (researchResult !== null) {
             entity.funding = researchResult.funding;
             entity.geo_presence = researchResult.geo_presence;
