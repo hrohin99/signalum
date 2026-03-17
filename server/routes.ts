@@ -4520,10 +4520,24 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
+  async function getEffectiveTenantId(userId: string): Promise<string> {
+    const result = await pool.query(
+      `SELECT COALESCE(
+        (SELECT w2.user_id FROM workspaces w1
+         JOIN workspaces w2 ON w2.id::text = w1.parent_workspace_id::text
+         WHERE w1.user_id = $1 LIMIT 1),
+        $1
+      ) AS effective_user_id`,
+      [userId]
+    );
+    return result.rows[0]?.effective_user_id ?? userId;
+  }
+
   app.get("/api/capabilities", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const capabilities = await storage.getWorkspaceCapabilities(userId);
+      const tenantId = await getEffectiveTenantId(userId);
+      const capabilities = await storage.getWorkspaceCapabilities(tenantId);
       return res.json({ capabilities });
     } catch (error: any) {
       console.error("Get capabilities error:", error);
@@ -4534,16 +4548,17 @@ Return only the bullet points, no JSON, no headers.`
   app.post("/api/capabilities", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const tenantId = await getEffectiveTenantId(userId);
       const { name } = req.body;
       if (!name || typeof name !== "string" || name.trim().length === 0) {
         return res.status(400).json({ message: "Capability name is required" });
       }
-      const existing = await storage.getWorkspaceCapabilities(userId);
+      const existing = await storage.getWorkspaceCapabilities(tenantId);
       if (existing.length >= 15) {
         return res.status(400).json({ message: "Maximum of 15 capabilities allowed" });
       }
       const capability = await storage.createWorkspaceCapability({
-        tenantId: userId,
+        tenantId: tenantId,
         name: name.trim(),
         displayOrder: existing.length,
       });
@@ -4557,11 +4572,12 @@ Return only the bullet points, no JSON, no headers.`
   app.put("/api/capabilities/reorder", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const tenantId = await getEffectiveTenantId(userId);
       const { orderedIds } = req.body;
       if (!Array.isArray(orderedIds)) {
         return res.status(400).json({ message: "orderedIds array is required" });
       }
-      await storage.reorderWorkspaceCapabilities(userId, orderedIds);
+      await storage.reorderWorkspaceCapabilities(tenantId, orderedIds);
       return res.json({ success: true });
     } catch (error: any) {
       console.error("Reorder capabilities error:", error);
@@ -4572,11 +4588,12 @@ Return only the bullet points, no JSON, no headers.`
   app.put("/api/capabilities/:id", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const tenantId = await getEffectiveTenantId(userId);
       const { name } = req.body;
       if (!name || typeof name !== "string" || name.trim().length === 0) {
         return res.status(400).json({ message: "Capability name is required" });
       }
-      const updated = await storage.updateWorkspaceCapability(req.params.id, userId, { name: name.trim() });
+      const updated = await storage.updateWorkspaceCapability(req.params.id, tenantId, { name: name.trim() });
       if (!updated) {
         return res.status(404).json({ message: "Capability not found" });
       }
@@ -4590,7 +4607,8 @@ Return only the bullet points, no JSON, no headers.`
   app.delete("/api/capabilities/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const deleted = await storage.deleteWorkspaceCapability(req.params.id, userId);
+      const tenantId = await getEffectiveTenantId(userId);
+      const deleted = await storage.deleteWorkspaceCapability(req.params.id, tenantId);
       if (!deleted) {
         return res.status(404).json({ message: "Capability not found" });
       }
