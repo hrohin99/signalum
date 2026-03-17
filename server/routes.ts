@@ -1907,6 +1907,25 @@ Return only the summary paragraphs, no JSON, no formatting.`
         `Our confirmed weaknesses/limitations (do NOT present these as advantages): ${prodWeaknesses || "Not provided"}`,
       ].join("\n");
 
+      const soWhatWorkspaceId = soWhatWsResult.rows[0]?.id;
+      let geoPresenceBlock = "";
+      if (soWhatWorkspaceId) {
+        const geoResult = await pool.query(
+          `SELECT region, iso_code, presence_type, channels, notes FROM entity_geo_presence WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
+          [entityName, soWhatWorkspaceId]
+        );
+        if (geoResult.rows.length > 0) {
+          const geoLines = geoResult.rows.map((r: any) => {
+            let line = `- ${r.region}`;
+            if (r.presence_type) line += ` (${r.presence_type})`;
+            if (r.channels) line += ` — channels: ${r.channels}`;
+            if (r.notes) line += ` — ${r.notes}`;
+            return line;
+          }).join("\n");
+          geoPresenceBlock = `\nGeographical presence:\n${geoLines}\n`;
+        }
+      }
+
       const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
       });
@@ -1922,6 +1941,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
 You are analysing: **${entityName}**
 
 ${prodContextBlock ? `Our product context:\n${prodContextBlock}\n` : ""}
+${geoPresenceBlock ? `Competitor geographical presence:${geoPresenceBlock}` : ""}
 ${focusContext ? `Our strategic context: ${focusContext}\n` : ""}
 Intelligence captures:
 ${contentSnippets}
