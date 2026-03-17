@@ -155,6 +155,10 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
 
   const editMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof EMPTY_FORM }) => {
+      if (id.startsWith('perplexity-')) {
+        const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`, data);
+        return res.json();
+      }
       const res = await apiRequest("PUT", `/api/entities/${encodeURIComponent(entityId)}/geo-presence/${encodeURIComponent(id)}`, data);
       return res.json();
     },
@@ -167,6 +171,7 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
+      if (id.startsWith('perplexity-')) return;
       await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/geo-presence/${encodeURIComponent(id)}`);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] })

@@ -5454,6 +5454,11 @@ Return ONLY a JSON array of 3 strings. No explanation.`
 
   app.put("/api/entities/:entityId/geo-presence/:geoId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const { geoId } = req.params;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(geoId)) {
+        return res.status(404).json({ error: 'Geo presence entry not found' });
+      }
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
       const role = profileResult.rows[0]?.role;
@@ -5483,6 +5488,11 @@ Return ONLY a JSON array of 3 strings. No explanation.`
 
   app.delete("/api/entities/:entityId/geo-presence/:geoId", requireAuth, async (req: Request, res: Response) => {
     try {
+      const { geoId } = req.params;
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(geoId)) {
+        return res.status(404).json({ error: 'Geo presence entry not found' });
+      }
       const userId = (req as any).userId;
       const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
       const role = profileResult.rows[0]?.role;
