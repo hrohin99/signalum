@@ -197,6 +197,8 @@ Return ONLY valid JSON, no other text.`
       ]
     });
 
+    inferencePromise.catch(() => {});
+
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error("Sibling inference timed out")), 10000)
     );
@@ -1566,9 +1568,11 @@ Return only the summary paragraphs, no JSON, no formatting.`
       let inferenceResult = null;
       if (!incomingWebsiteUrl) {
         try {
+          console.log(`[AddEntity] Running sibling inference for "${entityName}" (topicType=${safeTopicType}, category="${categoryName}")`);
           inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName, userId);
+          console.log(`[AddEntity] Sibling inference result for "${entityName}":`, inferenceResult ? `confidence=${inferenceResult.confidence}, domain="${inferenceResult.inferred_domain}"` : "null");
         } catch (inferErr: any) {
-          console.error(`[AddEntity] Sibling inference failed for "${entityName}":`, inferErr?.message || inferErr);
+          console.error(`[AddEntity] Sibling inference threw for "${entityName}" (topicType=${safeTopicType}):`, inferErr?.message || inferErr);
         }
       }
 
@@ -1588,6 +1592,8 @@ Return only the summary paragraphs, no JSON, no formatting.`
           newEntity.disambiguation_context = inferenceResult.inferred_domain;
           newEntity.disambiguation_confirmed = false;
         }
+      } else {
+        console.log(`[AddEntity] No inference result for "${entityName}" (topicType=${safeTopicType}); entity saved without disambiguation context.`);
       }
 
       category.entities.push(newEntity);
