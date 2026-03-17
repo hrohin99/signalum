@@ -509,6 +509,8 @@ export async function ensureDatabaseSchema(): Promise<void> {
         END IF;
       END $$
     `);
+    await db.execute(sql`ALTER TABLE competitor_capabilities ADD COLUMN IF NOT EXISTS assessment TEXT DEFAULT 'Advantage'`);
+    await db.execute(sql`ALTER TABLE competitor_capabilities ADD COLUMN IF NOT EXISTS comment TEXT DEFAULT ''`);
     console.log("[DBSafety] competitor_capabilities table verified.");
   } catch (error: any) {
     console.error("[DBSafety] Error ensuring competitor_capabilities table:", error?.message || error);
