@@ -5518,14 +5518,14 @@ Return ONLY a JSON array of 3 strings. No explanation.`
       const allCaptures = await storage.getCapturesByUserId(userId);
       const entityCaptures = allCaptures.filter((c: any) => c.matchedEntity === entityName);
       const contentSnippets = entityCaptures
-        .slice(0, 15)
+        .slice(0, 50)
         .map((c: any, i: number) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
         .join("\n\n");
 
       const anthropic = getAnthropicClient();
       const message = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1000,
+        max_tokens: 2000,
         messages: [{
           role: "user",
           content: `You are a competitive intelligence analyst. Analyse the following intelligence captures about "${entityName}" and produce a SWOT analysis.
