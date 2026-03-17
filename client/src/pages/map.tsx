@@ -1479,6 +1479,10 @@ function MapPageInner() {
           <DialogHeader>
             <DialogTitle>Edit Focus — {editFocusCategoryName}</DialogTitle>
           </DialogHeader>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 12, lineHeight: 1.5 }}>
+            Set your search focus to guide how Signalum searches for intelligence in this category. 
+            Keep it clear and concise — vague or overly broad focus instructions may yield inaccurate results.
+          </p>
           <div className="space-y-3 py-2">
             <div>
               <Textarea
@@ -1491,6 +1495,11 @@ function MapPageInner() {
                 maxLength={300}
                 data-testid="input-edit-category-focus"
               />
+              {editFocusValue.length > 0 && editFocusValue.length < 20 && (
+                <p style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>
+                  ⚠ Focus is too short — add more detail for better results
+                </p>
+              )}
               <p className="text-xs text-muted-foreground text-right mt-1" data-testid="text-focus-char-count">
                 {editFocusValue.length}/300
               </p>
