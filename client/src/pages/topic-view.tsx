@@ -90,14 +90,15 @@ import { topicTourSteps } from "@/lib/tourConfig";
 import { Eye, Crosshair, Compass, Star, MapPin, Phone, Clock } from "lucide-react";
 
 function CapabilityMatrix({ entityName, entityId }: { entityName: string; entityId: string }) {
-  const [assessments, setAssessments] = useState<Record<string, string>>({});
+  const [expandedComment, setExpandedComment] = useState<string | null>(null);
+  const [localComments, setLocalComments] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
 
   const { data: capsData } = useQuery<{ capabilities: Array<{ id: string; name: string }> }>({
     queryKey: ["/api/capabilities"],
   });
 
-  const { data: compCapData } = useQuery<{ competitorCapabilities: Array<{ capabilityId: string; status: string; evidence: string }> }>({
+  const { data: compCapData } = useQuery<{ competitorCapabilities: Array<{ capabilityId: string; status: string; evidence: string; assessment: string; comment: string }> }>({
     queryKey: ["/api/competitor-capabilities", entityId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/competitor-capabilities/${encodeURIComponent(entityId)}`);
@@ -114,11 +115,14 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ capabilityId, status }: { capabilityId: string; status: string }) => {
+    mutationFn: async ({ capabilityId, status, assessment, comment }: { capabilityId: string; status?: string; assessment?: string; comment?: string }) => {
+      const current = (compCapData?.competitorCapabilities || []).find(c => c.capabilityId === capabilityId);
       const res = await apiRequest("PUT", `/api/competitor-capabilities/${encodeURIComponent(entityId)}`, {
         capabilityId,
-        status,
+        status: status ?? current?.status ?? "unknown",
         evidence: null,
+        assessment: assessment !== undefined ? assessment : (current?.assessment ?? "Advantage"),
+        comment: comment !== undefined ? comment : (current?.comment ?? ""),
       });
       return res.json();
     },
@@ -147,13 +151,12 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
 
   const COMPETITOR_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
   const ENTRUST_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
-  const ASSESSMENT_CYCLE: Record<string, string> = { "Advantage": "Parity", "Parity": "Gap risk", "Gap risk": "Behind", "Behind": "Advantage" };
 
-  const STATUS_STYLES: Record<string, { bg: string; color: string; label: string }> = {
-    yes: { bg: "#1a3a1a", color: "#4ade80", label: "✓" },
-    partial: { bg: "#3a2e00", color: "#fbbf24", label: "~" },
-    no: { bg: "#2a2a2a", color: "#94a3b8", label: "—" },
-    unknown: { bg: "#2a2a2a", color: "#94a3b8", label: "—" },
+  const STATUS_STYLES: Record<string, { bg: string; color: string; label: string; title: string }> = {
+    yes: { bg: "#1a3a1a", color: "#4ade80", label: "✓", title: "Has this capability" },
+    partial: { bg: "#3a2e00", color: "#fbbf24", label: "~", title: "Partial capability" },
+    no: { bg: "#2a2a2a", color: "#94a3b8", label: "—", title: "Does not have this capability" },
+    unknown: { bg: "#2a2a2a", color: "#94a3b8", label: "—", title: "Unknown" },
   };
 
   const ASSESSMENT_STYLES_MAP: Record<string, { bg: string; color: string }> = {
@@ -173,6 +176,17 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     return found?.status || "unknown";
   };
 
+  const getAssessment = (capId: string) => {
+    const found = competitorCaps.find(cc => cc.capabilityId === capId);
+    return found?.assessment || "Advantage";
+  };
+
+  const getComment = (capId: string) => {
+    if (localComments[capId] !== undefined) return localComments[capId];
+    const found = competitorCaps.find(cc => cc.capabilityId === capId);
+    return found?.comment || "";
+  };
+
   const cycleCompetitorStatus = (capId: string) => {
     const current = getCompetitorStatus(capId);
     const next = COMPETITOR_CYCLE[current] || "yes";
@@ -185,9 +199,15 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     updateEntrustMutation.mutate({ capabilityId: capId, status: next });
   };
 
-  const cycleAssessment = (capId: string) => {
-    const current = assessments[capId] || "Advantage";
-    setAssessments(prev => ({ ...prev, [capId]: ASSESSMENT_CYCLE[current] || "Advantage" }));
+  const saveAssessment = (capId: string, value: string) => {
+    updateMutation.mutate({ capabilityId: capId, assessment: value });
+  };
+
+  const saveComment = (capId: string) => {
+    const comment = localComments[capId];
+    if (comment !== undefined) {
+      updateMutation.mutate({ capabilityId: capId, comment });
+    }
   };
 
   if (capabilities.length === 0) {
@@ -208,58 +228,102 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
           <tr>
             <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "left" as const }}>Capability</th>
             <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>{entityName.toUpperCase()}</th>
-            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Entrust</th>
-            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "right" as const }}>Assessment</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Our Capability</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Assessment</th>
+            <th style={{ fontSize: 11, fontWeight: 600, color: "#64748b", textTransform: "uppercase" as const, letterSpacing: "0.06em", padding: "6px 8px", textAlign: "center" as const }}>Notes</th>
           </tr>
         </thead>
         <tbody>
           {capabilities.map((cap) => {
             const competitorSt = getCompetitorStatus(cap.id);
             const entrustSt = getEntrustStatus(cap.id);
-            const assessment = assessments[cap.id] || "Advantage";
+            const assessment = getAssessment(cap.id);
+            const comment = getComment(cap.id);
             const compStyle = STATUS_STYLES[competitorSt] || STATUS_STYLES.unknown;
             const entrustStyle = STATUS_STYLES[entrustSt] || STATUS_STYLES.unknown;
             const assessStyle = ASSESSMENT_STYLES_MAP[assessment] || ASSESSMENT_STYLES_MAP["Advantage"];
+            const isCommentOpen = expandedComment === cap.id;
             return (
-              <tr key={cap.id} style={{ borderTop: "1px solid #f1f5f9" }} data-testid={`row-capmatrix-${cap.id}`}>
-                <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{cap.name}</td>
-                <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
-                  <button
-                    onClick={() => cycleCompetitorStatus(cap.id)}
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: compStyle.bg, color: compStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
-                    data-testid={`button-competitor-status-${cap.id}`}
-                  >
-                    {compStyle.label}
-                  </button>
-                </td>
-                <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
-                  <button
-                    onClick={() => cycleEntrustStatus(cap.id)}
-                    style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: entrustStyle.bg, color: entrustStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
-                    data-testid={`button-entrust-status-${cap.id}`}
-                  >
-                    {entrustStyle.label}
-                  </button>
-                </td>
-                <td style={{ padding: "10px 8px", textAlign: "right" as const }}>
-                  <select
-                    value={assessment}
-                    onChange={e => setAssessments(prev => ({ ...prev, [cap.id]: e.target.value }))}
-                    style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20, background: assessStyle.bg, color: assessStyle.color, border: "none", cursor: "pointer", outline: "none", appearance: "none" as const }}
-                    data-testid={`select-assessment-${cap.id}`}
-                  >
-                    <option value="Advantage">Advantage</option>
-                    <option value="Parity">Parity</option>
-                    <option value="Gap risk">Gap risk</option>
-                    <option value="Behind">Behind</option>
-                  </select>
-                </td>
-              </tr>
+              <>
+                <tr key={cap.id} style={{ borderTop: "1px solid #f1f5f9" }} data-testid={`row-capmatrix-${cap.id}`}>
+                  <td style={{ padding: "10px 8px", fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{cap.name}</td>
+                  <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
+                    <button
+                      onClick={() => cycleCompetitorStatus(cap.id)}
+                      title={compStyle.title}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: compStyle.bg, color: compStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
+                      data-testid={`button-competitor-status-${cap.id}`}
+                    >
+                      {compStyle.label}
+                    </button>
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
+                    <button
+                      onClick={() => cycleEntrustStatus(cap.id)}
+                      title={entrustStyle.title}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: entrustStyle.bg, color: entrustStyle.color, fontSize: 12, fontWeight: 700, border: "none", cursor: "pointer" }}
+                      data-testid={`button-entrust-status-${cap.id}`}
+                    >
+                      {entrustStyle.label}
+                    </button>
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
+                    <select
+                      value={assessment}
+                      onChange={e => saveAssessment(cap.id, e.target.value)}
+                      style={{ fontSize: 11, fontWeight: 600, padding: "2px 10px", borderRadius: 20, background: assessStyle.bg, color: assessStyle.color, border: "none", cursor: "pointer", outline: "none", appearance: "none" as const }}
+                      data-testid={`select-assessment-${cap.id}`}
+                    >
+                      <option value="Advantage">Advantage</option>
+                      <option value="Parity">Parity</option>
+                      <option value="Gap risk">Gap risk</option>
+                      <option value="Behind">Behind</option>
+                    </select>
+                  </td>
+                  <td style={{ padding: "10px 8px", textAlign: "center" as const }}>
+                    <button
+                      onClick={() => setExpandedComment(isCommentOpen ? null : cap.id)}
+                      title={comment ? comment : "Add note"}
+                      style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 24, height: 24, borderRadius: "50%", background: comment ? "#ede9fe" : "#f1f5f9", color: comment ? "#7c3aed" : "#94a3b8", fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer" }}
+                      data-testid={`button-note-${cap.id}`}
+                    >
+                      {comment ? "✎" : "+"}
+                    </button>
+                  </td>
+                </tr>
+                {isCommentOpen && (
+                  <tr key={`comment-${cap.id}`} style={{ background: "#f8fafc" }}>
+                    <td colSpan={5} style={{ padding: "8px 12px 12px" }}>
+                      <textarea
+                        value={comment}
+                        maxLength={200}
+                        rows={2}
+                        placeholder="Add a note for this capability... (max 200 characters)"
+                        onChange={e => setLocalComments(prev => ({ ...prev, [cap.id]: e.target.value }))}
+                        onBlur={() => saveComment(cap.id)}
+                        style={{ width: "100%", fontSize: 12, fontFamily: "inherit", padding: "8px 10px", border: "1px solid #e2e8f0", borderRadius: 8, background: "#fff", color: "#1e293b", resize: "none", lineHeight: 1.5, boxSizing: "border-box" as const, outline: "none" }}
+                        data-testid={`textarea-note-${cap.id}`}
+                        autoFocus
+                      />
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                        <span style={{ fontSize: 11, color: "#94a3b8" }}>{comment.length}/200</span>
+                        <button
+                          onClick={() => { saveComment(cap.id); setExpandedComment(null); }}
+                          style={{ fontSize: 11, padding: "3px 12px", background: "#1e3a5f", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}
+                          data-testid={`button-save-note-${cap.id}`}
+                        >
+                          Save
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </>
             );
           })}
         </tbody>
       </table>
-      <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 4, paddingTop: 10 }}>
+      <div style={{ borderTop: "1px solid #f1f5f9", marginTop: 4, paddingTop: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button
           onClick={() => navigate("/settings?section=capabilities")}
           style={{ fontSize: 12, color: "#64748b", background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: 4 }}
@@ -267,6 +331,17 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
         >
           <Plus style={{ width: 14, height: 14 }} /> Add capability row
         </button>
+        <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#94a3b8" }}>
+          <span title="Has this capability" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: "50%", background: "#1a3a1a", color: "#4ade80", fontSize: 9, fontWeight: 700 }}>✓</span> Full
+          </span>
+          <span title="Partial capability" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: "50%", background: "#3a2e00", color: "#fbbf24", fontSize: 9, fontWeight: 700 }}>~</span> Partial
+          </span>
+          <span title="Does not have this capability" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 16, height: 16, borderRadius: "50%", background: "#2a2a2a", color: "#94a3b8", fontSize: 9, fontWeight: 700 }}>—</span> None
+          </span>
+        </div>
       </div>
     </div>
   );

@@ -341,6 +341,8 @@ export const competitorCapabilities = pgTable("competitor_capabilities", {
   capabilityId: uuid("capability_id").notNull(),
   status: text("status").notNull().default("unknown"),
   evidence: text("evidence"),
+  assessment: text("assessment").default("Advantage"),
+  comment: text("comment").default(""),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   unique("competitor_capabilities_entity_capability").on(table.entityId, table.capabilityId),

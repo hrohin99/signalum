@@ -4623,7 +4623,7 @@ Return only the bullet points, no JSON, no headers.`
         return res.status(403).json({ error: "Forbidden" });
       }
       const tenantId = "00000000-0000-0000-0000-000000000000";
-      const { capabilityId, status, evidence } = req.body;
+      const { capabilityId, status, evidence, assessment, comment } = req.body;
       if (!capabilityId || !status) {
         return res.status(400).json({ message: "capabilityId and status are required" });
       }
@@ -4636,7 +4636,9 @@ Return only the bullet points, no JSON, no headers.`
         decodeURIComponent(req.params.entityId),
         capabilityId,
         status,
-        evidence !== undefined ? evidence : null
+        evidence !== undefined ? evidence : null,
+        assessment !== undefined ? assessment : null,
+        comment !== undefined ? comment : null
       );
       return res.json({ competitorCapability: result });
     } catch (error: any) {

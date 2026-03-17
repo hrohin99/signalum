@@ -664,7 +664,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(competitorCapabilities.tenantId, tenantId));
   }
 
-  async upsertCompetitorCapability(tenantId: string, entityId: string, capabilityId: string, status: string, evidence?: string | null): Promise<CompetitorCapability> {
+  async upsertCompetitorCapability(tenantId: string, entityId: string, capabilityId: string, status: string, evidence?: string | null, assessment?: string | null, comment?: string | null): Promise<CompetitorCapability> {
     const existing = await db
       .select()
       .from(competitorCapabilities)
@@ -677,7 +677,13 @@ export class DatabaseStorage implements IStorage {
     if (existing.length > 0) {
       const [updated] = await db
         .update(competitorCapabilities)
-        .set({ status, evidence: evidence ?? existing[0].evidence, updatedAt: new Date() })
+        .set({
+          status,
+          evidence: evidence ?? existing[0].evidence,
+          assessment: assessment !== undefined ? assessment : existing[0].assessment,
+          comment: comment !== undefined ? comment : existing[0].comment,
+          updatedAt: new Date()
+        })
         .where(and(
           eq(competitorCapabilities.tenantId, tenantId),
           eq(competitorCapabilities.entityId, entityId),
@@ -688,7 +694,7 @@ export class DatabaseStorage implements IStorage {
     } else {
       const [created] = await db
         .insert(competitorCapabilities)
-        .values({ tenantId, entityId, capabilityId, status, evidence })
+        .values({ tenantId, entityId, capabilityId, status, evidence, assessment: assessment ?? "Advantage", comment: comment ?? "" })
         .returning();
       return created;
     }
