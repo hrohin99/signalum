@@ -1894,9 +1894,18 @@ Return only the summary paragraphs, no JSON, no formatting.`
       const soWhatWsResult = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
       const soWhatProfileCtx = buildProfileContext(soWhatWsResult.rows[0] || null);
       const soWhatProfilePrefix = soWhatProfileCtx ? `${soWhatProfileCtx}\n\n` : "";
+      const soWhatWinFactors = soWhatWsResult.rows[0]?.win_factors || null;
 
       const soWhatTenantId = "00000000-0000-0000-0000-000000000000";
       const prodContext = await storage.getProductContext(soWhatTenantId);
+
+      const prodStrengths = prodContext?.strengths?.trim() || null;
+      const prodWeaknesses = prodContext?.weaknesses?.trim() || null;
+      const prodContextBlock = [
+        `Our confirmed product strengths: ${prodStrengths || "Not provided"}`,
+        `We win on: ${soWhatWinFactors || "Not provided"}`,
+        `Our confirmed weaknesses/limitations (do NOT present these as advantages): ${prodWeaknesses || "Not provided"}`,
+      ].join("\n");
 
       const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
@@ -1912,6 +1921,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
 
 You are analysing: **${entityName}**
 
+${prodContextBlock ? `Our product context:\n${prodContextBlock}\n` : ""}
 ${focusContext ? `Our strategic context: ${focusContext}\n` : ""}
 Intelligence captures:
 ${contentSnippets}
@@ -1927,8 +1937,9 @@ One paragraph (3-4 sentences) on the overall competitive threat level. Reference
 - [Third area of strength if applicable]
 
 ## Where We Have An Edge
-- [Specific advantage we hold over them based on our product context]
-- [Second advantage]
+Draw ONLY from our confirmed product strengths and "We win on" factors listed above. Do not invent advantages or misrepresent our weaknesses as strengths.
+- [Specific advantage drawn from our confirmed strengths or win factors]
+- [Second advantage if applicable]
 - [Third advantage if applicable]
 
 ## Risks To Watch
@@ -2707,6 +2718,16 @@ Rules:
       const client = getAnthropicClient();
 
       const briefProdContext = await storage.getProductContext(tenantId);
+      const briefWsResult = await pool.query("SELECT win_factors FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
+      const briefWinFactors = briefWsResult.rows[0]?.win_factors || null;
+
+      const briefProdStrengths = briefProdContext?.strengths?.trim() || null;
+      const briefProdWeaknesses = briefProdContext?.weaknesses?.trim() || null;
+      const briefProdContextBlock = [
+        `Our confirmed product strengths: ${briefProdStrengths || "Not provided"}`,
+        `We win on: ${briefWinFactors || "Not provided"}`,
+        `Our confirmed weaknesses/limitations (do NOT present these as advantages): ${briefProdWeaknesses || "Not provided"}`,
+      ].join("\n");
 
       const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
@@ -2718,7 +2739,7 @@ Rules:
 
 Do not use em dashes anywhere in your response. Use commas or plain sentences instead.
 
-Structure the brief as follows:
+${briefProdContextBlock ? `Our product context (use this to ground all competitive implications accurately):\n${briefProdContextBlock}\n\n` : ""}Structure the brief as follows:
 
 ## Executive Summary
 Write 2-3 short paragraphs summarising the most important developments across all tracked entities this period. Each paragraph should cover one theme or pattern. Keep each paragraph to 2-3 sentences. No bullet points in the summary.
@@ -2738,7 +2759,7 @@ For each entity/topic with notable activity, use a ### heading with the entity n
 **Watch for**
 [One short sentence on what to monitor next]
 
-Keep bullet points to one sentence each. Be direct. No vague statements.
+Keep bullet points to one sentence each. Be direct. No vague statements. When assessing competitive implications, draw only from our confirmed strengths and win factors above — do not misrepresent our weaknesses as advantages.
 
 ## Watch Items
 Any emerging patterns, risks, or items that deserve continued attention.
@@ -3697,13 +3718,22 @@ Return only the bullet points, no JSON, no headers.`
 
       let whatMeansForYou: string | null = null;
       const prodContext = await storage.getProductContext(tenantId);
+      const sdWinFactors = sdWsResult.rows[0]?.win_factors || null;
       if (prodContext && prodContext.productName) {
+        const sdProdStrengths = prodContext.strengths?.trim() || null;
+        const sdProdWeaknesses = prodContext.weaknesses?.trim() || null;
+        const sdProdContextLines = [
+          `Our confirmed product strengths: ${sdProdStrengths || "Not provided"}`,
+          `We win on: ${sdWinFactors || "Not provided"}`,
+          `Our confirmed weaknesses/limitations (do NOT present these as advantages): ${sdProdWeaknesses || "Not provided"}`,
+        ].join("\n");
+
         const meansMessage = await client.messages.create({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 512,
           messages: [{
             role: "user",
-            content: `${sdProfilePrefix}Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"} with strengths in ${prodContext.strengths || "its key areas"}, what does ${entityName}'s strategic direction mean for ${prodContext?.productName || "your organisation"}? Respond with 2-3 bullet points, one sentence each, starting with a strong verb. Do not use em dashes.
+            content: `${sdProfilePrefix}${sdProdContextLines ? `Our product context:\n${sdProdContextLines}\n\n` : ""}Given that ${prodContext.productName} serves ${prodContext.targetCustomer || "its target customers"}, what does ${entityName}'s strategic direction mean for ${prodContext?.productName || "your organisation"}? Respond with 2-3 bullet points, one sentence each, starting with a strong verb. Draw implications only from our confirmed strengths and win factors. Do not present our weaknesses as advantages. Do not use em dashes.
 
 ${entityName}'s strategic direction: ${whereHeading}
 
