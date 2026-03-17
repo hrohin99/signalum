@@ -90,7 +90,6 @@ import { topicTourSteps } from "@/lib/tourConfig";
 import { Eye, Crosshair, Compass, Star, MapPin, Phone, Clock } from "lucide-react";
 
 function CapabilityMatrix({ entityName, entityId }: { entityName: string; entityId: string }) {
-  const [entrustStatus, setEntrustStatus] = useState<Record<string, string>>({});
   const [assessments, setAssessments] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
 
@@ -102,6 +101,14 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     queryKey: ["/api/competitor-capabilities", entityId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/competitor-capabilities/${encodeURIComponent(entityId)}`);
+      return res.json();
+    },
+  });
+
+  const { data: entrustCapData } = useQuery<{ entrustCapabilities: Array<{ capabilityId: string; status: string }> }>({
+    queryKey: ["/api/entrust-capabilities", entityId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/entrust-capabilities/${encodeURIComponent(entityId)}`);
       return res.json();
     },
   });
@@ -120,8 +127,22 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     },
   });
 
+  const updateEntrustMutation = useMutation({
+    mutationFn: async ({ capabilityId, status }: { capabilityId: string; status: string }) => {
+      const res = await apiRequest("PUT", `/api/entrust-capabilities/${encodeURIComponent(entityId)}`, {
+        capabilityId,
+        status,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/entrust-capabilities", entityId] });
+    },
+  });
+
   const capabilities = capsData?.capabilities || [];
   const competitorCaps = compCapData?.competitorCapabilities || [];
+  const entrustCaps = entrustCapData?.entrustCapabilities || [];
 
   const COMPETITOR_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
   const ENTRUST_CYCLE: Record<string, string> = { yes: "partial", partial: "no", no: "yes", unknown: "yes" };
@@ -146,6 +167,11 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     return found?.status || "unknown";
   };
 
+  const getEntrustStatus = (capId: string) => {
+    const found = entrustCaps.find(ec => ec.capabilityId === capId);
+    return found?.status || "unknown";
+  };
+
   const cycleCompetitorStatus = (capId: string) => {
     const current = getCompetitorStatus(capId);
     const next = COMPETITOR_CYCLE[current] || "yes";
@@ -153,8 +179,9 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
   };
 
   const cycleEntrustStatus = (capId: string) => {
-    const current = entrustStatus[capId] || "unknown";
-    setEntrustStatus(prev => ({ ...prev, [capId]: ENTRUST_CYCLE[current] || "yes" }));
+    const current = getEntrustStatus(capId);
+    const next = ENTRUST_CYCLE[current] || "yes";
+    updateEntrustMutation.mutate({ capabilityId: capId, status: next });
   };
 
   const cycleAssessment = (capId: string) => {
@@ -187,7 +214,7 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
         <tbody>
           {capabilities.map((cap) => {
             const competitorSt = getCompetitorStatus(cap.id);
-            const entrustSt = entrustStatus[cap.id] || "unknown";
+            const entrustSt = getEntrustStatus(cap.id);
             const assessment = assessments[cap.id] || "Advantage";
             const compStyle = STATUS_STYLES[competitorSt] || STATUS_STYLES.unknown;
             const entrustStyle = STATUS_STYLES[entrustSt] || STATUS_STYLES.unknown;
@@ -924,8 +951,7 @@ function TopicViewContent({
           {(() => {
             const funding = entity.funding ? (typeof entity.funding === 'string' ? JSON.parse(entity.funding) : entity.funding) : null;
             const geoPresenceResearch = entity.geo_presence ? (typeof entity.geo_presence === 'string' ? JSON.parse(entity.geo_presence) : entity.geo_presence) : null;
-            const productsResearch = entity.products ? (typeof entity.products === 'string' ? JSON.parse(entity.products) : entity.products) : null;
-            if (!funding && !geoPresenceResearch && !productsResearch) return null;
+            if (!funding && !geoPresenceResearch) return null;
             return (
               <div className="space-y-4">
                 {funding && (
@@ -965,17 +991,6 @@ function TopicViewContent({
                         <span key={i} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: '#f1f5f9', color: '#475569', border: '0.5px solid #e2e8f0' }}>{region}</span>
                       ))}
                     </div>
-                  </div>
-                )}
-                {productsResearch && productsResearch.length > 0 && (
-                  <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Products (Auto-researched)</div>
-                    {productsResearch.map((p: { name: string; description: string }, i: number) => (
-                      <div key={i} style={{ padding: '6px 0', borderBottom: i < productsResearch.length - 1 ? '0.5px solid #f1f5f9' : 'none' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b' }}>{p.name}</div>
-                        {p.description && <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.description}</div>}
-                      </div>
-                    ))}
                   </div>
                 )}
                 {entity.last_researched_at && (

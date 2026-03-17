@@ -2,7 +2,7 @@ import { randomUUID, randomBytes } from "crypto";
 import { eq, desc, and, lt, gte, sql, asc } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, competitorPricing, strategicDirections, entitySeoData, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability, type InsertCompetitorPricing, type CompetitorPricing, type InsertStrategicDirection, type StrategicDirection, type InsertEntitySeoData, type EntitySeoData } from "@shared/schema";
+import { userProfiles, workspaces, captures, briefs, topicTypeConfigs, productContext, battlecards, topicDates, notifications, ambientSearchLogs, workspaceContext, monitoredUrls, featureInterest, feedback, workspaceCapabilities, competitorCapabilities, competitorPricing, strategicDirections, entitySeoData, entrustCapabilities, type InsertUserProfile, type UserProfile, type InsertWorkspace, type Workspace, type InsertCapture, type Capture, type InsertBrief, type Brief, type InsertTopicTypeConfig, type TopicTypeConfig, type InsertProductContext, type ProductContext, type InsertBattlecard, type Battlecard, type InsertTopicDate, type TopicDate, type InsertNotification, type Notification, type InsertWorkspaceContext, type WorkspaceContext, type InsertMonitoredUrl, type MonitoredUrl, type InsertFeatureInterest, type FeatureInterest, type InsertFeedback, type Feedback, type InsertWorkspaceCapability, type WorkspaceCapability, type InsertCompetitorCapability, type CompetitorCapability, type InsertCompetitorPricing, type CompetitorPricing, type InsertStrategicDirection, type StrategicDirection, type InsertEntitySeoData, type EntitySeoData, type EntrustCapability } from "@shared/schema";
 
 export const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -79,6 +79,8 @@ export interface IStorage {
   upsertStrategicDirection(tenantId: string, entityId: string, data: { whereHeading?: string | null; whatMeansForYou?: string | null }): Promise<StrategicDirection>;
   getEntitySeoData(userId: string, entityId: string): Promise<EntitySeoData | undefined>;
   upsertEntitySeoData(userId: string, entityId: string, data: Partial<InsertEntitySeoData>): Promise<EntitySeoData>;
+  getEntrustCapabilities(workspaceId: string, entityId: string): Promise<EntrustCapability[]>;
+  upsertEntrustCapability(workspaceId: string, entityId: string, capabilityId: string, status: string): Promise<EntrustCapability>;
   getBriefingSettings(userId: string): Promise<{ briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string | null; briefingLastSent: Date | null }>;
   saveBriefingSettings(userId: string, settings: { briefingEnabled: boolean; briefingDay: string; briefingTime: string; briefingEmail: string }): Promise<void>;
   getWorkspacesWithBriefingEnabled(): Promise<Array<{ userId: string; briefingDay: string; briefingTime: string; briefingEmail: string; briefingLastSent: Date | null }>>;
@@ -822,6 +824,43 @@ export class DatabaseStorage implements IStorage {
       `UPDATE workspaces SET briefing_last_sent = NOW() WHERE user_id = $1`,
       [userId]
     );
+  }
+
+  async getEntrustCapabilities(workspaceId: string, entityId: string): Promise<EntrustCapability[]> {
+    return db
+      .select()
+      .from(entrustCapabilities)
+      .where(and(eq(entrustCapabilities.workspaceId, workspaceId), eq(entrustCapabilities.entityId, entityId)));
+  }
+
+  async upsertEntrustCapability(workspaceId: string, entityId: string, capabilityId: string, status: string): Promise<EntrustCapability> {
+    const existing = await db
+      .select()
+      .from(entrustCapabilities)
+      .where(and(
+        eq(entrustCapabilities.workspaceId, workspaceId),
+        eq(entrustCapabilities.entityId, entityId),
+        eq(entrustCapabilities.capabilityId, capabilityId)
+      ));
+
+    if (existing.length > 0) {
+      const [updated] = await db
+        .update(entrustCapabilities)
+        .set({ status, updatedAt: new Date() })
+        .where(and(
+          eq(entrustCapabilities.workspaceId, workspaceId),
+          eq(entrustCapabilities.entityId, entityId),
+          eq(entrustCapabilities.capabilityId, capabilityId)
+        ))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(entrustCapabilities)
+        .values({ workspaceId, entityId, capabilityId, status })
+        .returning();
+      return created;
+    }
   }
 }
 

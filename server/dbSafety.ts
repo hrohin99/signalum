@@ -421,5 +421,43 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring workspace_capabilities table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS entity_products_managed (
+        workspace_id VARCHAR(255) NOT NULL,
+        entity_id TEXT NOT NULL,
+        PRIMARY KEY (workspace_id, entity_id)
+      )
+    `);
+    console.log("[DBSafety] entity_products_managed table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_products_managed table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS entrust_capabilities (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        workspace_id VARCHAR(255) NOT NULL,
+        entity_id TEXT NOT NULL,
+        capability_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unknown',
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(workspace_id, entity_id, capability_id)
+      )
+    `);
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'entrust_capabilities_entity_id_idx') THEN
+          CREATE INDEX entrust_capabilities_entity_id_idx ON entrust_capabilities (entity_id);
+        END IF;
+      END $$
+    `);
+    console.log("[DBSafety] entrust_capabilities table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entrust_capabilities table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

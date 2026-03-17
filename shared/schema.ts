@@ -425,6 +425,26 @@ export const insertEntitySeoDataSchema = createInsertSchema(entitySeoData).omit(
 export type InsertEntitySeoData = z.infer<typeof insertEntitySeoDataSchema>;
 export type EntitySeoData = typeof entitySeoData.$inferSelect;
 
+export const entrustCapabilities = pgTable("entrust_capabilities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: varchar("workspace_id", { length: 255 }).notNull(),
+  entityId: text("entity_id").notNull(),
+  capabilityId: text("capability_id").notNull(),
+  status: text("status").notNull().default("unknown"),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  unique("entrust_capabilities_entity_capability").on(table.workspaceId, table.entityId, table.capabilityId),
+  index("entrust_capabilities_entity_id_idx").on(table.entityId),
+]);
+
+export const insertEntrustCapabilitySchema = createInsertSchema(entrustCapabilities).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type InsertEntrustCapability = z.infer<typeof insertEntrustCapabilitySchema>;
+export type EntrustCapability = typeof entrustCapabilities.$inferSelect;
+
 export const ambientSearchLogs = pgTable("ambient_search_logs", {
   id: uuid("id").defaultRandom().primaryKey(),
   tenantId: uuid("tenant_id").notNull(),

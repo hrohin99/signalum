@@ -4589,6 +4589,58 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
+  app.get("/api/entrust-capabilities/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const caps = await storage.getEntrustCapabilities(workspaceId, decodeURIComponent(req.params.entityId));
+      return res.json({ entrustCapabilities: caps });
+    } catch (error: any) {
+      console.error("Get entrust capabilities error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/entrust-capabilities/:entityId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role;
+      if (role && !["admin", "sub_admin"].includes(role)) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      const { capabilityId, status } = req.body;
+      if (!capabilityId || !status) {
+        return res.status(400).json({ message: "capabilityId and status are required" });
+      }
+      const validStatuses = ["yes", "no", "partial", "unknown"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: "Invalid status. Must be: yes, no, partial, or unknown" });
+      }
+      const result = await storage.upsertEntrustCapability(
+        workspaceId,
+        decodeURIComponent(req.params.entityId),
+        capabilityId,
+        status
+      );
+      return res.json({ entrustCapability: result });
+    } catch (error: any) {
+      console.error("Upsert entrust capability error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/capabilities/suggest", requireAuth, async (req: Request, res: Response) => {
     try {
       const tenantId = "00000000-0000-0000-0000-000000000000";
@@ -5061,7 +5113,12 @@ Return ONLY a JSON array of 3 strings. No explanation.`
         `SELECT * FROM entity_products WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
         [req.params.entityId, workspaceId]
       );
-      if (result.rows.length > 0) {
+      const managedResult = await pool.query(
+        `SELECT 1 FROM entity_products_managed WHERE workspace_id = $1 AND entity_id = $2 LIMIT 1`,
+        [workspaceId, req.params.entityId]
+      );
+      const isManaged = managedResult.rowCount && managedResult.rowCount > 0;
+      if (result.rows.length > 0 || isManaged) {
         return res.json(result.rows);
       }
       const workspace = await storage.getWorkspaceByUserId(userId);
@@ -5116,9 +5173,36 @@ Return ONLY a JSON array of 3 strings. No explanation.`
          VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
         [workspaceId, req.params.entityId, product_name, description, safeStatus, tags]
       );
+      await pool.query(
+        `INSERT INTO entity_products_managed (workspace_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [workspaceId, req.params.entityId]
+      );
       res.json(result.rows[0]);
     } catch (error: any) {
       console.error("Create product error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/entities/:entityId/products/mark-managed", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
+      const role = profileResult.rows[0]?.role;
+      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+      await pool.query(
+        `INSERT INTO entity_products_managed (workspace_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [workspaceId, req.params.entityId]
+      );
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Mark products managed error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface Product {
   id: string;
@@ -30,6 +31,7 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const canEdit = userRole === 'admin' || userRole === 'sub_admin';
+  const { toast } = useToast();
 
   const { data: products = [], isLoading } = useQuery<Product[]>({
     queryKey: [`/api/entities/${entityId}/products`],
@@ -78,9 +80,30 @@ export function ProductsCard({ entityId, userRole }: { entityId: string; userRol
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/products/${encodeURIComponent(id)}`);
+      if (id.startsWith("perplexity-")) {
+        const currentProducts = queryClient.getQueryData<Product[]>([`/api/entities/${entityId}/products`]) || [];
+        const remaining = currentProducts.filter(p => p.id !== id);
+        await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/products/mark-managed`);
+        for (const p of remaining) {
+          await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/products`, {
+            product_name: p.product_name,
+            description: p.description,
+            status: p.status,
+            tags: p.tags,
+          });
+        }
+      } else {
+        await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/products/${encodeURIComponent(id)}`);
+      }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/products`] })
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/products`] }),
+    onError: (error: any) => {
+      toast({
+        title: "Failed to remove product",
+        description: error?.message ?? "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    },
   });
 
   return (
