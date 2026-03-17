@@ -530,12 +530,6 @@ function TopicViewContent({
   });
 
   useEffect(() => {
-    queryClient.removeQueries({ queryKey: [`/api/entities/${entityName}/products`] });
-    queryClient.removeQueries({ queryKey: [`/api/entities/${entityName}/geo-presence`] });
-    queryClient.removeQueries({ queryKey: [`/api/entities/${entityName}/funding`] });
-  }, [entityName]);
-
-  useEffect(() => {
     if (extractionStatus?.extraction?.status === "completed" && extractionStatus?.extraction?.noDataFound) {
       setExtractionNoData(true);
       queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
