@@ -459,5 +459,60 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring entrust_capabilities table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS our_product_capabilities (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        workspace_id VARCHAR(255) NOT NULL,
+        capability_id UUID NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unknown',
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(workspace_id, capability_id)
+      )
+    `);
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'our_product_capabilities_workspace_id_idx') THEN
+          CREATE INDEX our_product_capabilities_workspace_id_idx ON our_product_capabilities (workspace_id);
+        END IF;
+      END $$
+    `);
+    console.log("[DBSafety] our_product_capabilities table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring our_product_capabilities table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS competitor_capabilities (
+        id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+        tenant_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        capability_id UUID NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unknown',
+        evidence TEXT,
+        assessment TEXT DEFAULT 'Advantage',
+        comment TEXT DEFAULT '',
+        updated_at TIMESTAMP DEFAULT NOW() NOT NULL,
+        UNIQUE(entity_id, capability_id)
+      )
+    `);
+    await db.execute(sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'competitor_capabilities_tenant_id_idx') THEN
+          CREATE INDEX competitor_capabilities_tenant_id_idx ON competitor_capabilities (tenant_id);
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'competitor_capabilities_entity_id_idx') THEN
+          CREATE INDEX competitor_capabilities_entity_id_idx ON competitor_capabilities (entity_id);
+        END IF;
+      END $$
+    `);
+    console.log("[DBSafety] competitor_capabilities table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring competitor_capabilities table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

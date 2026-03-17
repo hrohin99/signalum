@@ -518,11 +518,13 @@ function CapabilitiesSection() {
       const res = await apiRequest("PUT", "/api/our-product-capabilities", { capabilityId, status });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/our-product-capabilities"] });
+      setLocalStatuses(prev => { const next = { ...prev }; delete next[variables.capabilityId]; return next; });
     },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+    onError: (error: Error, variables) => {
+      toast({ title: "Could not save", description: error.message, variant: "destructive" });
+      setLocalStatuses(prev => { const next = { ...prev }; delete next[variables.capabilityId]; return next; });
     },
   });
 

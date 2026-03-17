@@ -90,6 +90,7 @@ import { topicTourSteps } from "@/lib/tourConfig";
 import { Eye, Crosshair, Compass, Star, MapPin, Phone, Clock } from "lucide-react";
 
 function CapabilityMatrix({ entityName, entityId }: { entityName: string; entityId: string }) {
+  const { toast } = useToast();
   const [expandedComment, setExpandedComment] = useState<string | null>(null);
   const [localComments, setLocalComments] = useState<Record<string, string>>({});
   const [localAssessments, setLocalAssessments] = useState<Record<string, string>>({});
@@ -124,9 +125,27 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
       });
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/competitor-capabilities", entityId] });
       queryClient.invalidateQueries({ queryKey: ["/api/all-competitor-capabilities"] });
+      if (variables.status !== undefined) {
+        setLocalCompStatus(prev => { const next = { ...prev }; delete next[variables.capabilityId]; return next; });
+      }
+      if (variables.assessment !== undefined) {
+        setLocalAssessments(prev => { const next = { ...prev }; delete next[variables.capabilityId]; return next; });
+      }
+      if (variables.comment !== undefined) {
+        setLocalComments(prev => { const next = { ...prev }; delete next[variables.capabilityId]; return next; });
+      }
+    },
+    onError: (error: Error, variables) => {
+      toast({ title: "Could not save", description: error.message, variant: "destructive" });
+      if (variables.status !== undefined) {
+        setLocalCompStatus(prev => { const next = { ...prev }; delete next[variables.capabilityId]; return next; });
+      }
+      if (variables.assessment !== undefined) {
+        setLocalAssessments(prev => { const next = { ...prev }; delete next[variables.capabilityId]; return next; });
+      }
     },
   });
 
