@@ -1414,7 +1414,17 @@ function SoWhatCard({ entity, categoryName, captureCount }: { entity: ExtractedE
             <span>Analyzing strategic implications...</span>
           </div>
         ) : entity.soWhatText ? (
-          <ReactMarkdown className="prose prose-sm max-w-none text-sm leading-relaxed" data-testid="text-so-what-content">{entity.soWhatText}</ReactMarkdown>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #64748b)', lineHeight: 1.75 }} data-testid="text-so-what-content">
+            {entity.soWhatText.split('\n').map((line: string, i: number) => {
+              const trimmed = line.trim();
+              if (!trimmed) return <div key={i} style={{ height: 8 }} />;
+              const isHeading = trimmed.length < 80 && !trimmed.endsWith('.') && !trimmed.endsWith(',') && !trimmed.endsWith(':');
+              if (isHeading) {
+                return <p key={i} style={{ fontWeight: 700, color: 'var(--color-text-primary, #1e293b)', margin: '14px 0 4px' }}>{trimmed}</p>;
+              }
+              return <p key={i} style={{ margin: '0 0 10px' }}>{trimmed}</p>;
+            })}
+          </div>
         ) : (
           <p className="text-sm text-muted-foreground" data-testid="text-so-what-empty">
             No analysis generated yet.{' '}
