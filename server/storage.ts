@@ -148,6 +148,22 @@ export class DatabaseStorage implements IStorage {
   async updateWorkspaceCategories(userId: string, categories: any[]): Promise<Workspace | undefined> {
     const effective = await this.getWorkspaceByUserId(userId);
     if (!effective) return undefined;
+    // Fetch current categories to preserve fields like 'focus' that callers may not include
+    const current = await this.getWorkspaceByUserId(userId);
+    if (current?.categories) {
+      const currentCats = current.categories as any[];
+      categories = categories.map((incoming: any) => {
+        const existing = currentCats.find((c: any) => c.name === incoming.name);
+        if (!existing) return incoming;
+        // Preserve fields from existing that are not in incoming
+        return {
+          ...existing,
+          ...incoming,
+          // Always preserve focus if incoming doesn't explicitly set it
+          focus: incoming.focus !== undefined ? incoming.focus : existing.focus,
+        };
+      });
+    }
     const result = await pool.query(
       `UPDATE workspaces SET categories = $1 WHERE id = $2 RETURNING *`,
       [JSON.stringify(categories), effective.id]
