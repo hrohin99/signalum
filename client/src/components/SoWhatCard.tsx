@@ -79,7 +79,21 @@ export function SoWhatCard({ entityId, userRole }: { entityId: string; userRole:
           </p>
         )}
         {!editing && content && (
-          <p style={{ fontSize: 13, color: 'var(--color-text-secondary, #64748b)', lineHeight: 1.75, margin: 0 }} data-testid="text-intel-content">{content}</p>
+          <div style={{ fontSize: 13, color: 'var(--color-text-secondary, #64748b)', lineHeight: 1.75 }} data-testid="text-intel-content">
+            {content.split('\n').map((line, i) => {
+              const trimmed = line.trim();
+              if (!trimmed) return <div key={i} style={{ height: 8 }} />;
+              const isHeading = trimmed.length < 80 && !trimmed.endsWith('.') && !trimmed.endsWith(',') && !trimmed.endsWith(':');
+              if (isHeading) {
+                return (
+                  <p key={i} style={{ fontWeight: 700, color: 'var(--color-text-primary, #1e293b)', margin: '14px 0 4px' }}>
+                    {trimmed}
+                  </p>
+                );
+              }
+              return <p key={i} style={{ margin: '0 0 10px' }}>{trimmed}</p>;
+            })}
+          </div>
         )}
         {editing && (
           <>
