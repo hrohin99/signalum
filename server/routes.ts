@@ -1463,7 +1463,7 @@ Respond with JSON only, no explanation:
       }
 
       const contentSnippets = entityCaptures
-        .slice(0, 10)
+        .slice(0, 30)
         .map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
         .join("\n\n");
 
@@ -1480,7 +1480,7 @@ Respond with JSON only, no explanation:
 
       const message = await client.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
+        max_tokens: 2000,
         messages: [
           {
             role: "user",
@@ -1884,7 +1884,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
       }
 
       const contentSnippets = entityCaptures
-        .slice(0, 15)
+        .slice(0, 30)
         .map((c, i) => `[${i + 1}] (${c.type}) ${c.content.slice(0, 500)}`)
         .join("\n\n");
 
@@ -1913,7 +1913,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
 
       const message = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1200,
+        max_tokens: 2500,
         messages: [
           {
             role: "user",
