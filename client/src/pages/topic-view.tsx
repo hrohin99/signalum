@@ -92,6 +92,9 @@ import { Eye, Crosshair, Compass, Star, MapPin, Phone, Clock } from "lucide-reac
 function CapabilityMatrix({ entityName, entityId }: { entityName: string; entityId: string }) {
   const [expandedComment, setExpandedComment] = useState<string | null>(null);
   const [localComments, setLocalComments] = useState<Record<string, string>>({});
+  const [localAssessments, setLocalAssessments] = useState<Record<string, string>>({});
+  const [localCompStatus, setLocalCompStatus] = useState<Record<string, string>>({});
+  const [localEntrustStatus, setLocalEntrustStatus] = useState<Record<string, string>>({});
   const [, navigate] = useLocation();
 
   const { data: capsData } = useQuery<{ capabilities: Array<{ id: string; name: string }> }>({
@@ -167,16 +170,19 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
   };
 
   const getCompetitorStatus = (capId: string) => {
+    if (localCompStatus[capId] !== undefined) return localCompStatus[capId];
     const found = competitorCaps.find(cc => cc.capabilityId === capId);
     return found?.status || "unknown";
   };
 
   const getEntrustStatus = (capId: string) => {
+    if (localEntrustStatus[capId] !== undefined) return localEntrustStatus[capId];
     const found = entrustCaps.find(ec => ec.capabilityId === capId);
     return found?.status || "unknown";
   };
 
   const getAssessment = (capId: string) => {
+    if (localAssessments[capId] !== undefined) return localAssessments[capId];
     const found = competitorCaps.find(cc => cc.capabilityId === capId);
     return found?.assessment || "Advantage";
   };
@@ -190,16 +196,19 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
   const cycleCompetitorStatus = (capId: string) => {
     const current = getCompetitorStatus(capId);
     const next = COMPETITOR_CYCLE[current] || "yes";
+    setLocalCompStatus(prev => ({ ...prev, [capId]: next }));
     updateMutation.mutate({ capabilityId: capId, status: next });
   };
 
   const cycleEntrustStatus = (capId: string) => {
     const current = getEntrustStatus(capId);
     const next = ENTRUST_CYCLE[current] || "yes";
+    setLocalEntrustStatus(prev => ({ ...prev, [capId]: next }));
     updateEntrustMutation.mutate({ capabilityId: capId, status: next });
   };
 
   const saveAssessment = (capId: string, value: string) => {
+    setLocalAssessments(prev => ({ ...prev, [capId]: value }));
     updateMutation.mutate({ capabilityId: capId, assessment: value });
   };
 
