@@ -1479,7 +1479,7 @@ Respond with JSON only, no explanation:
       const profilePrefix = profileCtx ? `${profileCtx}\n\n` : "";
 
       const message = await client.messages.create({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-4-6",
         max_tokens: 2000,
         messages: [
           {
@@ -1931,7 +1931,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
       });
 
       const message = await anthropic.messages.create({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-4-6",
         max_tokens: 2500,
         messages: [
           {
@@ -5544,7 +5544,7 @@ Return ONLY a JSON array of 3 strings. No explanation.`
 
       const anthropic = getAnthropicClient();
       const message = await anthropic.messages.create({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-4-6",
         max_tokens: 2000,
         messages: [{
           role: "user",
