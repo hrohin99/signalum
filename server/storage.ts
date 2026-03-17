@@ -195,11 +195,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCapturesByUserId(userId: string): Promise<Capture[]> {
-    return db
-      .select()
-      .from(captures)
-      .where(eq(captures.userId, userId))
-      .orderBy(desc(captures.createdAt));
+    const result = await pool.query(
+      `SELECT c.* FROM captures c
+       WHERE c.user_id = $1
+       OR c.user_id = (
+         SELECT w2.user_id FROM workspaces w1
+         JOIN workspaces w2 ON w2.id::varchar = w1.parent_workspace_id::varchar
+         WHERE w1.user_id = $1
+         LIMIT 1
+       )
+       ORDER BY c.created_at DESC`,
+      [userId]
+    );
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      userId: row.user_id,
+      type: row.type,
+      content: row.content,
+      matchedEntity: row.matched_entity,
+      matchedCategory: row.matched_category,
+      matchReason: row.match_reason,
+      extractedExcerpt: row.extracted_excerpt,
+      suggestedNewCategory: row.suggested_new_category,
+      suggestedNewCategoryReason: row.suggested_new_category_reason,
+      createdAt: row.created_at,
+    } as Capture));
   }
 
   async createBrief(brief: InsertBrief): Promise<Brief> {
