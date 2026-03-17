@@ -1539,10 +1539,14 @@ Return only the summary paragraphs, no JSON, no formatting.`
         return res.status(404).json({ message: "No workspace found" });
       }
 
-      const categories = workspace.categories as ExtractedCategory[];
+      const categories = (workspace.categories || []) as ExtractedCategory[];
       const category = categories.find(c => c.name === categoryName);
       if (!category) {
         return res.status(404).json({ message: "Category not found" });
+      }
+
+      if (!Array.isArray(category.entities)) {
+        category.entities = [];
       }
 
       const existingEntity = category.entities.find(e => e.name.toLowerCase() === entityName.toLowerCase());
@@ -1559,7 +1563,14 @@ Return only the summary paragraphs, no JSON, no formatting.`
       }
 
       const tenantId = "00000000-0000-0000-0000-000000000000";
-      const inferenceResult = incomingWebsiteUrl ? null : await performSiblingInference(entityName, tenantId, { categories }, categoryName, userId);
+      let inferenceResult = null;
+      if (!incomingWebsiteUrl) {
+        try {
+          inferenceResult = await performSiblingInference(entityName, tenantId, { categories }, categoryName, userId);
+        } catch (inferErr: any) {
+          console.error(`[AddEntity] Sibling inference failed for "${entityName}":`, inferErr?.message || inferErr);
+        }
+      }
 
       let siblingInference: SiblingInferenceResult | null = null;
 

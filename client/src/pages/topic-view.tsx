@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/App";
@@ -124,6 +124,7 @@ function CapabilityMatrix({ entityName, entityId }: { entityName: string; entity
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/competitor-capabilities", entityId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/all-competitor-capabilities"] });
     },
   });
 
@@ -925,80 +926,77 @@ function TopicViewContent({
       )}
 
       {isCompetitor && activeTab === 'profile' && (
-        <div className="space-y-6">
-          <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
-          <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
-          <div className="space-y-4">
-            <BattlecardCollapsedHeader
-              entity={entity}
-              categoryName={categoryName}
-              expanded={battlecardExpanded}
-              onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
-            />
-            {battlecardExpanded && (
-              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
-            )}
-          </div>
-          <CompetitorCapabilitiesCard entityName={entity.name} />
+        <div className="space-y-4">
+          <ProfileCollapsibleSection title="Summary" defaultExpanded={true}>
+            <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
+          </ProfileCollapsibleSection>
+          <ProfileCollapsibleSection title="Battlecard" defaultExpanded={false}>
+            <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+          </ProfileCollapsibleSection>
 
           {/* Products & Solutions */}
-          <ProductsCard entityId={entity.name} userRole={userRole} />
+          <ProfileCollapsibleSection title="Products & Solutions" defaultExpanded={true}>
+            <ProductsCard entityId={entity.name} userRole={userRole} />
+          </ProfileCollapsibleSection>
 
           {/* Geographic Presence */}
-          <GeoPresenceCard entityId={entity.name} userRole={userRole} />
+          <ProfileCollapsibleSection title="Geographic Presence" defaultExpanded={true}>
+            <GeoPresenceCard entityId={entity.name} userRole={userRole} />
+          </ProfileCollapsibleSection>
 
-          {/* Ambient Research Enrichment */}
+          {/* Funding Intelligence */}
           {(() => {
             const funding = entity.funding ? (typeof entity.funding === 'string' ? JSON.parse(entity.funding) : entity.funding) : null;
-            const geoPresenceResearch = entity.geo_presence ? (typeof entity.geo_presence === 'string' ? JSON.parse(entity.geo_presence) : entity.geo_presence) : null;
-            if (!funding && !geoPresenceResearch) return null;
+            if (!funding) return null;
             return (
-              <div className="space-y-4">
-                {funding && (
-                  <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Funding Intelligence</div>
-                    {funding.total_raised && (
-                      <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
-                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Total raised</span>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.total_raised}</span>
-                      </div>
-                    )}
-                    {funding.latest_round && (
-                      <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
-                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Latest round</span>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.latest_round}</span>
-                      </div>
-                    )}
-                    {funding.latest_round_date && (
-                      <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
-                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Round date</span>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.latest_round_date}</span>
-                      </div>
-                    )}
-                    {funding.key_investors && funding.key_investors.length > 0 && (
-                      <div style={{ display: 'flex', gap: 8, padding: '5px 0' }}>
-                        <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Key investors</span>
-                        <span style={{ fontSize: 13, color: '#1e293b' }}>{funding.key_investors.join(', ')}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-                {geoPresenceResearch && geoPresenceResearch.length > 0 && (
-                  <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Market Footprint</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                      {geoPresenceResearch.map((region: string, i: number) => (
-                        <span key={i} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: '#f1f5f9', color: '#475569', border: '0.5px solid #e2e8f0' }}>{region}</span>
-                      ))}
+              <ProfileCollapsibleSection title="Funding Intelligence" defaultExpanded={true}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                  {funding.total_raised && (
+                    <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Total raised</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.total_raised}</span>
                     </div>
-                  </div>
-                )}
-                {entity.last_researched_at && (
-                  <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right' }}>
-                    Last researched: {new Date(entity.last_researched_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </div>
-                )}
-              </div>
+                  )}
+                  {funding.latest_round && (
+                    <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Latest round</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.latest_round}</span>
+                    </div>
+                  )}
+                  {funding.latest_round_date && (
+                    <div style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '0.5px solid #f1f5f9' }}>
+                      <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Round date</span>
+                      <span style={{ fontSize: 13, fontWeight: 500, color: '#1e293b' }}>{funding.latest_round_date}</span>
+                    </div>
+                  )}
+                  {funding.key_investors && funding.key_investors.length > 0 && (
+                    <div style={{ display: 'flex', gap: 8, padding: '5px 0' }}>
+                      <span style={{ fontSize: 12, color: '#94a3b8', minWidth: 120 }}>Key investors</span>
+                      <span style={{ fontSize: 13, color: '#1e293b' }}>{funding.key_investors.join(', ')}</span>
+                    </div>
+                  )}
+                  {entity.last_researched_at && (
+                    <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'right', marginTop: 8 }}>
+                      Last researched: {new Date(entity.last_researched_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </div>
+                  )}
+                </div>
+              </ProfileCollapsibleSection>
+            );
+          })()}
+
+          {/* Market Footprint */}
+          {(() => {
+            const geoPresenceResearch = entity.geo_presence ? (typeof entity.geo_presence === 'string' ? JSON.parse(entity.geo_presence) : entity.geo_presence) : null;
+            if (!geoPresenceResearch || !geoPresenceResearch.length) return null;
+            return (
+              <ProfileCollapsibleSection title="Market Footprint" defaultExpanded={true}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {geoPresenceResearch.map((region: string, i: number) => (
+                    <span key={i} style={{ fontSize: 12, padding: '3px 10px', borderRadius: 20, background: '#f1f5f9', color: '#475569', border: '0.5px solid #e2e8f0' }}>{region}</span>
+                  ))}
+                </div>
+              </ProfileCollapsibleSection>
             );
           })()}
         </div>
@@ -1340,6 +1338,23 @@ function TopBar({
           Add Update
         </Button>
       </div>
+    </div>
+  );
+}
+
+function ProfileCollapsibleSection({ title, children, defaultExpanded = true }: { title: string; children: ReactNode; defaultExpanded?: boolean }) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  return (
+    <div>
+      <button
+        onClick={() => setExpanded(!expanded)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px', background: 'none', border: 'none', cursor: 'pointer', marginBottom: expanded ? 6 : 0 }}
+        data-testid={`section-toggle-${title.toLowerCase().replace(/\s+/g, '-')}`}
+      >
+        <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{title}</span>
+        {expanded ? <ChevronUp className="w-4 h-4 text-slate-400" /> : <ChevronDown className="w-4 h-4 text-slate-400" />}
+      </button>
+      {expanded && children}
     </div>
   );
 }
