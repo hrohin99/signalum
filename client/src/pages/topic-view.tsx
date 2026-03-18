@@ -3232,6 +3232,25 @@ function getSignalStrength(cap: Capture): "high" | "medium" | "low" | null {
   return match ? (match[1] as "high" | "medium" | "low") : null;
 }
 
+function getNewsDate(cap: Capture): Date | null {
+  if (!cap.matchReason) return null;
+  const match = cap.matchReason.match(/\[news_date:([^\]]+)\]/);
+  if (!match) return null;
+  const d = new Date(match[1]);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function getDisplayDate(cap: Capture): Date {
+  return getNewsDate(cap) ?? new Date(cap.createdAt);
+}
+
+function cleanMatchReason(reason: string): string {
+  return reason
+    .replace(/ \[FLAGGED_FOR_BRIEF\]/g, "")
+    .replace(/ \[news_date:[^\]]+\]/g, "")
+    .trim();
+}
+
 type SignalFilter = "all" | "notable" | "high";
 
 function getSignalCardStyles(strength: "high" | "medium" | "low" | null): {
@@ -3312,7 +3331,7 @@ function KeySignalsSection({ highSignalCaptures }: { highSignalCaptures: Capture
                     {(cap.content || "").length > 120 ? "…" : ""}
                   </span>
                   <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                    {new Date(cap.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    {getDisplayDate(cap).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </span>
                   <span className="px-1.5 py-0.5 rounded-full bg-[#c9a84c]/15 text-[#c9a84c] border border-[#c9a84c]/30 text-[9px] font-medium whitespace-nowrap shrink-0">
                     High Signal
@@ -3420,14 +3439,14 @@ function UpdatesFeedWidget({
                         <CaptureSourceIndicator capture={cap} />
                         {cap.matchReason && !cap.matchReason.includes("FLAGGED_FOR_BRIEF") && (
                           <p className="text-xs text-muted-foreground mt-1 italic">
-                            {cap.matchReason.replace(/ \[FLAGGED_FOR_BRIEF\]/g, "")}
+                            {cleanMatchReason(cap.matchReason)}
                           </p>
                         )}
                       </div>
                       <div className="text-right shrink-0 ml-2">
                         <Badge variant="outline" className="text-[10px] mb-1">{cap.type}</Badge>
                         <p className="text-[11px] text-muted-foreground whitespace-nowrap">
-                          {new Date(cap.createdAt).toLocaleDateString("en-US", {
+                          {getDisplayDate(cap).toLocaleDateString("en-US", {
                             month: "short",
                             day: "numeric",
                           })}
@@ -3595,7 +3614,7 @@ function RecentSignalsCard({ captures }: { captures: Capture[] }) {
                     {(cap.content || "").length > 100 ? "…" : ""}
                   </p>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
-                    {new Date(cap.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    {getDisplayDate(cap).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                   </p>
                 </div>
                 <span className="px-1.5 py-0.5 rounded-full bg-[#c9a84c]/15 text-[#c9a84c] border border-[#c9a84c]/30 text-[9px] font-medium whitespace-nowrap shrink-0 mt-0.5">

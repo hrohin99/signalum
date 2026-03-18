@@ -305,6 +305,7 @@ export function findingsToCaptures(
       : finding.summary;
 
     const signalTag = finding.signal_type === "hiring_signal" ? " [signal_type:hiring_signal]" : "";
+    const dateTag = finding.approximate_date ? ` [news_date:${finding.approximate_date}]` : "";
 
     return {
       userId,
@@ -312,7 +313,7 @@ export function findingsToCaptures(
       content: rawContent,
       matchedEntity: entityId,
       matchedCategory: source,
-      matchReason: `Automatically discovered via Perplexity web search [${finding.signal_strength}]${signalTag}`,
+      matchReason: `Automatically discovered via Perplexity web search [${finding.signal_strength}]${signalTag}${dateTag}`,
     } satisfies InsertCapture;
   });
 }
