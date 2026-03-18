@@ -557,7 +557,7 @@ export default function CapturePage() {
     try {
       await apiRequest("POST", "/api/captures", {
         type: pendingType,
-        content: match.relevant_excerpt,
+        content: pendingContent,
         matchedEntity: match.entity_id,
         matchedCategory: match.category,
         matchReason: match.reasoning,
@@ -624,7 +624,7 @@ export default function CapturePage() {
 
       await apiRequest("POST", "/api/captures", {
         type: pendingType,
-        content: match.relevant_excerpt,
+        content: pendingContent,
         matchedEntity: entityName,
         matchedCategory: categoryName,
         matchReason: match.reasoning,
@@ -693,7 +693,7 @@ export default function CapturePage() {
           queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
           await apiRequest("POST", "/api/captures", {
             type: pendingType,
-            content: match.relevant_excerpt,
+            content: pendingContent,
             matchedEntity: match.suggested_entity_name,
             matchedCategory: catName,
             matchReason: match.reasoning,
@@ -702,7 +702,7 @@ export default function CapturePage() {
         } else if (match.entity_id && match.category) {
           await apiRequest("POST", "/api/captures", {
             type: pendingType,
-            content: match.relevant_excerpt,
+            content: pendingContent,
             matchedEntity: match.entity_id,
             matchedCategory: match.category,
             matchReason: match.reasoning,
