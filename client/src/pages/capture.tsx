@@ -141,6 +141,7 @@ export default function CapturePage() {
   const [isConfirmingAll, setIsConfirmingAll] = useState(false);
   const [savingCards, setSavingCards] = useState<Set<number>>(new Set());
   const [multiMatchCategoryOverrides, setMultiMatchCategoryOverrides] = useState<Record<number, string>>({});
+  const [multiMatchSaveMode, setMultiMatchSaveMode] = useState<Record<number, 'excerpt' | 'full'>>({});
   const [changingCategoryIndex, setChangingCategoryIndex] = useState<number | null>(null);
 
   const [showPostCreateDateModal, setShowPostCreateDateModal] = useState(false);
@@ -209,6 +210,7 @@ export default function CapturePage() {
     setIsConfirmingAll(false);
     setSavingCards(new Set());
     setMultiMatchCategoryOverrides({});
+    setMultiMatchSaveMode({});
     setChangingCategoryIndex(null);
     setExtractedDates([]);
     setTrackedDateIndices(new Set());
@@ -378,6 +380,7 @@ export default function CapturePage() {
         setClassification(data as ClassificationMultiMatch);
         setMultiMatchSkipped(new Set());
         setMultiMatchConfirmed(new Set());
+        setMultiMatchSaveMode({});
       } else if (typeof data.matched === "undefined") {
         const legacyData = data as any;
         setClassification({
@@ -553,11 +556,13 @@ export default function CapturePage() {
 
   const handleConfirmMultiMatchItem = async (match: MultiMatchItem, index: number) => {
     if (!pendingContent || !match.entity_id || !match.category) return;
+    const saveMode = multiMatchSaveMode[index] ?? 'full';
+    const contentToSave = saveMode === 'excerpt' ? match.relevant_excerpt : pendingContent;
     setSavingCards(prev => new Set(prev).add(index));
     try {
       await apiRequest("POST", "/api/captures", {
         type: pendingType,
-        content: pendingContent,
+        content: contentToSave,
         matchedEntity: match.entity_id,
         matchedCategory: match.category,
         matchReason: match.reasoning,
@@ -589,6 +594,8 @@ export default function CapturePage() {
   const handleCreateAndConfirmMultiMatchItem = async (match: MultiMatchItem, index: number) => {
     const entityName = match.suggested_entity_name;
     if (!entityName) return;
+    const saveMode = multiMatchSaveMode[index] ?? 'full';
+    const contentToSave = saveMode === 'excerpt' ? match.relevant_excerpt : pendingContent;
 
     let categoryName = getResolvedCategoryForMatch(match, index);
 
@@ -624,7 +631,7 @@ export default function CapturePage() {
 
       await apiRequest("POST", "/api/captures", {
         type: pendingType,
-        content: pendingContent,
+        content: contentToSave,
         matchedEntity: entityName,
         matchedCategory: categoryName,
         matchReason: match.reasoning,
@@ -691,18 +698,22 @@ export default function CapturePage() {
             });
           }
           queryClient.invalidateQueries({ queryKey: ["/api/workspace/current"] });
+          const saveMode = multiMatchSaveMode[index] ?? 'full';
+          const contentToSave = saveMode === 'excerpt' ? match.relevant_excerpt : pendingContent;
           await apiRequest("POST", "/api/captures", {
             type: pendingType,
-            content: pendingContent,
+            content: contentToSave,
             matchedEntity: match.suggested_entity_name,
             matchedCategory: catName,
             matchReason: match.reasoning,
           });
           confirmedCategories.add(catName);
         } else if (match.entity_id && match.category) {
+          const saveMode = multiMatchSaveMode[index] ?? 'full';
+          const contentToSave = saveMode === 'excerpt' ? match.relevant_excerpt : pendingContent;
           await apiRequest("POST", "/api/captures", {
             type: pendingType,
-            content: pendingContent,
+            content: contentToSave,
             matchedEntity: match.entity_id,
             matchedCategory: match.category,
             matchReason: match.reasoning,
@@ -1584,6 +1595,23 @@ export default function CapturePage() {
                         {match.relevant_excerpt}
                       </p>
                     </div>
+                    <div className="flex items-center gap-1 mt-2">
+                      <p className="text-xs text-muted-foreground mr-1">Save:</p>
+                      <button
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${(multiMatchSaveMode[index] ?? 'full') === 'excerpt' ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]' : 'bg-background text-muted-foreground border-border hover:border-foreground'}`}
+                        onClick={() => setMultiMatchSaveMode(prev => ({ ...prev, [index]: 'excerpt' }))}
+                        data-testid={`button-save-mode-excerpt-${index}`}
+                      >
+                        Excerpt only
+                      </button>
+                      <button
+                        className={`text-xs px-2 py-1 rounded border transition-colors ${(multiMatchSaveMode[index] ?? 'full') === 'full' ? 'bg-[#1e3a5f] text-white border-[#1e3a5f]' : 'bg-background text-muted-foreground border-border hover:border-foreground'}`}
+                        onClick={() => setMultiMatchSaveMode(prev => ({ ...prev, [index]: 'full' }))}
+                        data-testid={`button-save-mode-full-${index}`}
+                      >
+                        Full text
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center justify-end gap-3">
@@ -1687,6 +1715,7 @@ export default function CapturePage() {
                     setPendingType("");
                     setMultiMatchSkipped(new Set());
                     setMultiMatchConfirmed(new Set());
+                    setMultiMatchSaveMode({});
                   }}
                   data-testid="button-cancel-multi-match"
                 >
