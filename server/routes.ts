@@ -287,6 +287,158 @@ function sanitizeErrorMessage(error: any): string {
   return "An internal error occurred";
 }
 
+async function buildCompetitorProfileContext(
+  entityName: string,
+  entity: ExtractedEntity,
+  workspaceId: string | null
+): Promise<string> {
+  const TENANT_ID = "00000000-0000-0000-0000-000000000000";
+  const sections: string[] = [];
+
+  const entityProducts: { name: string; description?: string }[] = Array.isArray(entity.products)
+    ? [...(entity.products as { name: string; description?: string }[])]
+    : [];
+  if (workspaceId) {
+    try {
+      const dbProducts = await pool.query(
+        `SELECT product_name, description FROM entity_products WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order`,
+        [entityName, workspaceId]
+      );
+      const existingNames = new Set(entityProducts.map((p) => p.name?.toLowerCase()));
+      for (const row of dbProducts.rows) {
+        if (!existingNames.has(row.product_name?.toLowerCase())) {
+          entityProducts.push({ name: row.product_name, description: row.description });
+        }
+      }
+    } catch (_) {}
+  }
+  if (entityProducts.length > 0) {
+    sections.push(
+      `Products & solutions:\n${entityProducts.map((p) => `- ${p.name}${p.description ? `: ${p.description}` : ""}`).join("\n")}`
+    );
+  }
+
+  const geoSet = new Set<string>();
+  const jsonGeo: string[] = Array.isArray(entity.geo_presence) ? (entity.geo_presence as string[]) : [];
+  jsonGeo.forEach((g) => geoSet.add(g));
+  if (workspaceId) {
+    try {
+      const dbGeo = await pool.query(
+        `SELECT region, presence_type, channels, notes FROM entity_geo_presence WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
+        [entityName, workspaceId]
+      );
+      for (const row of dbGeo.rows) {
+        let entry = row.region;
+        if (row.presence_type && row.presence_type !== "active") entry += ` (${row.presence_type})`;
+        if (row.channels) entry += ` — ${row.channels}`;
+        if (row.notes) entry += ` — ${row.notes}`;
+        geoSet.add(entry);
+      }
+    } catch (_) {}
+  }
+  if (geoSet.size > 0) {
+    sections.push(`Geographic presence:\n${[...geoSet].map((g) => `- ${g}`).join("\n")}`);
+  }
+
+  const customers: string[] = Array.isArray(entity.jina_customers) ? (entity.jina_customers as string[]) : [];
+  const verticals: string[] = Array.isArray(entity.jina_customer_verticals) ? (entity.jina_customer_verticals as string[]) : [];
+  if (customers.length > 0 || verticals.length > 0) {
+    const parts: string[] = [];
+    if (verticals.length > 0) parts.push(`Customer verticals: ${verticals.join(", ")}`);
+    if (customers.length > 0) parts.push(`Named customers: ${customers.join(", ")}`);
+    sections.push(`Known customers:\n${parts.join("\n")}`);
+  }
+
+  if (workspaceId) {
+    try {
+      const certsResult = await pool.query(
+        `SELECT cert_name, cert_description, status FROM entity_certifications WHERE entity_id = $1 AND workspace_id = $2 ORDER BY created_at`,
+        [entityName, workspaceId]
+      );
+      if (certsResult.rows.length > 0) {
+        const certLines = certsResult.rows
+          .map((r: any) => {
+            let line = `- ${r.cert_name}`;
+            if (r.cert_description) line += `: ${r.cert_description}`;
+            if (r.status) line += ` [${r.status}]`;
+            return line;
+          })
+          .join("\n");
+        sections.push(`Certifications & compliance:\n${certLines}`);
+      }
+    } catch (_) {}
+  }
+
+  if (workspaceId) {
+    try {
+      const partnersResult = await pool.query(
+        `SELECT partner_name, partner_industry, relationship_type, program_description, context_note FROM entity_partnerships WHERE entity_id = $1 AND workspace_id = $2 ORDER BY created_at`,
+        [entityName, workspaceId]
+      );
+      if (partnersResult.rows.length > 0) {
+        const partnerLines = partnersResult.rows
+          .map((r: any) => {
+            let line = `- ${r.partner_name}`;
+            if (r.relationship_type) line += ` (${r.relationship_type})`;
+            if (r.partner_industry) line += ` — ${r.partner_industry}`;
+            if (r.program_description) line += `: ${r.program_description}`;
+            if (r.context_note) line += ` | ${r.context_note}`;
+            return line;
+          })
+          .join("\n");
+        sections.push(`Partnerships & alliances:\n${partnerLines}`);
+      }
+    } catch (_) {}
+  }
+
+  if (workspaceId) {
+    try {
+      const winLossResult = await pool.query(
+        `SELECT outcome, deal_name, description, quarter, sector FROM entity_win_loss WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
+        [entityName, workspaceId]
+      );
+      if (winLossResult.rows.length > 0) {
+        const winLines = winLossResult.rows
+          .map((r: any) => {
+            let line = `- ${r.outcome.toUpperCase()}: ${r.deal_name}`;
+            if (r.sector) line += ` (${r.sector})`;
+            if (r.quarter) line += ` — ${r.quarter}`;
+            if (r.description) line += `: ${r.description}`;
+            return line;
+          })
+          .join("\n");
+        sections.push(`Win/loss history:\n${winLines}`);
+      }
+    } catch (_) {}
+  }
+
+  if (workspaceId) {
+    try {
+      const capsResult = await pool.query(
+        `SELECT wc.capability_name, cc.status, cc.evidence
+         FROM workspace_capabilities wc
+         LEFT JOIN competitor_capabilities cc ON cc.capability_id = wc.id AND cc.entity_id = $1 AND cc.tenant_id = $2
+         WHERE wc.workspace_id = $3
+         ORDER BY wc.created_at`,
+        [entityName, TENANT_ID, workspaceId]
+      );
+      const rated = capsResult.rows.filter((r: any) => r.status && r.status !== "unknown");
+      if (rated.length > 0) {
+        const capLines = rated
+          .map((r: any) => {
+            let line = `- ${r.capability_name}: ${r.status}`;
+            if (r.evidence) line += ` (${String(r.evidence).slice(0, 100)})`;
+            return line;
+          })
+          .join("\n");
+        sections.push(`Capability assessment:\n${capLines}`);
+      }
+    } catch (_) {}
+  }
+
+  return sections.join("\n\n");
+}
+
 function verificationResultPage(message: string, success: boolean): string {
   const color = success ? "#16a34a" : "#dc2626";
   const icon = success ? "&#10003;" : "&#10007;";
@@ -1488,13 +1640,23 @@ Respond with JSON only, no explanation:
       const profileCtx = buildProfileContext(wsProfileResult.rows[0] || null);
       const profilePrefix = profileCtx ? `${profileCtx}\n\n` : "";
 
+      const aiSumWorkspaceId = wsProfileResult.rows[0]?.id || null;
+      let aiSumEntity: ExtractedEntity | undefined;
+      for (const cat of categories) {
+        const found = cat.entities.find((e: any) => e.name === entityName);
+        if (found) { aiSumEntity = found as ExtractedEntity; break; }
+      }
+      const entityProfileCtx = aiSumEntity
+        ? await buildCompetitorProfileContext(entityName, aiSumEntity, aiSumWorkspaceId)
+        : "";
+
       const message = await client.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 2000,
         messages: [
           {
             role: "user",
-            content: `${profilePrefix}You are an intelligence analyst. Based on the captured intel items below about "${entityName}" (category: "${categoryName}"), write a structured strategic summary covering: what this entity is and does, recent notable developments, strategic direction, and relevance to the government identity verification space.
+            content: `${profilePrefix}You are an intelligence analyst. Based on the structured profile data and captured intel below about "${entityName}" (category: "${categoryName}"), write a structured strategic summary covering: what this entity is and does, recent notable developments, strategic direction, and relevance to the government identity verification space.
 
 Use this format:
 One sentence overview of what this company is.
@@ -1503,7 +1665,7 @@ Then 2-3 short paragraphs of 2-3 sentences each. Separate each paragraph with a 
 
 Do not use bullet points. Do not use em dashes. Do not use headers. Return only the paragraphs.
 ${focusContext}
-Captured intel:
+${entityProfileCtx ? `Structured profile data:\n${entityProfileCtx}\n\n` : ""}Captured intel:
 ${contentSnippets}
 
 Return only the summary paragraphs, no JSON, no formatting.`
@@ -1975,23 +2137,7 @@ Return only the summary paragraphs, no JSON, no formatting.`
       ].join("\n");
 
       const soWhatWorkspaceId = soWhatWsResult.rows[0]?.id;
-      let geoPresenceBlock = "";
-      if (soWhatWorkspaceId) {
-        const geoResult = await pool.query(
-          `SELECT region, iso_code, presence_type, channels, notes FROM entity_geo_presence WHERE entity_id = $1 AND workspace_id = $2 ORDER BY sort_order, created_at`,
-          [entityName, soWhatWorkspaceId]
-        );
-        if (geoResult.rows.length > 0) {
-          const geoLines = geoResult.rows.map((r: any) => {
-            let line = `- ${r.region}`;
-            if (r.presence_type) line += ` (${r.presence_type})`;
-            if (r.channels) line += ` — channels: ${r.channels}`;
-            if (r.notes) line += ` — ${r.notes}`;
-            return line;
-          }).join("\n");
-          geoPresenceBlock = `\nGeographical presence:\n${geoLines}\n`;
-        }
-      }
+      const competitorProfileBlock = await buildCompetitorProfileContext(entityName, entity, soWhatWorkspaceId || null);
 
       const anthropic = new Anthropic({
         apiKey: process.env.ANTHROPIC_API_KEY,
@@ -2008,9 +2154,9 @@ Return only the summary paragraphs, no JSON, no formatting.`
 You are analysing: **${entityName}**
 
 ${prodContextBlock ? `Our product context:\n${prodContextBlock}\n` : ""}
-${geoPresenceBlock ? `Competitor geographical presence:${geoPresenceBlock}` : ""}
+${competitorProfileBlock ? `Competitor profile intelligence:\n${competitorProfileBlock}\n` : ""}
 ${focusContext ? `Our strategic context: ${focusContext}\n` : ""}
-Intelligence captures:
+Intelligence captures (recent news & signals):
 ${contentSnippets}
 
 Write a "What Does It Mean For Us" briefing using EXACTLY this structure. Be direct, opinionated, and specific — no generic statements. Every point must reference actual evidence from the captures above.
@@ -5895,19 +6041,36 @@ Return ONLY the JSON object, no other text.`
 
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+      const pulseWsCategories = (wsProfileResult.rows[0]?.categories || []) as ExtractedEntity[];
+
       const entitySummaries: string[] = [];
-      for (const [entity, items] of Object.entries(grouped)) {
+      for (const [entityKey, items] of Object.entries(grouped)) {
         const captureText = items.map((c, i) => `${i + 1}. ${c}`).join('\n');
+
+        let pulseEntityObj: ExtractedEntity | undefined;
+        for (const cat of (pulseWsCategories as any[])) {
+          const found = (cat.entities || []).find((e: any) => e.name === entityKey);
+          if (found) { pulseEntityObj = found as ExtractedEntity; break; }
+        }
+        const pulseProfileCtx = pulseEntityObj
+          ? await buildCompetitorProfileContext(entityKey, pulseEntityObj, workspaceId)
+          : "";
+
         const msg = await anthropic.messages.create({
           model: "claude-sonnet-4-6",
-          max_tokens: 400,
+          max_tokens: 500,
           messages: [{
             role: "user",
-            content: `You are a competitive intelligence analyst. Summarise the following ${items.length} intelligence signals about "${entity}" into a concise 150-200 word briefing. Cover: recent activity, strategic direction, notable moves, and any emerging patterns. Be specific and factual — only use what is in the signals below.\n\nSIGNALS:\n${captureText}\n\nRespond with only the summary paragraph, no headers or preamble.`
+            content: `You are a competitive intelligence analyst. Summarise intelligence about "${entityKey}" into a concise 150-200 word briefing covering: recent activity, strategic direction, notable moves, and emerging patterns. Be specific and factual.
+${pulseProfileCtx ? `\nKnown profile data (use as context, not as recent signals):\n${pulseProfileCtx}\n` : ""}
+RECENT SIGNALS (${items.length} total):
+${captureText}
+
+Respond with only the summary paragraph, no headers or preamble.`
           }]
         });
         const summary = (msg.content[0] as any).text || '';
-        entitySummaries.push(`## ${entity} (${items.length} signals)\n${summary}`);
+        entitySummaries.push(`## ${entityKey} (${items.length} signals)\n${summary}`);
       }
 
       const consolidatedContext = entitySummaries.join('\n\n');
