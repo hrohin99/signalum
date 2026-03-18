@@ -912,7 +912,7 @@ export default function CapturePage() {
 
       setExtractionInfo({ filename: extractData.filename, characterCount: extractData.characterCount });
 
-      const content = `[File: ${extractData.filename}]\n${extractData.text.slice(0, 5000)}`;
+      const content = `[File: ${extractData.filename}]\n${extractData.text.slice(0, 9800)}`;
       classifyContent(content, "document");
     } catch (err: any) {
       toast({ title: "Extraction failed", description: err.message || "Could not extract text from document.", variant: "destructive" });
