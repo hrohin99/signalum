@@ -100,6 +100,9 @@ export interface ExtractedEntity {
   geo_presence?: any;
   products?: any;
   last_researched_at?: string;
+  last_jina_searched_at?: string;
+  jina_customers?: string[];
+  jina_customer_verticals?: string[];
 }
 
 export interface ExtractionResult {

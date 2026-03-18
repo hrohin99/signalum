@@ -5,6 +5,7 @@ import {
   deduplicateFindings,
   findingsToCaptures,
 } from "./perplexityService";
+import { runJinaCompetitorEnrichment } from "./jinaSearchService";
 import type { ExtractedCategory, ExtractedEntity, InsertNotification } from "@shared/schema";
 
 async function researchEntity(entity: { name: string }, categoryContext: string = ''): Promise<{ funding: any; geo_presence: string[]; products: any[] } | null> {
@@ -224,6 +225,28 @@ export async function runAmbientSearchForUser(
             entity.products = researchResult.products;
             entity.last_researched_at = new Date().toISOString();
             console.log(`[research] Enriched ${entity.name} with funding/geo/products`);
+          }
+        }
+
+        const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+        const needsJina = entity.topic_type === 'competitor' && (
+          !entity.last_jina_searched_at ||
+          (Date.now() - new Date(entity.last_jina_searched_at).getTime()) > SEVEN_DAYS_MS
+        );
+        if (needsJina) {
+          const jinaResult = await runJinaCompetitorEnrichment(entity.name, entity.website_url);
+          if (jinaResult !== null) {
+            const existingGeo: string[] = Array.isArray(entity.geo_presence) ? entity.geo_presence : [];
+            const mergedGeo = Array.from(new Set([...existingGeo, ...jinaResult.geo_presence]));
+            const existingProducts: { name: string; description: string }[] = Array.isArray(entity.products) ? entity.products : [];
+            const existingProductNames = new Set(existingProducts.map((p: any) => p.name?.toLowerCase()));
+            const newProducts = jinaResult.products.filter((p) => !existingProductNames.has(p.name?.toLowerCase()));
+            entity.geo_presence = mergedGeo;
+            entity.products = [...existingProducts, ...newProducts];
+            entity.jina_customers = jinaResult.customers;
+            entity.jina_customer_verticals = jinaResult.customer_verticals;
+            entity.last_jina_searched_at = new Date().toISOString();
+            console.log(`[jina] Enriched ${entity.name}: ${jinaResult.products.length} products, ${jinaResult.geo_presence.length} geo, ${jinaResult.customers.length} customers`);
           }
         }
       } catch (entityError) {

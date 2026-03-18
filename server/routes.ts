@@ -1634,6 +1634,39 @@ Return only the summary paragraphs, no JSON, no formatting.`
         } catch (searchErr: any) {
           console.error(`[AddEntity] Background search failed for "${entityName}":`, searchErr?.message || searchErr);
         }
+
+        if (safeTopicType === "competitor") {
+          try {
+            const { runJinaCompetitorEnrichment } = await import("./jinaSearchService");
+            const jinaResult = await runJinaCompetitorEnrichment(entityName, incomingWebsiteUrl || undefined);
+            if (jinaResult !== null) {
+              const ws = await storage.getWorkspaceByUserId(userId);
+              if (ws) {
+                const cats = (ws.categories || []) as any[];
+                for (const cat of cats) {
+                  const ent = cat.entities?.find((e: any) => e.name.toLowerCase() === entityName.toLowerCase());
+                  if (ent) {
+                    const existingGeo: string[] = Array.isArray(ent.geo_presence) ? ent.geo_presence : [];
+                    const mergedGeo = Array.from(new Set([...existingGeo, ...jinaResult.geo_presence]));
+                    const existingProducts: any[] = Array.isArray(ent.products) ? ent.products : [];
+                    const existingProductNames = new Set(existingProducts.map((p: any) => p.name?.toLowerCase()));
+                    const newProducts = jinaResult.products.filter((p) => !existingProductNames.has(p.name?.toLowerCase()));
+                    ent.geo_presence = mergedGeo;
+                    ent.products = [...existingProducts, ...newProducts];
+                    ent.jina_customers = jinaResult.customers;
+                    ent.jina_customer_verticals = jinaResult.customer_verticals;
+                    ent.last_jina_searched_at = new Date().toISOString();
+                    break;
+                  }
+                }
+                await storage.updateWorkspaceCategories(userId, cats);
+                console.log(`[AddEntity] Jina enriched "${entityName}": ${jinaResult.products.length} products, ${jinaResult.geo_presence.length} geo, ${jinaResult.customers.length} customers`);
+              }
+            }
+          } catch (jinaErr: any) {
+            console.error(`[AddEntity] Jina enrichment failed for "${entityName}":`, jinaErr?.message || jinaErr);
+          }
+        }
       })();
 
       return res.json({ success: true, workspace: updated, siblingInference });

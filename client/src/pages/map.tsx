@@ -354,6 +354,7 @@ function MapPageInner() {
   const [showCompareModal, setShowCompareModal] = useState(false);
   const [topAddTopicName, setTopAddTopicName] = useState("");
   const [topAddTopicType, setTopAddTopicType] = useState("general");
+  const [topAddTopicWebsiteUrl, setTopAddTopicWebsiteUrl] = useState("");
   const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
   const [renameCategoryOpen, setRenameCategoryOpen] = useState(false);
   const [renameCategoryOldName, setRenameCategoryOldName] = useState("");
@@ -661,7 +662,7 @@ function MapPageInner() {
   }, [user, categories, captures, capLoading, triggerEntitySearch]);
 
   const addEntityMutation = useMutation({
-    mutationFn: async (data: { categoryName: string; entityName: string; entityType: string; topicType?: string }) => {
+    mutationFn: async (data: { categoryName: string; entityName: string; entityType: string; topicType?: string; website_url?: string }) => {
       const res = await apiRequest("POST", "/api/add-entity", data);
       return res.json();
     },
@@ -801,14 +802,19 @@ function MapPageInner() {
   const handleTopAddTopic = () => {
     const name = topAddTopicName.trim();
     if (!name || !effectiveCategory) return;
-    addEntityMutation.mutate({
+    const payload: { categoryName: string; entityName: string; entityType: string; topicType: string; website_url?: string } = {
       categoryName: effectiveCategory,
       entityName: name,
       entityType: "other",
       topicType: topAddTopicType,
-    });
+    };
+    if (topAddTopicType === "competitor" && topAddTopicWebsiteUrl.trim()) {
+      payload.website_url = topAddTopicWebsiteUrl.trim();
+    }
+    addEntityMutation.mutate(payload);
     setTopAddTopicName("");
     setTopAddTopicType("general");
+    setTopAddTopicWebsiteUrl("");
     setShowTopAddTopic(false);
   };
 
@@ -1250,7 +1256,7 @@ function MapPageInner() {
                           onChange={(e) => setTopAddTopicName(e.target.value)}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") handleTopAddTopic();
-                            if (e.key === "Escape") { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); }
+                            if (e.key === "Escape") { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); setTopAddTopicWebsiteUrl(""); }
                           }}
                           className="flex-1 h-9 text-sm"
                           data-testid="input-top-add-topic-name"
@@ -1262,7 +1268,7 @@ function MapPageInner() {
                           <button
                             key={t}
                             type="button"
-                            onClick={() => setTopAddTopicType(t)}
+                            onClick={() => { setTopAddTopicType(t); if (t !== "competitor") setTopAddTopicWebsiteUrl(""); }}
                             className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
                               topAddTopicType === t
                                 ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
@@ -1274,6 +1280,21 @@ function MapPageInner() {
                           </button>
                         ))}
                       </div>
+                      {topAddTopicType === "competitor" && (
+                        <div>
+                          <Input
+                            placeholder="Website URL (optional, e.g. https://competitor.com)"
+                            value={topAddTopicWebsiteUrl}
+                            onChange={(e) => setTopAddTopicWebsiteUrl(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleTopAddTopic();
+                            }}
+                            className="h-9 text-sm"
+                            data-testid="input-top-add-topic-website"
+                          />
+                          <p className="text-[11px] text-muted-foreground mt-1">Providing a URL improves product and geo intelligence gathering</p>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
@@ -1287,7 +1308,7 @@ function MapPageInner() {
                         </Button>
                         <button
                           type="button"
-                          onClick={() => { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); }}
+                          onClick={() => { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); setTopAddTopicWebsiteUrl(""); }}
                           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
                           data-testid="button-top-add-topic-cancel"
                         >
