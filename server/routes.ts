@@ -1618,9 +1618,9 @@ Return only the summary paragraphs, no JSON, no formatting.`
           const catFocus = category?.focus || undefined;
           let findings;
           if (topicType === "competitor") {
-            findings = await searchCompetitorNews(searchContext, categoryName, 30, { categoryFocus: catFocus });
+            findings = await searchCompetitorNews(searchContext, categoryName, 180, { categoryFocus: catFocus });
           } else {
-            findings = await searchTopicUpdates(searchContext, topicType, 30, { categoryFocus: catFocus });
+            findings = await searchTopicUpdates(searchContext, topicType, 180, { categoryFocus: catFocus });
           }
           if (findings.length > 0) {
             const existingCaptures = await storage.getCapturesByUserId(userId);
@@ -2588,7 +2588,7 @@ Rules:
             for (const entity of category.entities) {
               try {
                 const topicType = (entity.topic_type || "general").toLowerCase();
-                const lookbackDays = 90;
+                const lookbackDays = 180;
                 const seedFocus = category.focus || undefined;
 
                 let findings;
