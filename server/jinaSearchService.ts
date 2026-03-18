@@ -5,6 +5,7 @@ interface JinaCompetitorEnrichment {
   geo_presence: string[];
   customers: string[];
   customer_verticals: string[];
+  pricing: { planName: string; price: string; inclusions?: string; pricingModel?: string }[];
 }
 
 async function jinaSearch(query: string): Promise<string> {
@@ -41,6 +42,7 @@ export async function runJinaCompetitorEnrichment(
   let productsRaw = "";
   let geoRaw = "";
   let customersRaw = "";
+  let pricingRaw = "";
 
   try {
     productsRaw = await jinaSearch(`${competitorName} products solutions features platform${siteHint}`);
@@ -60,7 +62,13 @@ export async function runJinaCompetitorEnrichment(
     console.error(`[Jina] Customers search failed for ${competitorName}:`, err.message);
   }
 
-  if (!productsRaw && !geoRaw && !customersRaw) {
+  try {
+    pricingRaw = await jinaSearch(`${competitorName} pricing plans cost price per transaction subscription fee${siteHint}`);
+  } catch (err: any) {
+    console.error(`[Jina] Pricing search failed for ${competitorName}:`, err.message);
+  }
+
+  if (!productsRaw && !geoRaw && !customersRaw && !pricingRaw) {
     console.log(`[Jina] All searches returned empty for ${competitorName}`);
     return null;
   }
@@ -71,6 +79,7 @@ export async function runJinaCompetitorEnrichment(
     productsRaw ? `=== PRODUCTS/SOLUTIONS SEARCH ===\n${productsRaw}` : "",
     geoRaw ? `=== GEO PRESENCE SEARCH ===\n${geoRaw}` : "",
     customersRaw ? `=== CUSTOMERS/DEPLOYMENTS SEARCH ===\n${customersRaw}` : "",
+    pricingRaw ? `=== PRICING SEARCH ===\n${pricingRaw}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -78,7 +87,7 @@ export async function runJinaCompetitorEnrichment(
   try {
     const message = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1500,
+      max_tokens: 2000,
       messages: [
         {
           role: "user",
@@ -88,7 +97,8 @@ export async function runJinaCompetitorEnrichment(
   "products": [{ "name": "string", "description": "one sentence" }],
   "geo_presence": ["country or region strings"],
   "customers": ["named customer or company strings"],
-  "customer_verticals": ["industry vertical strings e.g. Banking, Healthcare"]
+  "customer_verticals": ["industry vertical strings e.g. Banking, Healthcare"],
+  "pricing": [{ "planName": "string", "price": "string e.g. $0.50 per check", "inclusions": "optional string of what is included", "pricingModel": "per_transaction|subscription|usage_based|custom|unknown" }]
 }
 
 Rules:
@@ -98,6 +108,7 @@ Rules:
 - geo_presence: countries, regions, or cities where they operate or have offices
 - customers: specifically named companies or organisations using their product
 - customer_verticals: industries or sectors their customers come from
+- pricing: specific plans or tiers with named prices (e.g. "$0.50 per check", "from $299/month"); omit if only vague mentions found
 
 Search results:
 ${combinedText}`,
@@ -117,7 +128,8 @@ ${combinedText}`,
       (parsed.products && parsed.products.length > 0) ||
       (parsed.geo_presence && parsed.geo_presence.length > 0) ||
       (parsed.customers && parsed.customers.length > 0) ||
-      (parsed.customer_verticals && parsed.customer_verticals.length > 0);
+      (parsed.customer_verticals && parsed.customer_verticals.length > 0) ||
+      (parsed.pricing && parsed.pricing.length > 0);
 
     if (!hasData) return null;
 
@@ -126,6 +138,7 @@ ${combinedText}`,
       geo_presence: parsed.geo_presence || [],
       customers: parsed.customers || [],
       customer_verticals: parsed.customer_verticals || [],
+      pricing: parsed.pricing || [],
     };
   } catch (err: any) {
     console.error(`[Jina] Claude extraction failed for ${competitorName}:`, err.message);

@@ -1077,6 +1077,31 @@ function TopicViewContent({
               </ProfileCollapsibleSection>
             );
           })()}
+
+          {/* Known Customers */}
+          {(() => {
+            const customers: string[] = Array.isArray(entity.jina_customers) ? entity.jina_customers : [];
+            const verticals: string[] = Array.isArray(entity.jina_customer_verticals) ? entity.jina_customer_verticals : [];
+            if (!customers.length && !verticals.length) return null;
+            return (
+              <ProfileCollapsibleSection title="Known Customers" defaultExpanded={true}>
+                {verticals.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: customers.length ? 10 : 0 }}>
+                    {verticals.map((v: string, i: number) => (
+                      <span key={i} style={{ fontSize: 11, padding: '2px 9px', borderRadius: 20, background: '#eff6ff', color: '#2563eb', border: '0.5px solid #bfdbfe', fontWeight: 500 }}>{v}</span>
+                    ))}
+                  </div>
+                )}
+                {customers.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {customers.map((c: string, i: number) => (
+                      <div key={i} style={{ fontSize: 13, color: '#334155', padding: '4px 0', borderBottom: i < customers.length - 1 ? '0.5px solid #f1f5f9' : 'none' }}>{c}</div>
+                    ))}
+                  </div>
+                )}
+              </ProfileCollapsibleSection>
+            );
+          })()}
         </div>
       )}
 

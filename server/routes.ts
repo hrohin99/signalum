@@ -1630,6 +1630,8 @@ Return only the summary paragraphs, no JSON, no formatting.`
               const captureRecords = findingsToCaptures(deduplicated, entityName, userId, categoryName);
               await storage.createCaptures(captureRecords);
             }
+          } else {
+            console.log(`[AddEntity] Perplexity returned 0 findings for "${entityName}"`);
           }
         } catch (searchErr: any) {
           console.error(`[AddEntity] Background search failed for "${entityName}":`, searchErr?.message || searchErr);
@@ -1660,7 +1662,29 @@ Return only the summary paragraphs, no JSON, no formatting.`
                   }
                 }
                 await storage.updateWorkspaceCategories(userId, cats);
-                console.log(`[AddEntity] Jina enriched "${entityName}": ${jinaResult.products.length} products, ${jinaResult.geo_presence.length} geo, ${jinaResult.customers.length} customers`);
+
+                if (jinaResult.pricing && jinaResult.pricing.length > 0) {
+                  const JINA_TENANT_ID = "00000000-0000-0000-0000-000000000000";
+                  const today = new Date().toISOString().split("T")[0];
+                  const existingPricing = await storage.getCompetitorPricing(JINA_TENANT_ID, entityName);
+                  const existingPlanNames = new Set(existingPricing.map((p) => p.planName.toLowerCase()));
+                  for (const plan of jinaResult.pricing) {
+                    if (!existingPlanNames.has(plan.planName.toLowerCase())) {
+                      await storage.createCompetitorPricing({
+                        tenantId: JINA_TENANT_ID,
+                        entityId: entityName,
+                        capturedDate: today,
+                        planName: plan.planName,
+                        price: plan.price,
+                        inclusions: plan.inclusions || null,
+                        sourceUrl: null,
+                        pricingModel: plan.pricingModel || null,
+                      });
+                    }
+                  }
+                }
+
+                console.log(`[AddEntity] Jina enriched "${entityName}": ${jinaResult.products.length} products, ${jinaResult.geo_presence.length} geo, ${jinaResult.customers.length} customers, ${jinaResult.pricing.length} pricing plans`);
               }
             }
           } catch (jinaErr: any) {

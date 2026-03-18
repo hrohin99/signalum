@@ -246,7 +246,29 @@ export async function runAmbientSearchForUser(
             entity.jina_customers = jinaResult.customers;
             entity.jina_customer_verticals = jinaResult.customer_verticals;
             entity.last_jina_searched_at = new Date().toISOString();
-            console.log(`[jina] Enriched ${entity.name}: ${jinaResult.products.length} products, ${jinaResult.geo_presence.length} geo, ${jinaResult.customers.length} customers`);
+
+            if (jinaResult.pricing && jinaResult.pricing.length > 0) {
+              const JINA_TENANT_ID = "00000000-0000-0000-0000-000000000000";
+              const today = new Date().toISOString().split("T")[0];
+              const existingPricing = await storage.getCompetitorPricing(JINA_TENANT_ID, entity.name);
+              const existingPlanNames = new Set(existingPricing.map((p) => p.planName.toLowerCase()));
+              for (const plan of jinaResult.pricing) {
+                if (!existingPlanNames.has(plan.planName.toLowerCase())) {
+                  await storage.createCompetitorPricing({
+                    tenantId: JINA_TENANT_ID,
+                    entityId: entity.name,
+                    capturedDate: today,
+                    planName: plan.planName,
+                    price: plan.price,
+                    inclusions: plan.inclusions || null,
+                    sourceUrl: null,
+                    pricingModel: plan.pricingModel || null,
+                  });
+                }
+              }
+            }
+
+            console.log(`[jina] Enriched ${entity.name}: ${jinaResult.products.length} products, ${jinaResult.geo_presence.length} geo, ${jinaResult.customers.length} customers, ${jinaResult.pricing.length} pricing plans`);
           }
         }
       } catch (entityError) {
