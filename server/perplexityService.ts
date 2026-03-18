@@ -24,9 +24,17 @@ interface PerplexityResponse {
 
 const PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions";
 
+function recencyFilterFromDays(lookbackDays: number): "day" | "week" | "month" | "year" {
+  if (lookbackDays <= 1) return "day";
+  if (lookbackDays <= 7) return "week";
+  if (lookbackDays <= 30) return "month";
+  return "year";
+}
+
 async function callPerplexity(
   systemPrompt: string,
-  userPrompt: string
+  userPrompt: string,
+  lookbackDays: number = 30
 ): Promise<PerplexityResponse> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) {
@@ -47,7 +55,7 @@ async function callPerplexity(
       ] as PerplexityMessage[],
       max_tokens: 1000,
       return_citations: true,
-      search_recency_filter: "month",
+      search_recency_filter: recencyFilterFromDays(lookbackDays),
     }),
   });
 
@@ -203,7 +211,7 @@ export async function searchCompetitorNews(
     userPrompt += `\n\nAlso search for recent job postings or strategic hires at ${competitorName} from the last ${lookbackDays} days. Focus on leadership hires, AI/ML roles, and new market expansion roles as these signal strategic direction.${hiringFocusHint} If found, return as findings with signal_type: "hiring_signal".`;
   }
 
-  const response = await callPerplexity(systemPrompt, userPrompt);
+  const response = await callPerplexity(systemPrompt, userPrompt, lookbackDays);
   return parseFindings(response);
 }
 
@@ -242,7 +250,7 @@ export async function searchTopicUpdates(
     promptMap[effectiveType] ||
     `${sitePrefix}Find recent news and notable developments related to ${searchName} from the last ${lookbackDays} days.`;
 
-  const response = await callPerplexity(systemPrompt, userPrompt);
+  const response = await callPerplexity(systemPrompt, userPrompt, lookbackDays);
   return parseFindings(response);
 }
 
