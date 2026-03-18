@@ -267,10 +267,20 @@ function isAllowedRedirectUrl(url: string): boolean {
 }
 
 function sanitizeErrorMessage(error: any): string {
+  if (error?.status === 529 || error?.status === 503) {
+    return "The AI service is overloaded. Please try again in a moment.";
+  }
+  if (error?.status === 502 || (error?.message && error.message.includes("502"))) {
+    return "The AI service is temporarily unavailable. Please try again in a moment.";
+  }
   if (error?.message && typeof error.message === "string") {
     const msg = error.message;
     if (msg.includes("API key") || msg.includes("secret") || msg.includes("token") || msg.includes("password") || msg.includes("credential")) {
       return "An internal error occurred";
+    }
+    const isHtml = msg.trimStart().startsWith("<") || msg.includes("</html>") || msg.includes("<title>");
+    if (isHtml) {
+      return "The AI service returned an unexpected error. Please try again.";
     }
     return msg.slice(0, 200);
   }

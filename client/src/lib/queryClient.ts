@@ -13,6 +13,15 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
+    const isHtml = text.trimStart().startsWith("<");
+    if (isHtml) {
+      const transientCodes: Record<number, string> = {
+        502: "The AI service is temporarily unavailable. Please try again in a moment.",
+        503: "The AI service is temporarily unavailable. Please try again in a moment.",
+        529: "The AI service is overloaded. Please try again in a moment.",
+      };
+      throw new Error(transientCodes[res.status] || `Server error (${res.status}). Please try again.`);
+    }
     throw new Error(`${res.status}: ${text}`);
   }
 }

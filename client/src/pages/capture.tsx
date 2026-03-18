@@ -356,7 +356,7 @@ export default function CapturePage() {
     }
   };
 
-  const classifyContent = async (content: string, type: string) => {
+  const classifyContent = async (content: string, type: string, retryCount = 0) => {
     setIsClassifying(true);
     setPendingContent(content);
     setPendingType(type);
@@ -414,9 +414,27 @@ export default function CapturePage() {
         }
       }
     } catch (err: any) {
+      const isTransient = err.message && (
+        err.message.includes("temporarily unavailable") ||
+        err.message.includes("overloaded") ||
+        err.message.includes("502") ||
+        err.message.includes("503") ||
+        err.message.includes("529")
+      );
+      if (isTransient && retryCount < 2) {
+        const delay = (retryCount + 1) * 3000;
+        toast({
+          title: "AI service busy — retrying…",
+          description: `Attempt ${retryCount + 2} of 3 in ${delay / 1000}s.`,
+        });
+        setTimeout(() => classifyContent(content, type, retryCount + 1), delay);
+        return;
+      }
       toast({
         title: "Classification failed",
-        description: err.message || "Could not classify this content.",
+        description: isTransient
+          ? "The AI service is temporarily unavailable. Please try again in a moment."
+          : err.message || "Could not classify this content.",
         variant: "destructive",
       });
     } finally {
