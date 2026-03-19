@@ -18,6 +18,24 @@ import { buildProfileContext } from "./profileContext";
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4, baseDelayMs = 3000): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      const status = err?.status ?? err?.statusCode ?? (err?.error?.type === 'overloaded_error' ? 529 : null);
+      const isRetryable = status === 529 || status === 503 || status === 429;
+      if (!isRetryable || attempt === maxAttempts) throw err;
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      console.warn(`[retry] Attempt ${attempt} failed with status ${status}. Retrying in ${delay}ms…`);
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw lastError;
+}
+
 function generateTempPassword(): string {
   const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
   return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
@@ -6056,7 +6074,7 @@ Return ONLY the JSON object, no other text.`
           ? await buildCompetitorProfileContext(entityKey, pulseEntityObj, workspaceId)
           : "";
 
-        const msg = await anthropic.messages.create({
+        const msg = await withRetry(() => anthropic.messages.create({
           model: "claude-sonnet-4-6",
           max_tokens: 500,
           messages: [{
@@ -6068,13 +6086,13 @@ ${captureText}
 
 Respond with only the summary paragraph, no headers or preamble.`
           }]
-        });
+        }));
         const summary = (msg.content[0] as any).text || '';
         entitySummaries.push(`## ${entityKey} (${items.length} signals)\n${summary}`);
       }
 
       const consolidatedContext = entitySummaries.join('\n\n');
-      const message = await anthropic.messages.create({
+      const message = await withRetry(() => anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 6000,
         messages: [{
@@ -6099,7 +6117,7 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
   "regional_intelligence": { "headline": "One sentence summarising the global geographic picture", "items": [{"title": "North America", "detail": "Key regulatory, competitive and market developments. If no signals, say: No signals captured for this region."}, {"title": "United Kingdom", "detail": "..."}, {"title": "European Union", "detail": "..."}, {"title": "EMEA", "detail": "..."}, {"title": "APAC", "detail": "..."}, {"title": "South America", "detail": "..."}] }
 }`
         }]
-      });
+      }));
 
       const raw = (message.content[0] as any).text || "{}";
       const clean = raw.replace(/```json|```/g, "").trim();
