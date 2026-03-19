@@ -801,6 +801,7 @@ function TopicViewContent({
         <DisambiguationCard
           entity={entity}
           categoryName={categoryName}
+          topicType={currentTopicType}
         />
       )}
 
@@ -5189,9 +5190,11 @@ function DisambiguationBanner({
 function DisambiguationCard({
   entity,
   categoryName,
+  topicType,
 }: {
   entity: ExtractedEntity;
   categoryName: string;
+  topicType: string;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -5205,11 +5208,18 @@ function DisambiguationCard({
   const [modalOpen, setModalOpen] = useState(false);
   const [disambigWebsiteUrl, setDisambigWebsiteUrl] = useState("");
 
+  const isCompetitorType = topicType === "competitor";
+
   useEffect(() => {
     if ((entity.disambiguation_confirmed ?? false) || entity.disambiguation_context) return;
 
-    setStep("companies");
-    setModalOpen(true);
+    if (isCompetitorType) {
+      setStep("companies");
+      setModalOpen(true);
+    } else {
+      setModalOpen(true);
+      loadAspects();
+    }
   }, [entity.name, entity.disambiguation_confirmed ?? false, entity.disambiguation_context]);
 
   const loadAspects = async (companyContext?: string) => {
