@@ -5552,19 +5552,19 @@ Return ONLY a JSON array of 3 strings. No explanation.`
   app.post("/api/entities/:entityId/products/mark-managed", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const profileResult = await pool.query(`SELECT role FROM user_profiles WHERE user_id = $1`, [userId]);
-      const role = profileResult.rows[0]?.role;
-      if (role === 'read_only') return res.status(403).json({ error: 'Forbidden' });
-      const wsResult = await pool.query(
-        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
-        [userId]
-      );
-      const workspaceId = wsResult.rows[0]?.id;
-      if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
-      await pool.query(
-        `INSERT INTO entity_products_managed (workspace_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [workspaceId, req.params.entityId]
-      );
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      if (!workspace) return res.status(404).json({ message: "No workspace found" });
+      const categories = workspace.categories as ExtractedCategory[];
+      const entityName = req.params.entityId;
+      for (const category of categories) {
+        const entity = category.entities.find((e: any) => e.name === entityName);
+        if (entity) {
+          entity.products = [];
+          entity.geo_presence = [];
+          break;
+        }
+      }
+      await storage.updateWorkspaceCategories(userId, categories);
       res.json({ success: true });
     } catch (error: any) {
       console.error("Mark products managed error:", error);
