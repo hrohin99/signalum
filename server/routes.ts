@@ -6759,5 +6759,19 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     }
   });
 
+  app.get("/api/debug/db-check", async (req, res) => {
+    try {
+      const dims = await db.execute(
+        sql`SELECT id, name FROM competitive_dimensions ORDER BY created_at`
+      );
+      res.json({
+        db_url_prefix: process.env.DATABASE_URL?.substring(0, 50),
+        rows: dims.rows
+      });
+    } catch (e: any) {
+      res.json({ error: e.message });
+    }
+  });
+
   return httpServer;
 }
