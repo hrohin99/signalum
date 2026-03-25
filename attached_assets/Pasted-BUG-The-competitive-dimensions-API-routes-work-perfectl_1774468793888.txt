@@ -1,0 +1,52 @@
+BUG: The competitive dimensions API routes work perfectly (tested 
+via direct fetch with auth token — returns 200 and creates rows). 
+But the UI buttons in DimensionEditor.tsx are not persisting 
+dimensions to the database.
+
+FILE: client/src/components/DimensionEditor.tsx
+
+DEBUG STEPS:
+1. Find the createMutation (line ~750) and saveMutation (line ~357)
+2. Add console.log BEFORE the apiRequest call:
+   console.log('[DIM] Creating dimension:', body);
+   console.log('[DIM] Saving dimension:', dim.id, body);
+3. Add console.log in the onError handler:
+   console.log('[DIM] Create error:', error);
+   console.log('[DIM] Save error:', error);
+4. Check that the Accept button for AI-suggested dimensions 
+   actually calls createMutation.mutate() — it may just be 
+   adding to local React state without calling the API
+5. Check that the "Add dimension" form's save button calls 
+   createMutation.mutate()
+
+LIKELY ROOT CAUSE:
+The AI suggestion Accept button probably adds the dimension to 
+local state (useState array) but never calls POST /api/dimensions.
+Same for the main Save button — it may save product context to 
+the workspace but skip creating dimension rows.
+
+FIX REQUIREMENTS:
+- When Accept is clicked on an AI suggestion, it must IMMEDIATELY 
+  call createMutation.mutate() with the dimension data
+- When a custom dimension form is submitted, it must call 
+  createMutation.mutate()
+- When editing an existing dimension and clicking Save, it must 
+  call saveMutation.mutate()
+- All mutations use apiRequest which already handles auth via 
+  getAuthHeaders()
+- After each successful mutation, invalidate queryKey: 
+  ["/api/dimensions"]
+- Add toast notifications for success AND error cases
+- Add console.error in all catch/onError handlers so failures 
+  are visible in DevTools
+
+Also: clean up the test dimension I created:
+Add a console.log at the top of the DimensionEditor component:
+  console.log('[DIM] Dimensions loaded:', dimensions);
+so I can see what's being fetched from the API.
+
+SAFETY RULES:
+- Do NOT modify server/routes.ts
+- Do NOT run drizzle-kit push
+- Only modify client/src/components/DimensionEditor.tsx and 
+  related frontend files

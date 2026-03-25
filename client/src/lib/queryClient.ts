@@ -1,13 +1,22 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { supabase } from "./supabase";
+import { supabase, getCachedToken } from "./supabase";
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
-  let { data } = await supabase.auth.getSession();
-  if (!data.session) {
-    const refreshResult = await supabase.auth.refreshSession();
-    data = refreshResult.data as typeof data;
+  // 1. Try the module-level cached token (set synchronously by onAuthStateChange)
+  let token = getCachedToken();
+
+  // 2. If cache is empty, try getSession() (async read from localStorage)
+  if (!token) {
+    const { data } = await supabase.auth.getSession();
+    token = data.session?.access_token ?? null;
   }
-  const token = data.session?.access_token;
+
+  // 3. Last resort: force a token refresh
+  if (!token) {
+    const { data } = await supabase.auth.refreshSession();
+    token = data.session?.access_token ?? null;
+  }
+
   if (token) {
     return { Authorization: `Bearer ${token}` };
   }

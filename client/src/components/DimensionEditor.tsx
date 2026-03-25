@@ -356,6 +356,7 @@ function DimensionCard({
 
   const saveMutation = useMutation({
     mutationFn: async (body: { name: string; priority: string; items: DimensionItem[]; display_order: number }) => {
+      console.log("[DIM] Saving dimension:", dim.id, body);
       const res = await apiRequest("PUT", `/api/dimensions/${dim.id}`, body);
       return res.json();
     },
@@ -365,7 +366,8 @@ function DimensionCard({
       toast({ title: "Dimension saved", className: "bg-green-50 border-green-200 text-green-800" });
     },
     onError: (err: Error) => {
-      toast({ title: "Error saving", description: err.message, variant: "destructive" });
+      console.error("[DIM] Save error:", err);
+      toast({ title: "Error saving dimension", description: err.message, variant: "destructive" });
     },
   });
 
@@ -376,6 +378,7 @@ function DimensionCard({
         const idx = STATUS_CYCLE.indexOf(it.our_status);
         return { ...it, our_status: STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] };
       });
+      console.log("[DIM] Cycling item status:", dim.id, "item index:", itemIndex);
       const res = await apiRequest("PUT", `/api/dimensions/${dim.id}`, {
         name: dim.name,
         priority: dim.priority,
@@ -388,7 +391,8 @@ function DimensionCard({
       queryClient.invalidateQueries({ queryKey: ["/api/dimensions"] });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error("[DIM] Cycle error:", err);
+      toast({ title: "Error updating status", description: err.message, variant: "destructive" });
     },
   });
 
@@ -747,8 +751,11 @@ export function DimensionEditor() {
     refetchOnMount: "always",
   });
 
+  console.log("[DIM] Dimensions loaded:", dimensions);
+
   const createMutation = useMutation({
     mutationFn: async (body: Partial<Dimension>) => {
+      console.log("[DIM] Creating dimension:", body);
       const res = await apiRequest("POST", "/api/dimensions", body);
       return res.json();
     },
@@ -758,7 +765,8 @@ export function DimensionEditor() {
       toast({ title: "Dimension added", className: "bg-green-50 border-green-200 text-green-800" });
     },
     onError: (err: Error) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
+      console.error("[DIM] Create error:", err);
+      toast({ title: "Error saving dimension", description: err.message, variant: "destructive" });
     },
   });
 
