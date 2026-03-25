@@ -516,5 +516,51 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring competitor_capabilities table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS competitive_dimensions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        name TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'custom',
+        priority TEXT NOT NULL DEFAULT 'medium',
+        display_order INTEGER NOT NULL DEFAULT 0,
+        items JSONB NOT NULL DEFAULT '[]'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_comp_dim_workspace ON competitive_dimensions(workspace_id)
+    `);
+    console.log("[DBSafety] competitive_dimensions table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring competitive_dimensions table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS competitor_dimension_status (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        dimension_id UUID NOT NULL,
+        entity_name TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unknown',
+        source TEXT NOT NULL DEFAULT 'perplexity',
+        evidence TEXT,
+        last_updated TIMESTAMP DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_comp_dim_status_dimension ON competitor_dimension_status(dimension_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_comp_dim_status_entity ON competitor_dimension_status(entity_name)
+    `);
+    console.log("[DBSafety] competitor_dimension_status table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring competitor_dimension_status table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
