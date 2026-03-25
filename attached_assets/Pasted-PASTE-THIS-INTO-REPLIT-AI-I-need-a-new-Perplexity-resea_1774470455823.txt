@@ -1,0 +1,69 @@
+PASTE THIS INTO REPLIT AI:
+I need a new Perplexity research function for Signalum that evaluates
+competitors against the user's competitive dimensions. Read CLAUDE.md
+first. This is Phase 4 of the Competitive Dimensions feature.
+ 
+CRITICAL SAFETY RULES:
+- Do NOT modify the existing researchEntity function
+- Do NOT modify the cron schedule in server/index.ts
+- Do NOT delete any existing code in ambientSearch.ts
+- Keep the existing RateLimiter (10 calls per minute)
+- Strip markdown code fences before JSON.parse (existing pattern)
+- NEVER overwrite competitor_dimension_status rows where
+  source='manual' (user overrides must persist)
+ 
+CONTEXT:
+- competitive_dimensions table has dimension groups with items
+- competitor_dimension_status stores per-competitor status per item
+- The existing researchEntity function does funding/geo/products
+  research. Keep it working as-is.
+- entity.disambiguation_context and category.focus are used for
+  accurate company identification (prevents wrong-company bugs)
+ 
+TASK:
+ 
+1. In server/ambientSearch.ts, add a NEW exported function:
+   researchEntityDimensions(entityName, disambiguationContext,
+   categoryFocus, workspaceId)
+ 
+   This function:
+   a) Reads all competitive_dimensions for the workspace
+   b) Builds a prompt structured by dimension:
+      "[HIGH PRIORITY] Biometric capabilities:
+       - Passive liveness
+       - Active liveness
+       ..."
+   c) Includes entity disambiguation context and category focus
+   d) Includes the user's product context (from workspace fields)
+      for comparison framing
+   e) Asks Perplexity to return JSON:
+      [{dimension_name, items: [{name, status, evidence}]}]
+   f) Parses the JSON response (strip code fences first!)
+   g) For each item result, upserts into competitor_dimension_status:
+      - SKIP any row where source='manual' (preserve overrides)
+      - For new/perplexity-sourced rows: INSERT ON CONFLICT UPDATE
+   h) Returns the parsed results
+ 
+2. In server/routes.ts, add a manual trigger route:
+   POST /api/search/research-dimensions/:entityName
+   - requireAdmin middleware
+   - Looks up the entity in workspace categories to get
+     disambiguation_context
+   - Calls researchEntityDimensions
+   - Returns the results as JSON
+ 
+3. The Perplexity prompt should:
+   - Use the sonar model (same as existing)
+   - Include entity name + disambiguation context
+   - Group items by dimension with priority labels
+   - Ask for valid JSON only, no markdown
+   - Request one-sentence evidence per item
+   - Mention: "If you cannot determine the status, use 'unknown'"
+ 
+TEST: After building, test with a manual curl:
+curl -X POST http://localhost:5000/api/search/research-dimensions/iProov \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json"
+ 
+Check the competitor_dimension_status table for results:
+node -e "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});p.query(\"SELECT * FROM competitor_dimension_status WHERE entity_name='iProov' LIMIT 10\").then(r=>{console.log(JSON.stringify(r.rows,null,2));p.end()})"
