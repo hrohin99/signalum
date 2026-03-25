@@ -4368,6 +4368,42 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
+  app.post("/api/search/research-dimensions/:entityName", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+
+      const wsResult = await pool.query(
+        `SELECT id, categories FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspace = wsResult.rows[0];
+      if (!workspace) return res.status(404).json({ message: "No workspace found" });
+
+      const workspaceId = workspace.id;
+      const categories: ExtractedCategory[] = workspace.categories || [];
+
+      let disambiguationContext = '';
+      let categoryFocus = '';
+      for (const category of categories) {
+        const entity = category.entities?.find((e: any) => e.name === entityName);
+        if (entity) {
+          disambiguationContext = (entity as any).disambiguation_context || '';
+          categoryFocus = (category as any).focus || category.description || '';
+          break;
+        }
+      }
+
+      const { researchEntityDimensions } = await import("./ambientSearch");
+      const results = await researchEntityDimensions(entityName, disambiguationContext, categoryFocus, workspaceId);
+
+      return res.json({ entityName, disambiguationContext, results });
+    } catch (error: any) {
+      console.error("Research dimensions error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   const createMonitoredUrlSchema = z.object({
     url: z.string().url("Please enter a valid URL"),
     urlCategory: z.enum(["pricing", "product", "news", "careers", "custom"]),

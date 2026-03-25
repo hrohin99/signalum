@@ -1,4 +1,4 @@
-import { storage } from "./storage";
+import { storage, pool, db } from "./storage";
 import {
   searchCompetitorNews,
   searchTopicUpdates,
@@ -7,6 +7,7 @@ import {
 } from "./perplexityService";
 import { runJinaCompetitorEnrichment } from "./jinaSearchService";
 import type { ExtractedCategory, ExtractedEntity, InsertNotification } from "@shared/schema";
+import { sql } from "drizzle-orm";
 
 async function researchEntity(entity: { name: string }, categoryContext: string = ''): Promise<{ funding: any; geo_presence: string[]; products: any[] } | null> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
@@ -97,6 +98,165 @@ interface AmbientSearchResult {
   notificationsCreated: number;
   errors: number;
   timestamp: string;
+}
+
+export async function researchEntityDimensions(
+  entityName: string,
+  disambiguationContext: string,
+  categoryFocus: string,
+  workspaceId: string
+): Promise<Array<{ dimension_name: string; items: Array<{ name: string; status: string; evidence: string }> }>> {
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey) {
+    console.error('[dimensions-research] No PERPLEXITY_API_KEY set');
+    return [];
+  }
+
+  const dimsResult = await db.execute(
+    sql`SELECT * FROM competitive_dimensions WHERE workspace_id = ${workspaceId}::uuid ORDER BY display_order ASC`
+  );
+  const dimensions = dimsResult.rows as any[];
+  if (dimensions.length === 0) {
+    console.log(`[dimensions-research] No competitive dimensions found for workspace ${workspaceId}`);
+    return [];
+  }
+
+  const pcResult = await pool.query(
+    `SELECT * FROM product_context WHERE tenant_id = $1 LIMIT 1`,
+    [workspaceId]
+  );
+  const pc = pcResult.rows[0];
+  const productContext = [
+    pc?.product_name ? `Our product: ${pc.product_name}` : '',
+    pc?.description ? `Description: ${pc.description}` : '',
+    pc?.target_customer ? `Target customer: ${pc.target_customer}` : '',
+  ].filter(Boolean).join('. ');
+
+  const dimensionSections = dimensions.map((dim: any) => {
+    const items: any[] = Array.isArray(dim.items) ? dim.items : JSON.parse(dim.items || '[]');
+    const itemLines = items
+      .map((item: any) => `  - ${typeof item === 'string' ? item : item.name}`)
+      .join('\n');
+    const priorityLabel =
+      dim.priority === 'high' ? '[HIGH PRIORITY]' :
+      dim.priority === 'low' ? '[LOW PRIORITY]' :
+      '[MEDIUM PRIORITY]';
+    return `${priorityLabel} ${dim.name}:\n${itemLines}`;
+  }).join('\n\n');
+
+  const systemPrompt = 'You are a competitive intelligence researcher. Return only valid JSON with no prose, no markdown, no code fences.';
+  const userPrompt = `Research the company "${entityName}"${disambiguationContext ? ` (${disambiguationContext})` : ''} and evaluate their capabilities across the following competitive dimensions.${categoryFocus ? ` Market context: ${categoryFocus}.` : ''}${productContext ? ` Comparison context: ${productContext}.` : ''}
+
+For each dimension and item below, determine whether "${entityName}" has that capability or characteristic.
+
+${dimensionSections}
+
+Return a JSON array with this exact structure:
+[
+  {
+    "dimension_name": "exact dimension name as listed above",
+    "items": [
+      {
+        "name": "exact item name as listed above",
+        "status": "yes|partial|no|unknown",
+        "evidence": "one sentence of evidence or reasoning"
+      }
+    ]
+  }
+]
+
+If you cannot determine the status for an item, use "unknown". Return JSON only, no markdown.`;
+
+  await perplexityRateLimiter.waitForSlot();
+
+  const response = await fetch('https://api.perplexity.ai/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'sonar',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+      max_tokens: 2000,
+    }),
+  });
+
+  if (!response.ok) {
+    console.error(`[dimensions-research] Perplexity error for ${entityName}: ${response.status}`);
+    return [];
+  }
+
+  const data = await response.json();
+  const content = data?.choices?.[0]?.message?.content || '';
+
+  let parsed: Array<{ dimension_name: string; items: Array<{ name: string; status: string; evidence: string }> }>;
+  try {
+    const cleanedText = content
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    parsed = JSON.parse(cleanedText);
+  } catch (err) {
+    console.error(`[dimensions-research] Failed to parse response for ${entityName}:`, err);
+    return [];
+  }
+
+  const dimMap = new Map<string, string>();
+  for (const dim of dimensions) {
+    dimMap.set(dim.name, dim.id);
+  }
+
+  for (const dimResult of parsed) {
+    const dimensionId = dimMap.get(dimResult.dimension_name);
+    if (!dimensionId) {
+      console.warn(`[dimensions-research] No dimension ID found for "${dimResult.dimension_name}", skipping`);
+      continue;
+    }
+
+    for (const item of dimResult.items) {
+      try {
+        const existingResult = await db.execute(sql`
+          SELECT id, source FROM competitor_dimension_status
+          WHERE dimension_id = ${dimensionId}::uuid
+            AND entity_name = ${entityName}
+            AND item_name = ${item.name}
+          LIMIT 1
+        `);
+        const existing = existingResult.rows[0] as any;
+
+        if (existing?.source === 'manual') {
+          console.log(`[dimensions-research] Skipping manual override for ${entityName} / ${item.name}`);
+          continue;
+        }
+
+        if (existing) {
+          await db.execute(sql`
+            UPDATE competitor_dimension_status
+            SET status = ${item.status},
+                source = 'perplexity',
+                evidence = ${item.evidence || null},
+                last_updated = NOW()
+            WHERE id = ${existing.id}::uuid
+          `);
+        } else {
+          await db.execute(sql`
+            INSERT INTO competitor_dimension_status (dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+            VALUES (${dimensionId}::uuid, ${entityName}, ${item.name}, ${item.status}, 'perplexity', ${item.evidence || null}, NOW())
+          `);
+        }
+      } catch (err) {
+        console.error(`[dimensions-research] Error upserting ${entityName} / ${item.name}:`, err);
+      }
+    }
+  }
+
+  console.log(`[dimensions-research] Completed for ${entityName}: ${parsed.length} dimensions processed`);
+  return parsed;
 }
 
 export async function runAmbientSearchForUser(
