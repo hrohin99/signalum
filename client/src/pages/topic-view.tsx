@@ -537,7 +537,10 @@ function TopicViewContent({
 
   const { data: dimensionsData } = useQuery<{ id: string; name: string }[]>({
     queryKey: ["/api/dimensions"],
-    queryFn: () => fetch("/api/dimensions").then((r) => r.json()),
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/dimensions");
+      return res.json();
+    },
     enabled: !!user && isCompetitor,
     staleTime: 0,
     gcTime: 0,
