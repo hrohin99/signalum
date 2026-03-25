@@ -80,6 +80,7 @@ import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
 import { SwotCard } from "@/components/SwotCard";
 import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
 import { DimensionComparisonCard } from "@/components/DimensionComparisonCard";
+import { DimensionMatrix } from "@/components/DimensionMatrix";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ProductsCard } from "@/components/ProductsCard";
 import { GeoPresenceCard, getRegionFlag } from "@/components/GeoPresenceCard";
@@ -1135,7 +1136,7 @@ function TopicViewContent({
           {dimensionsExist && (
             <DimensionComparisonCard entityName={entity.name} />
           )}
-          <CapabilityMatrix entityName={entity.name} entityId={entity.name} />
+          {dimensionsExist ? <DimensionMatrix /> : <CapabilityMatrix entityName={entity.name} entityId={entity.name} />}
           <div className="space-y-4">
             <BattlecardCollapsedHeader
               entity={entity}

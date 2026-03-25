@@ -6883,6 +6883,90 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     }
   });
 
+  app.get("/api/matrix/dimensions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id, categories FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.json({ dimensions: [], competitors: [] });
+
+      const dimsResult = await db.execute(sql`
+        SELECT * FROM competitive_dimensions
+        WHERE workspace_id = ${workspaceId}::uuid
+        ORDER BY display_order ASC
+      `);
+
+      const dims = dimsResult.rows as any[];
+      if (dims.length === 0) return res.json({ dimensions: [], competitors: [] });
+
+      const dimIds = dims.map((d) => d.id);
+      const statusResult = await db.execute(sql`
+        SELECT * FROM competitor_dimension_status
+        WHERE dimension_id = ANY(${dimIds}::uuid[])
+      `);
+
+      const allStatusRows = statusResult.rows as any[];
+
+      const competitorSet = new Set<string>();
+      for (const row of allStatusRows) {
+        competitorSet.add(row.entity_name);
+      }
+
+      const categories = wsResult.rows[0]?.categories;
+      if (categories) {
+        const cats = typeof categories === 'string' ? JSON.parse(categories) : categories;
+        for (const cat of (cats || [])) {
+          for (const entity of (cat.entities || [])) {
+            if (entity.topic_type === 'competitor') {
+              competitorSet.add(entity.name);
+            }
+          }
+        }
+      }
+
+      const competitors = Array.from(competitorSet).sort();
+
+      const statusMap = new Map<string, any[]>();
+      for (const row of allStatusRows) {
+        const key = `${row.dimension_id}::${row.item_name}`;
+        if (!statusMap.has(key)) statusMap.set(key, []);
+        statusMap.get(key)!.push(row);
+      }
+
+      const dimensions = dims.map((dim) => {
+        const rawItems: any[] = Array.isArray(dim.items) ? dim.items : JSON.parse(dim.items || '[]');
+        return {
+          id: dim.id,
+          name: dim.name,
+          priority: dim.priority,
+          display_order: dim.display_order,
+          items: rawItems.map((item: any) => {
+            const itemName = typeof item === 'string' ? item : item.name;
+            const ourStatus = typeof item === 'object' ? (item.our_status ?? null) : null;
+            const statuses = statusMap.get(`${dim.id}::${itemName}`) || [];
+            return {
+              name: itemName,
+              our_status: ourStatus,
+              competitors: statuses.map((s) => ({
+                entity_name: s.entity_name,
+                status: s.status,
+                source: s.source,
+              })),
+            };
+          }),
+        };
+      });
+
+      return res.json({ dimensions, competitors });
+    } catch (error: any) {
+      console.error("Get matrix dimensions error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/debug/db-check", async (req, res) => {
     try {
       const dims = await db.execute(
