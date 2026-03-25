@@ -24,6 +24,7 @@ import {
   LogOut,
   Lock,
   Brain,
+  Lightbulb,
 } from "lucide-react";
 
 const navItems = [
@@ -32,6 +33,7 @@ const navItems = [
   { title: "Live Feed", url: "/inbox", icon: Inbox },
   { title: "Intelligence", url: "/intelligence", icon: Brain },
   { title: "Briefings", url: "/briefings", icon: Newspaper },
+  { title: "Product & Intelligence", url: "/settings/product-intelligence", icon: Lightbulb },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 

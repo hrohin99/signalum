@@ -1,0 +1,98 @@
+PASTE THIS INTO REPLIT AI:
+I need you to build a new "Product & Intelligence" settings page for
+Signalum. Read CLAUDE.md first. This is Phase 2 of the Competitive
+Dimensions feature.
+ 
+CRITICAL SAFETY RULES:
+- NEVER run drizzle-kit push
+- Do NOT modify existing settings page components
+- Do NOT modify server/storage.ts
+- Do NOT modify shared/schema.ts
+- All new useQuery calls MUST include staleTime: 0, gcTime: 0,
+  refetchOnMount: "always"
+- Use db.execute(sql`...`) for all database writes, NOT pool.query
+- Do NOT define form components inside parent components. Each form
+  or editor must be its own file.
+ 
+CONTEXT: Phase 1 created two new tables:
+- competitive_dimensions (workspace_id, name, source, priority,
+  display_order, items jsonb)
+- competitor_dimension_status (dimension_id, entity_name, item_name,
+  status, source, evidence)
+ 
+TASK: Build these pieces:
+ 
+1. NEW API ROUTES in server/routes.ts (add at the end, before the
+   catch-all route):
+ 
+   GET /api/dimensions
+   - requireAuth middleware
+   - Returns all competitive_dimensions for the user's workspace
+   - Order by display_order ASC
+ 
+   POST /api/dimensions
+   - requireSubAdmin middleware
+   - Creates a new dimension
+   - Body: { name, source, priority, items, display_order }
+   - Returns the created dimension
+ 
+   PUT /api/dimensions/:id
+   - requireSubAdmin middleware
+   - Updates a dimension (name, priority, items, display_order)
+   - Returns updated dimension
+ 
+   DELETE /api/dimensions/:id
+   - requireAdmin middleware (admin only can delete)
+   - Deletes the dimension AND all related competitor_dimension_status rows
+   - Use a transaction or delete status rows first
+ 
+   POST /api/dimensions/suggest
+   - requireSubAdmin middleware
+   - Reads the user's workspace product context (product_name,
+     product_description, product_audience, key_strengths,
+     key_weaknesses from workspaces table)
+   - Calls Claude API (claude-sonnet-4-6) with a prompt asking it
+     to suggest 3-5 competitive dimensions with items based on the
+     product description
+   - System prompt: "You are an expert competitive analyst. Based on
+     the product description, suggest 3-5 competitive dimensions that
+     would be most important to track against competitors. For each
+     dimension, provide a name, suggested priority (high/medium/low),
+     and 4-7 specific capability items. Respond ONLY with valid JSON,
+     no markdown fences. Format: [{name, priority, rationale, items:
+     [{name}]}]"
+   - Returns the parsed JSON array
+ 
+2. NEW FRONTEND COMPONENTS (all separate files in
+   client/src/components/ or client/src/pages/):
+ 
+   ProductIntelligencePage.tsx - Main page with three sections:
+   a) ProductSection - product name, description, audience,
+      differentiators (reads/writes existing workspace fields)
+   b) DimensionEditor - lists all dimensions grouped by source
+      (universal, ai-suggested, custom). Each dimension is a
+      collapsible card showing its items as colored pills.
+      Status colors: green=yes, amber=partial, red=no, gray=na.
+      Clicking a pill cycles through statuses.
+      Add Dimension button opens a simple form.
+      "Suggest dimensions" button calls POST /api/dimensions/suggest
+      and displays results with Accept/Edit/Dismiss buttons.
+   c) IntelligencePriorities - win factors, vulnerability, early
+      warning signals (reads/writes existing workspace fields)
+ 
+   Single "Save" button at the bottom that saves all sections.
+ 
+3. ROUTING: Add a route for /settings/product-intelligence that
+   renders ProductIntelligencePage.
+ 
+4. NAVIGATION: In app-sidebar.tsx, add "Product & Intelligence"
+   as a nav item under Settings, linking to
+   /settings/product-intelligence.
+ 
+STYLE: Use Tailwind + shadcn/ui consistent with existing Signalum
+pages. Purple (#534AB7) as the accent color. Cards with rounded
+borders. Keep it clean and minimal.
+ 
+IMPORTANT: The existing Settings pages (Account, My Product,
+Capabilities, Notifications, Email capture) must continue to work
+exactly as they do now. Do not modify them.

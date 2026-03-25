@@ -6630,5 +6630,134 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     }
   });
 
+  // ── Competitive Dimensions ──────────────────────────────────────────────────
+
+  app.get("/api/dimensions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.json([]);
+      const result = await db.execute(
+        sql`SELECT * FROM competitive_dimensions WHERE workspace_id = ${workspaceId} ORDER BY display_order ASC`
+      );
+      return res.json(result.rows);
+    } catch (error: any) {
+      console.error("Get dimensions error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/dimensions", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const { name, source = "custom", priority = "medium", items = [], display_order = 0 } = req.body;
+      if (!name) return res.status(400).json({ message: "name is required" });
+      const result = await db.execute(sql`
+        INSERT INTO competitive_dimensions (workspace_id, name, source, priority, display_order, items)
+        VALUES (${workspaceId}, ${name}, ${source}, ${priority}, ${display_order}, ${JSON.stringify(items)}::jsonb)
+        RETURNING *
+      `);
+      return res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Create dimension error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/dimensions/:id", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const { name, priority, items, display_order } = req.body;
+      const result = await db.execute(sql`
+        UPDATE competitive_dimensions
+        SET name = ${name},
+            priority = ${priority},
+            items = ${JSON.stringify(items)}::jsonb,
+            display_order = ${display_order},
+            updated_at = NOW()
+        WHERE id = ${req.params.id}::uuid AND workspace_id = ${workspaceId}
+        RETURNING *
+      `);
+      if (result.rows.length === 0) return res.status(404).json({ message: "Dimension not found" });
+      return res.json(result.rows[0]);
+    } catch (error: any) {
+      console.error("Update dimension error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/dimensions/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      await db.execute(sql`DELETE FROM competitor_dimension_status WHERE dimension_id = ${req.params.id}::uuid`);
+      await db.execute(sql`DELETE FROM competitive_dimensions WHERE id = ${req.params.id}::uuid AND workspace_id = ${workspaceId}`);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete dimension error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/dimensions/suggest", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const pcResult = await pool.query(`SELECT * FROM product_context WHERE tenant_id = $1 LIMIT 1`, [workspaceId]);
+      const pc = pcResult.rows[0];
+
+      const userPrompt = [
+        pc?.product_name ? `Product: ${pc.product_name}` : "",
+        pc?.description ? `Description: ${pc.description}` : "",
+        pc?.target_customer ? `Target customer: ${pc.target_customer}` : "",
+        pc?.strengths ? `Strengths: ${pc.strengths}` : "",
+        pc?.weaknesses ? `Weaknesses: ${pc.weaknesses}` : "",
+      ].filter(Boolean).join("\n") || "No product context provided.";
+
+      const client = getAnthropicClient();
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2048,
+        system: `You are an expert competitive analyst. Based on the product description, suggest 3-5 competitive dimensions that would be most important to track against competitors. For each dimension, provide a name, suggested priority (high/medium/low), and 4-7 specific capability items. Respond ONLY with valid JSON, no markdown fences. Format: [{name, priority, rationale, items: [{name}]}]`,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+
+      const rawText = (response.content[0] as any).text || "";
+      const clean = rawText.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+      const parsed = JSON.parse(clean);
+      return res.json(parsed);
+    } catch (error: any) {
+      console.error("Suggest dimensions error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

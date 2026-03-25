@@ -17,6 +17,7 @@ import SettingsPage from "./settings";
 import TopicViewPage from "./topic-view";
 import AdminPage from "./admin";
 import IntelligencePage from "./intelligence";
+import ProductIntelligencePage from "./product-intelligence";
 
 export default function Dashboard() {
   console.log("WORKSPACE RENDERED");
@@ -63,6 +64,7 @@ export default function Dashboard() {
               <Route path="/settings/briefing">{() => <Redirect to="/briefings" />}</Route>
               <Route path="/weekly-email">{() => <Redirect to="/briefings" />}</Route>
               <Route path="/todays-brief">{() => <Redirect to="/briefings" />}</Route>
+              <Route path="/settings/product-intelligence" component={ProductIntelligencePage} />
               <Route path="/settings" component={SettingsPage} />
               <Route path="/admin" component={AdminPage} />
               <Route path="/topic/:category/:entity">{(params) => <TopicViewPage params={params} />}</Route>
