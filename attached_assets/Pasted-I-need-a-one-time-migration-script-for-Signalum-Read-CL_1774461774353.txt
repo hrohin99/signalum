@@ -1,0 +1,54 @@
+I need a one-time migration script for Signalum. Read CLAUDE.md first.
+This is Phase 3 of the Competitive Dimensions feature.
+ 
+CRITICAL SAFETY RULES:
+- This script READS from old tables, WRITES to new tables
+- Do NOT modify or delete any data in old tables
+- Do NOT modify any application code
+- Use db.execute(sql`...`) for all writes
+- Run this script ONCE manually, not on server startup
+ 
+CONTEXT:
+Old tables:
+- workspace_capabilities (id, workspace_id, name, display_order,
+  our_status: yes/partial/no/unknown)
+- competitor_capabilities (id, workspace_id, capability_id,
+  entity_name, status, assessment)
+- entrust_capabilities (id, workspace_id, capability_id,
+  entity_name, status)
+ 
+New tables (created in Phase 1):
+- competitive_dimensions
+- competitor_dimension_status
+ 
+TASK: Create scripts/migrate-capabilities.ts that:
+ 
+1. Reads all workspace_capabilities for workspace
+   5a13e507-4524-4c56-ae58-6f455d6c0315
+ 
+2. Groups them into a single dimension called "Legacy capabilities"
+   with source='custom', priority='medium'
+ 
+3. For each capability, maps our_status from entrust_capabilities:
+   - Finds the entrust_capabilities row for that capability
+   - Maps to items[].our_status (yes/partial/no map directly,
+     unknown maps to "na")
+ 
+4. Inserts one competitive_dimensions row with all capabilities
+   as items
+ 
+5. For each competitor in competitor_capabilities:
+   - Creates competitor_dimension_status rows mapping their status
+     per capability item
+   - Sets source='manual' (these are existing manual entries)
+ 
+6. Logs a summary: how many capabilities migrated, how many
+   competitor statuses created
+ 
+7. Does a verification query at the end: counts rows in both
+   new tables and prints them
+ 
+Run command: npx tsx scripts/migrate-capabilities.ts
+ 
+After running, verify with:
+node -e "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});Promise.all([p.query('SELECT count(*) FROM competitive_dimensions'),p.query('SELECT count(*) FROM competitor_dimension_status')]).then(([d,s])=>{console.log('Dimensions:',d.rows[0].count,'Statuses:',s.rows[0].
