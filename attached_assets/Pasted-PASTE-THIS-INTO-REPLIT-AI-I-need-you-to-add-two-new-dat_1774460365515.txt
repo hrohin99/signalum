@@ -1,0 +1,61 @@
+PASTE THIS INTO REPLIT AI:
+I need you to add two new database tables to Signalum. These tables are
+for a new "Competitive Dimensions" feature. Read CLAUDE.md first.
+ 
+CRITICAL SAFETY RULES:
+- NEVER run drizzle-kit push (will drop ~25 columns)
+- ONLY modify server/dbSafety.ts
+- Do NOT touch shared/schema.ts or drizzle.config.ts
+- Do NOT modify any other files
+- Use ADD COLUMN IF NOT EXISTS / CREATE TABLE IF NOT EXISTS pattern
+ 
+TASK: In server/dbSafety.ts, add CREATE TABLE IF NOT EXISTS statements
+for these two tables:
+ 
+TABLE 1: competitive_dimensions
+- id: uuid PRIMARY KEY DEFAULT gen_random_uuid()
+- workspace_id: uuid NOT NULL (references workspaces.id)
+- name: text NOT NULL (e.g. "Biometric capabilities")
+- source: text NOT NULL DEFAULT 'custom' (values: universal, ai, custom)
+- priority: text NOT NULL DEFAULT 'medium' (values: high, medium, low)
+- display_order: integer NOT NULL DEFAULT 0
+- items: jsonb NOT NULL DEFAULT '[]'::jsonb
+  (array of objects: {name: string, our_status: "yes"|"partial"|"no"|"na",
+   notes: string|null})
+- created_at: timestamp DEFAULT now()
+- updated_at: timestamp DEFAULT now()
+ 
+TABLE 2: competitor_dimension_status
+- id: uuid PRIMARY KEY DEFAULT gen_random_uuid()
+- dimension_id: uuid NOT NULL (references competitive_dimensions.id)
+- entity_name: text NOT NULL (competitor name from categories JSONB)
+- item_name: text NOT NULL (matches item name in dimension.items[])
+- status: text NOT NULL DEFAULT 'unknown'
+  (values: yes, partial, no, unknown)
+- source: text NOT NULL DEFAULT 'perplexity' (values: perplexity, manual)
+- evidence: text (one-sentence evidence from research)
+- last_updated: timestamp DEFAULT now()
+ 
+Add these AFTER the existing CREATE TABLE and ALTER TABLE statements
+in the ensureSafeSchema function. Keep the same pattern as existing code.
+ 
+Also add an index:
+CREATE INDEX IF NOT EXISTS idx_comp_dim_workspace
+ON competitive_dimensions(workspace_id);
+ 
+CREATE INDEX IF NOT EXISTS idx_comp_dim_status_dimension
+ON competitor_dimension_status(dimension_id);
+ 
+CREATE INDEX IF NOT EXISTS idx_comp_dim_status_entity
+ON competitor_dimension_status(entity_name);
+ 
+After making changes, restart the server and confirm the tables exist by
+running in the shell:
+node -e "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});p.query(\"SELECT table_name FROM information_schema.tables WHERE table_name IN ('competitive_dimensions','competitor_dimension_status')\").then(r=>{console.log(r.rows);p.end()})"
+
+Verification steps
+•	Both tables appear in the query above
+•	No errors in server startup logs
+•	Existing app still loads and works (My Workspace, competitor pages, settings)
+•	Old capability tables still exist (workspace_capabilities, competitor_capabilities, entrust_capabilities)
+•	drizzle-kit push was NOT run
