@@ -1,0 +1,56 @@
+I need a new capability matrix component for Signalum that groups by
+competitive dimensions and lets users filter which competitors to
+compare. Read CLAUDE.md first. This is Phase 6.
+ 
+CRITICAL SAFETY RULES:
+- Build DimensionMatrix as a NEW component file
+- Do NOT modify existing CapabilityMatrix or CapabilityMatrixCard
+- Use the feature flag pattern: show new if dimensions exist,
+  old as fallback
+ 
+CONTEXT:
+- competitive_dimensions has dimension groups with items + our_status
+- competitor_dimension_status has all competitor statuses
+- Need to show all competitors in one grid, grouped by dimension
+ 
+TASK:
+ 
+1. NEW API ROUTE in routes.ts:
+   GET /api/matrix/dimensions
+   - requireAuth middleware
+   - Returns: { dimensions: [{name, priority, display_order,
+     items: [{name, our_status,
+       competitors: [{entity_name, status, source}]
+     }]}],
+     competitors: [list of all competitor entity names] }
+   - Single efficient query joining both tables
+ 
+2. NEW COMPONENT: client/src/components/DimensionMatrix.tsx
+ 
+   Layout:
+   - Header: "Capability matrix" with status legend
+   - Competitor filter bar: row of clickable chips, one per
+     competitor. Clicking toggles that competitor on/off.
+     "All" chip selects/deselects all. Selected chips get purple
+     highlight (#534AB7 bg). Default: show first 4 competitors.
+   - Table:
+     - Header row: blank | "Us" (highlighted bg) | competitor names
+     - Dimension group header rows (spanning full width) with
+       dimension name + priority badge
+     - Item rows: item name | our status pill | competitor status
+       pills for each selected competitor
+     - Status pills: green=yes, amber=partial, red=no, gray=unknown
+   - Table updates instantly when competitor chips are toggled
+     (client-side filter, no re-fetch needed)
+   - If no competitors selected, show "Select competitors above
+     to compare" message
+ 
+3. FEATURE FLAG: Wherever the current CapabilityMatrix is rendered,
+   add:
+   {dimensionsExist ? <DimensionMatrix /> : <CapabilityMatrix />}
+ 
+   Same pattern as Phase 5.
+ 
+STYLE: Clean grid. Use table-layout: fixed for consistent columns.
+Purple accent for selected chips. "Us" column with subtle background
+highlight. Scrollable horizontally if many competitors selected.
