@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { DimensionMatrix } from "@/components/DimensionMatrix";
 import { OnboardingWelcomeModal as OnboardingWelcomeModalComponent } from "@/components/welcome-modal";
 import { useAuth } from "@/lib/auth-context";
 import { useQuery, useMutation } from "@tanstack/react-query";
@@ -413,6 +414,20 @@ function MapPageInner() {
   });
 
   const allTopicDates = Array.isArray(topicDatesData?.dates) ? topicDatesData.dates : [];
+
+  const { data: dimensionsData } = useQuery({
+    queryKey: ["/api/dimensions"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/dimensions");
+      return res.json();
+    },
+    enabled: !!user && wsPhase === "ready",
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+  });
+  const dimensionsExist = Array.isArray(dimensionsData) && dimensionsData.length > 0;
+
   const rawCategories = wsData?.workspace?.categories;
   const categories = (Array.isArray(rawCategories) ? rawCategories : []).map(cat => ({
     ...cat,
@@ -968,7 +983,14 @@ function MapPageInner() {
         </Button>
       </div>
 
-      {showCompareModal && (
+      {showCompareModal && dimensionsExist && (
+        <Dialog open={showCompareModal} onOpenChange={setShowCompareModal}>
+          <DialogContent className="max-w-[95vw] max-h-[90vh] overflow-auto p-6">
+            <DimensionMatrix />
+          </DialogContent>
+        </Dialog>
+      )}
+      {showCompareModal && !dimensionsExist && (
         <CompareModal
           categories={categories}
           open={showCompareModal}
