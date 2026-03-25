@@ -6795,6 +6795,94 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
     }
   });
 
+  app.get("/api/competitor-dimensions/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.json({ dimensions: [] });
+
+      const dimsResult = await db.execute(sql`
+        SELECT * FROM competitive_dimensions
+        WHERE workspace_id = ${workspaceId}::uuid
+        ORDER BY display_order ASC
+      `);
+
+      const statusResult = await db.execute(sql`
+        SELECT * FROM competitor_dimension_status WHERE entity_name = ${entityName}
+      `);
+      const statusMap = new Map<string, any>();
+      for (const row of statusResult.rows as any[]) {
+        statusMap.set(`${row.dimension_id}::${row.item_name}`, row);
+      }
+
+      const dimensions = (dimsResult.rows as any[]).map((dim) => {
+        const rawItems: any[] = Array.isArray(dim.items) ? dim.items : JSON.parse(dim.items || '[]');
+        return {
+          id: dim.id,
+          name: dim.name,
+          priority: dim.priority,
+          items: rawItems.map((item: any) => {
+            const itemName = typeof item === 'string' ? item : item.name;
+            const ourStatus = typeof item === 'object' ? (item.our_status ?? null) : null;
+            const statusRow = statusMap.get(`${dim.id}::${itemName}`);
+            return {
+              name: itemName,
+              our_status: ourStatus,
+              competitor_status: statusRow?.status ?? null,
+              status_id: statusRow?.id ?? null,
+              source: statusRow?.source ?? null,
+              evidence: statusRow?.evidence ?? null,
+            };
+          }),
+        };
+      });
+
+      return res.json({ dimensions });
+    } catch (error: any) {
+      console.error("Get competitor dimensions error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/competitor-dimension-status/:id", requireAuth, requireSubAdmin, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { status, dimension_id, entity_name, item_name } = req.body;
+
+      if (!status) return res.status(400).json({ message: "status is required" });
+
+      if (id === "new") {
+        if (!dimension_id || !entity_name || !item_name) {
+          return res.status(400).json({ message: "dimension_id, entity_name, and item_name are required for new rows" });
+        }
+        const result = await db.execute(sql`
+          INSERT INTO competitor_dimension_status (dimension_id, entity_name, item_name, status, source, last_updated)
+          VALUES (${dimension_id}::uuid, ${entity_name}, ${item_name}, ${status}, 'manual', NOW())
+          RETURNING *
+        `);
+        return res.json(result.rows[0]);
+      } else {
+        const result = await db.execute(sql`
+          UPDATE competitor_dimension_status
+          SET status = ${status}, source = 'manual', last_updated = NOW()
+          WHERE id = ${id}::uuid
+          RETURNING *
+        `);
+        if (result.rows.length === 0) return res.status(404).json({ message: "Status row not found" });
+        return res.json(result.rows[0]);
+      }
+    } catch (error: any) {
+      console.error("Update competitor dimension status error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.get("/api/debug/db-check", async (req, res) => {
     try {
       const dims = await db.execute(

@@ -1,0 +1,72 @@
+I need a new competitor comparison component for Signalum topic pages.
+Read CLAUDE.md first. This is Phase 5 of the Competitive Dimensions
+feature.
+ 
+CRITICAL SAFETY RULES:
+- topic-view.tsx is ~2500+ lines. Make MINIMAL changes to it.
+- Build DimensionComparisonCard as a SEPARATE component file
+- Do NOT modify the existing CapabilityMatrix or CapabilityMatrixCard
+- Do NOT define any components inline inside topic-view.tsx
+- Add staleTime: 0, gcTime: 0, refetchOnMount: "always" to all
+  new useQuery calls
+ 
+CONTEXT:
+- competitive_dimensions has the user's dimension definitions + items
+  + our_status
+- competitor_dimension_status has per-competitor statuses (from
+  Phase 4 Perplexity research or manual overrides)
+- The component needs to show a side-by-side comparison: "Us" vs
+  the current competitor, grouped by dimension
+ 
+TASK:
+ 
+1. NEW API ROUTE in routes.ts:
+   GET /api/competitor-dimensions/:entityName
+   - requireAuth middleware
+   - Joins competitive_dimensions with competitor_dimension_status
+     for this entity
+   - Returns: { dimensions: [{name, priority, items: [{name,
+     our_status, competitor_status, source, evidence}]}] }
+ 
+2. NEW COMPONENT: client/src/components/DimensionComparisonCard.tsx
+   Props: { entityName: string, workspaceId: string }
+ 
+   Layout:
+   - Card header: "Competitive dimensions" with legend
+     (yes/partial/no/unknown pills)
+   - For each dimension group:
+     - Dimension name + priority badge (high=coral, medium=amber)
+     - Table rows: Item name | Us status | Competitor status
+     - Source badge on competitor status ("via Perplexity" or "manual")
+     - If any item has our_status in [no, na] AND competitor status
+       is "yes": show a red vulnerability alert box below that
+       dimension group
+   - AI assessment box per dimension (optional, can be added later)
+   - Click on any competitor status cell opens StatusOverrideModal
+ 
+3. NEW COMPONENT: client/src/components/StatusOverrideModal.tsx
+   - Simple modal to manually set a competitor's status for an item
+   - Dropdown: yes / partial / no / unknown
+   - Saves to competitor_dimension_status with source='manual'
+   - PUT /api/competitor-dimension-status/:id route needed
+ 
+4. In topic-view.tsx, find where CapabilityMatrix renders. Add
+   this ABOVE it (not replacing it):
+ 
+   {dimensionsExist && <DimensionComparisonCard
+     entityName={entity.name}
+     workspaceId={workspaceId}
+   />}
+ 
+   Where dimensionsExist is a simple check:
+   const { data: dimensions } = useQuery({
+     queryKey: ['dimensions', workspaceId],
+     queryFn: () => fetch('/api/dimensions').then(r => r.json()),
+     staleTime: 0, gcTime: 0, refetchOnMount: "always"
+   });
+   const dimensionsExist = dimensions && dimensions.length > 0;
+ 
+   The old CapabilityMatrix stays visible below it for now.
+ 
+STYLE: Match existing Signalum card style. Purple accent. Use the
+same table pattern as other cards in topic-view (Products, Funding).

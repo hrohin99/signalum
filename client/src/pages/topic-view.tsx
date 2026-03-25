@@ -79,6 +79,7 @@ import { PartnershipsCard } from "@/components/PartnershipsCard";
 import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
 import { SwotCard } from "@/components/SwotCard";
 import { CapabilityMatrixCard } from "@/components/CapabilityMatrixCard";
+import { DimensionComparisonCard } from "@/components/DimensionComparisonCard";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ProductsCard } from "@/components/ProductsCard";
 import { GeoPresenceCard, getRegionFlag } from "@/components/GeoPresenceCard";
@@ -533,6 +534,16 @@ function TopicViewContent({
     enabled: !!user,
   });
   const userRole = profileData?.role || "admin";
+
+  const { data: dimensionsData } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ["/api/dimensions"],
+    queryFn: () => fetch("/api/dimensions").then((r) => r.json()),
+    enabled: !!user && isCompetitor,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+  });
+  const dimensionsExist = Array.isArray(dimensionsData) && dimensionsData.length > 0;
 
   const { data: extractionStatus } = useQuery<{ extraction: { status: string; noDataFound?: boolean } | null }>({
     queryKey: ["/api/entity/website-extraction-status", entity.name],
@@ -1118,6 +1129,9 @@ function TopicViewContent({
         <div className="space-y-6">
           <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
           <SwotCard entityId={entity.name} userRole={userRole} />
+          {dimensionsExist && (
+            <DimensionComparisonCard entityName={entity.name} />
+          )}
           <CapabilityMatrix entityName={entity.name} entityId={entity.name} />
           <div className="space-y-4">
             <BattlecardCollapsedHeader
