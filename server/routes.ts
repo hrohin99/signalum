@@ -6903,10 +6903,12 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
       if (dims.length === 0) return res.json({ dimensions: [], competitors: [] });
 
       const dimIds = dims.map((d) => d.id);
-      const statusResult = await db.execute(sql`
-        SELECT * FROM competitor_dimension_status
-        WHERE dimension_id = ANY(${dimIds}::uuid[])
-      `);
+      const statusResult = dimIds.length > 0
+        ? await db.execute(sql`
+            SELECT * FROM competitor_dimension_status
+            WHERE dimension_id IN (${sql.join(dimIds.map(id => sql`${id}::uuid`), sql`, `)})
+          `)
+        : { rows: [] };
 
       const allStatusRows = statusResult.rows as any[];
 
