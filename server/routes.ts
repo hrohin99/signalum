@@ -6038,9 +6038,13 @@ Return ONLY the JSON object, no other text.`
   });
 
   app.post("/api/strategic-pulse/generate", requireAuth, async (req: Request, res: Response) => {
-    // Ensure regional_intelligence column exists
+    // Ensure all required columns exist
     try {
       await db.execute(sql`ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS regional_intelligence text`);
+      await db.execute(sql`ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS market_direction text`);
+      await db.execute(sql`ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS market_forces text`);
+      await db.execute(sql`ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS threat_watch text`);
+      await db.execute(sql`ALTER TABLE strategic_pulse ADD COLUMN IF NOT EXISTS roadmap_implications text`);
     } catch (_) {}
 
     try {
@@ -6077,10 +6081,30 @@ Return ONLY the JSON object, no other text.`
       }
       const entityCount = Object.keys(grouped).length;
 
+      // Fetch competitive dimensions for context and Roadmap Implications
+      const dimsResult = await db.execute(sql`
+        SELECT name, priority, items FROM competitive_dimensions
+        WHERE workspace_id = ${workspaceId} ORDER BY display_order
+      `);
+      const dims = dimsResult.rows as any[];
+      const dimContextLines: string[] = [];
+      for (const dim of dims) {
+        const dimItems = (typeof dim.items === 'string' ? JSON.parse(dim.items) : dim.items) || [];
+        const itemsList = dimItems.map((it: any) => `  - ${it.name} (our status: ${it.our_status || 'unknown'})`).join('\n');
+        dimContextLines.push(`[${(dim.priority || 'medium').toUpperCase()} PRIORITY] ${dim.name}:\n${itemsList}`);
+      }
+      const dimContext = dimContextLines.length > 0
+        ? `USER'S COMPETITIVE DIMENSIONS (for tagging insights and Roadmap Implications):\n${dimContextLines.join('\n\n')}`
+        : '';
+      const dimTagInstruction = dimContextLines.length > 0
+        ? `\nWhere an insight directly relates to one of the user's competitive dimensions listed above, append a tag at the end of that insight in this exact format: [DIM:Dimension Name|Item Name]. Only tag insights with a clear, direct connection — do not force tags.`
+        : '';
+
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
       const pulseWsCategories = (wsProfileResult.rows[0]?.categories || []) as ExtractedEntity[];
 
+      // Pass 1: Summarise each entity (sequential to stay within rate limits)
       const entitySummaries: string[] = [];
       for (const [entityKey, items] of Object.entries(grouped)) {
         const captureText = items.map((c, i) => `${i + 1}. ${c}`).join('\n');
@@ -6111,30 +6135,38 @@ Respond with only the summary paragraph, no headers or preamble.`
         entitySummaries.push(`## ${entityKey} (${items.length} signals)\n${summary}`);
       }
 
+      // Pass 2: Synthesise into 7-section Strategic Pulse (sequential — avoids 30k TPM rate limit)
       const consolidatedContext = entitySummaries.join('\n\n');
       const message = await withRetry(() => anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 6000,
+        max_tokens: 7000,
         messages: [{
           role: "user",
-          content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Your job is to synthesise intelligence summaries into sharp strategic insight for the organisation described above.
-
-You are analysing ${entityCount} tracked entities. ${captureCount} total intelligence signals have been captured over the last 6 months and summarised below.
+          content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Synthesise the intelligence below into a Strategic Pulse briefing for the organisation described above. Write as a trusted advisor to the leadership team. Use ONLY evidence from the summaries.
+${dimContext ? '\n' + dimContext + '\n' : ''}
+You are analysing ${entityCount} tracked entities. ${captureCount} total intelligence signals from the last 6 months are summarised below.
 
 ENTITY SUMMARIES:
 ${consolidatedContext}
 
-Write a Strategic Pulse briefing. Use ONLY evidence from the summaries above. Write as a trusted advisor to the leadership team.
-Be concise. Each section headline must be 1 sentence. Each item title must be under 8 words. Each item detail must be 2 sentences maximum. The regional_intelligence items must be 2 sentences each. Total response must fit within 5000 tokens.
+FORMATTING RULES:
+- Each section headline must be 1 sentence.
+- Each item title must be under 8 words.
+- Each item detail must be 2 sentences maximum.
+- regional_intelligence items must be 2 sentences each.
+- market_direction must be 2-3 flowing paragraphs (no bullet points) — synthesise the pattern, take a position, write like an analyst briefing.
+- roadmap_implications items: each title must start with "Based on [specific signal]," and each detail must start with "Consider [specific action]." Reference dimension gaps (items with our_status "no") that the market is moving toward.
+- Total response must fit within 6000 tokens.${dimTagInstruction}
 
 Respond ONLY with valid JSON, no other text, no markdown code fences:
 {
-  "big_shift": { "headline": "One sharp sentence summarising the single most important pattern", "items": [{"title": "Point 1", "detail": "2-3 sentence elaboration with specific evidence"}, {"title": "Point 2", "detail": "..."}, {"title": "Point 3", "detail": "..."}] },
+  "market_direction": { "paragraphs": ["2-3 paragraph strategic outlook for the next 6-18 months. Where is technology heading, what are buyers demanding differently, is the market consolidating or fragmenting? Write with conviction."] },
+  "market_forces": { "headline": "One sentence on structural forces shaping the market", "items": [{"title": "Force name", "detail": "Direction this force is pushing the market and evidence"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
   "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
-  "threat_radar": { "headline": "One sentence on the threat landscape", "items": [{"title": "[CRITICAL] Threat — timeframe", "detail": "What it is, evidence, why urgent"}, {"title": "[WATCH] Threat — timeframe", "detail": "..."}, {"title": "[MONITOR] Threat — timeframe", "detail": "..."}] },
   "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move"}] },
-  "watch_list": { "headline": "Key things to monitor over the next 6 months", "items": [{"title": "Item to watch", "detail": "If [trigger], then [implication]. Horizon: X. Likelihood: High/Medium/Low"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
-  "regional_intelligence": { "headline": "One sentence summarising the global geographic picture", "items": [{"title": "North America", "detail": "Key regulatory, competitive and market developments. If no signals, say: No signals captured for this region."}, {"title": "United Kingdom", "detail": "..."}, {"title": "European Union", "detail": "..."}, {"title": "EMEA", "detail": "..."}, {"title": "APAC", "detail": "..."}, {"title": "South America", "detail": "..."}] }
+  "threat_watch": { "headline": "One sentence on the threat and monitoring landscape", "urgent": [{"title": "Urgent threat name", "detail": "What it is, why it requires action within 30 days, suggested immediate response"}], "monitoring": [{"title": "Watch item name", "detail": "What trigger would escalate this and the implication if it does. Horizon: X months. Likelihood: High/Medium/Low"}] },
+  "regional_intelligence": { "headline": "One sentence summarising the global geographic picture", "items": [{"title": "North America", "detail": "Key regulatory, competitive and market developments. If no signals, say: No signals captured for this region."}, {"title": "United Kingdom", "detail": "..."}, {"title": "European Union", "detail": "..."}, {"title": "EMEA", "detail": "..."}, {"title": "APAC", "detail": "..."}, {"title": "South America", "detail": "..."}] },
+  "roadmap_implications": { "headline": "Actionable product roadmap recommendations from this week's intelligence", "items": [{"title": "Based on [specific signal from above],", "detail": "Consider [specific investment or action]. Reference dimension gaps where relevant."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
 }`
         }]
       }));
@@ -6147,12 +6179,11 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
         const jsonStr = jsonMatch ? jsonMatch[0] : clean;
         parsed = JSON.parse(jsonStr);
       } catch {
-        // Attempt to fix truncated JSON by closing open structures
         try {
           const jsonStr = (jsonMatch ? jsonMatch[0] : clean)
             .replace(/,\s*$/, '')
             .replace(/\}\s*$/, '}}')
-            + ']}]}]}]}]}';
+            + ']}]}]}]}]}]}]}';
           const fixed = jsonStr.match(/\{[\s\S]*/)?.[0] || '{}';
           parsed = JSON.parse(fixed);
         } catch {
@@ -6162,8 +6193,18 @@ Respond ONLY with valid JSON, no other text, no markdown code fences:
       }
 
       const insertResult = await db.execute(sql`
-        INSERT INTO strategic_pulse (workspace_id, big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, regional_intelligence, entity_count, capture_count)
-        VALUES (${workspaceId}, ${parsed.big_shift ? JSON.stringify(parsed.big_shift) : null}, ${parsed.threat_radar ? JSON.stringify(parsed.threat_radar) : null}, ${parsed.emerging_opportunities ? JSON.stringify(parsed.emerging_opportunities) : null}, ${parsed.competitor_moves ? JSON.stringify(parsed.competitor_moves) : null}, ${parsed.watch_list ? JSON.stringify(parsed.watch_list) : null}, ${parsed.regional_intelligence ? JSON.stringify(parsed.regional_intelligence) : null}, ${entityCount}, ${captureCount})
+        INSERT INTO strategic_pulse (
+          workspace_id,
+          big_shift, threat_radar, emerging_opportunities, competitor_moves, watch_list, regional_intelligence,
+          market_direction, market_forces, threat_watch, roadmap_implications,
+          entity_count, capture_count
+        )
+        VALUES (
+          ${workspaceId},
+          ${null}, ${null}, ${parsed.emerging_opportunities ? JSON.stringify(parsed.emerging_opportunities) : null}, ${parsed.competitor_moves ? JSON.stringify(parsed.competitor_moves) : null}, ${null}, ${parsed.regional_intelligence ? JSON.stringify(parsed.regional_intelligence) : null},
+          ${parsed.market_direction ? JSON.stringify(parsed.market_direction) : null}, ${parsed.market_forces ? JSON.stringify(parsed.market_forces) : null}, ${parsed.threat_watch ? JSON.stringify(parsed.threat_watch) : null}, ${parsed.roadmap_implications ? JSON.stringify(parsed.roadmap_implications) : null},
+          ${entityCount}, ${captureCount}
+        )
         RETURNING *
       `);
 
