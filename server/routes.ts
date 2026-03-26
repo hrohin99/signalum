@@ -6172,7 +6172,11 @@ Generate 3 sections as JSON:
 }${dimTagInstruction}`
         }]
       }));
-      const p1 = parseJson((call1.content[0] as any).text || '{}');
+      const raw1 = (call1.content[0] as any).text || '';
+      console.log('[PULSE] Call 1 raw length:', raw1.length);
+      console.log('[PULSE] Call 1 first 300 chars:', raw1.substring(0, 300));
+      const p1 = parseJson(raw1);
+      console.log('[PULSE] Call 1 parsed keys:', Object.keys(p1));
 
       // Call 2: Competitor Moves + Threat Radar & Watch List (with dim context)
       const call2 = await withRetry(() => anthropic.messages.create({
@@ -6190,7 +6194,11 @@ Generate 2 sections as JSON:
 }${dimTagInstruction}`
         }]
       }));
-      const p2 = parseJson((call2.content[0] as any).text || '{}');
+      const raw2 = (call2.content[0] as any).text || '';
+      console.log('[PULSE] Call 2 raw length:', raw2.length);
+      console.log('[PULSE] Call 2 first 300 chars:', raw2.substring(0, 300));
+      const p2 = parseJson(raw2);
+      console.log('[PULSE] Call 2 parsed keys:', Object.keys(p2));
 
       // Call 3: Regional Intelligence + Roadmap Implications (with dim context)
       const call3 = await withRetry(() => anthropic.messages.create({
@@ -6208,7 +6216,11 @@ Generate 2 sections as JSON:
 }${dimTagInstruction}`
         }]
       }));
-      const p3 = parseJson((call3.content[0] as any).text || '{}');
+      const raw3 = (call3.content[0] as any).text || '';
+      console.log('[PULSE] Call 3 raw length:', raw3.length);
+      console.log('[PULSE] Call 3 first 300 chars:', raw3.substring(0, 300));
+      const p3 = parseJson(raw3);
+      console.log('[PULSE] Call 3 parsed keys:', Object.keys(p3));
 
       const parsed = { ...p1, ...p2, ...p3 };
 
