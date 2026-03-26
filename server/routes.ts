@@ -6081,33 +6081,38 @@ Return ONLY the JSON object, no other text.`
       }
       const entityCount = Object.keys(grouped).length;
 
-      // Fetch competitive dimensions for context and Roadmap Implications
+      // Fetch competitive dimensions — HIGH priority only to keep prompts lean
       const dimsResult = await db.execute(sql`
         SELECT name, priority, items FROM competitive_dimensions
         WHERE workspace_id = ${workspaceId} ORDER BY display_order
       `);
       const dims = dimsResult.rows as any[];
-      const dimContextLines: string[] = [];
+      const highDimLines: string[] = [];
       for (const dim of dims) {
+        if ((dim.priority || 'medium') !== 'high') continue;
         const dimItems = (typeof dim.items === 'string' ? JSON.parse(dim.items) : dim.items) || [];
         const itemsList = dimItems.map((it: any) => `  - ${it.name} (our status: ${it.our_status || 'unknown'})`).join('\n');
-        dimContextLines.push(`[${(dim.priority || 'medium').toUpperCase()} PRIORITY] ${dim.name}:\n${itemsList}`);
+        highDimLines.push(`[HIGH PRIORITY] ${dim.name}:\n${itemsList}`);
       }
-      const dimContext = dimContextLines.length > 0
-        ? `USER'S COMPETITIVE DIMENSIONS (for tagging insights and Roadmap Implications):\n${dimContextLines.join('\n\n')}`
+      const dimContext = highDimLines.length > 0
+        ? `USER'S HIGH-PRIORITY COMPETITIVE DIMENSIONS:\n${highDimLines.join('\n\n')}`
         : '';
-      const dimTagInstruction = dimContextLines.length > 0
-        ? `\nWhere an insight directly relates to one of the user's competitive dimensions listed above, append a tag at the end of that insight in this exact format: [DIM:Dimension Name|Item Name]. Only tag insights with a clear, direct connection — do not force tags.`
+      const dimTagInstruction = highDimLines.length > 0
+        ? `\nWhere an insight directly relates to one of the user's competitive dimensions above, append [DIM:Dimension Name|Item Name] at the end. Only tag insights with a clear, direct connection.`
         : '';
 
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
       const pulseWsCategories = (wsProfileResult.rows[0]?.categories || []) as ExtractedEntity[];
 
-      // Pass 1: Summarise each entity (sequential to stay within rate limits)
+      // Pass 1: Summarise each entity — cap to top 15 by signal count to stay within timeout
+      const sortedEntities = Object.entries(grouped)
+        .sort(([, a], [, b]) => b.length - a.length)
+        .slice(0, 15);
+
       const entitySummaries: string[] = [];
-      for (const [entityKey, items] of Object.entries(grouped)) {
-        const captureText = items.map((c, i) => `${i + 1}. ${c}`).join('\n');
+      for (const [entityKey, items] of sortedEntities) {
+        const captureText = items.slice(0, 8).map((c, i) => `${i + 1}. ${c}`).join('\n');
 
         let pulseEntityObj: ExtractedEntity | undefined;
         for (const cat of (pulseWsCategories as any[])) {
@@ -6120,77 +6125,92 @@ Return ONLY the JSON object, no other text.`
 
         const msg = await withRetry(() => anthropic.messages.create({
           model: "claude-sonnet-4-6",
-          max_tokens: 500,
+          max_tokens: 300,
           messages: [{
             role: "user",
-            content: `You are a competitive intelligence analyst. Summarise intelligence about "${entityKey}" into a concise 150-200 word briefing covering: recent activity, strategic direction, notable moves, and emerging patterns. Be specific and factual.
-${pulseProfileCtx ? `\nKnown profile data (use as context, not as recent signals):\n${pulseProfileCtx}\n` : ""}
-RECENT SIGNALS (${items.length} total):
+            content: `Competitive intelligence analyst. Summarise "${entityKey}" in 100-120 words: recent activity, strategic direction, notable moves. Be specific.
+${pulseProfileCtx ? `Known profile (context only):\n${pulseProfileCtx}\n` : ""}
+SIGNALS (${items.length} total, showing top ${Math.min(items.length, 8)}):
 ${captureText}
 
-Respond with only the summary paragraph, no headers or preamble.`
+Respond with only the summary, no preamble.`
           }]
         }));
         const summary = (msg.content[0] as any).text || '';
-        entitySummaries.push(`## ${entityKey} (${items.length} signals)\n${summary}`);
+        entitySummaries.push(`## ${entityKey}\n${summary}`);
       }
 
-      // Pass 2: Synthesise into 7-section Strategic Pulse (sequential — avoids 30k TPM rate limit)
+      // Pass 2: Synthesise into 7 sections — 3 batched API calls to stay within gateway timeout
       const consolidatedContext = entitySummaries.join('\n\n');
-      const message = await withRetry(() => anthropic.messages.create({
+      const baseContext = `${profileCtx ? profileCtx + '\n\n' : ''}ENTITY SUMMARIES (${entityCount} entities, ${captureCount} signals):\n${consolidatedContext}\n\nRULES: Each headline = 1 sentence. Each item title < 8 words. Each detail = 2 sentences max. Respond ONLY with valid JSON, no markdown fences.`;
+
+      const parseJson = (text: string): any => {
+        const clean = text.replace(/```json|```/g, '').trim();
+        const match = clean.match(/\{[\s\S]*/);
+        try { return JSON.parse(match ? match[0] : clean); } catch {
+          try {
+            const fixed = ((match ? match[0] : clean).replace(/,\s*$/, '') + ']}]}]}]}]}]}]}');
+            return JSON.parse(fixed.match(/\{[\s\S]*/)?.[0] || '{}');
+          } catch { return {}; }
+        }
+      };
+
+      // Call 1: Market Direction + Market Forces (with dim context) + Emerging Opportunities
+      const call1 = await withRetry(() => anthropic.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 7000,
+        max_tokens: 2500,
         messages: [{
           role: "user",
-          content: `${profileCtx ? profileCtx + '\n\n' : ''}You are a senior competitive intelligence analyst. Synthesise the intelligence below into a Strategic Pulse briefing for the organisation described above. Write as a trusted advisor to the leadership team. Use ONLY evidence from the summaries.
-${dimContext ? '\n' + dimContext + '\n' : ''}
-You are analysing ${entityCount} tracked entities. ${captureCount} total intelligence signals from the last 6 months are summarised below.
+          content: `${baseContext}
+${dimContext ? '\n' + dimContext : ''}
 
-ENTITY SUMMARIES:
-${consolidatedContext}
-
-FORMATTING RULES:
-- Each section headline must be 1 sentence.
-- Each item title must be under 8 words.
-- Each item detail must be 2 sentences maximum.
-- regional_intelligence items must be 2 sentences each.
-- market_direction must be 2-3 flowing paragraphs (no bullet points) — synthesise the pattern, take a position, write like an analyst briefing.
-- roadmap_implications items: each title must start with "Based on [specific signal]," and each detail must start with "Consider [specific action]." Reference dimension gaps (items with our_status "no") that the market is moving toward.
-- Total response must fit within 6000 tokens.${dimTagInstruction}
-
-Respond ONLY with valid JSON, no other text, no markdown code fences:
+Generate 3 sections as JSON:
 {
-  "market_direction": { "paragraphs": ["2-3 paragraph strategic outlook for the next 6-18 months. Where is technology heading, what are buyers demanding differently, is the market consolidating or fragmenting? Write with conviction."] },
-  "market_forces": { "headline": "One sentence on structural forces shaping the market", "items": [{"title": "Force name", "detail": "Direction this force is pushing the market and evidence"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
-  "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise"}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
-  "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move"}] },
-  "threat_watch": { "headline": "One sentence on the threat and monitoring landscape", "urgent": [{"title": "Urgent threat name", "detail": "What it is, why it requires action within 30 days, suggested immediate response"}], "monitoring": [{"title": "Watch item name", "detail": "What trigger would escalate this and the implication if it does. Horizon: X months. Likelihood: High/Medium/Low"}] },
-  "regional_intelligence": { "headline": "One sentence summarising the global geographic picture", "items": [{"title": "North America", "detail": "Key regulatory, competitive and market developments. If no signals, say: No signals captured for this region."}, {"title": "United Kingdom", "detail": "..."}, {"title": "European Union", "detail": "..."}, {"title": "EMEA", "detail": "..."}, {"title": "APAC", "detail": "..."}, {"title": "South America", "detail": "..."}] },
-  "roadmap_implications": { "headline": "Actionable product roadmap recommendations from this week's intelligence", "items": [{"title": "Based on [specific signal from above],", "detail": "Consider [specific investment or action]. Reference dimension gaps where relevant."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
-}`
+  "market_direction": { "paragraphs": ["Para 1: where technology is heading and why.", "Para 2: how buyer demands are shifting.", "Para 3: market structure — consolidating or fragmenting? Take a position."] },
+  "market_forces": { "headline": "One sentence on structural forces shaping the market", "items": [{"title": "Force name", "detail": "Direction and evidence. [DIM:...] tag if relevant."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
+  "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
+}${dimTagInstruction}`
         }]
       }));
+      const p1 = parseJson((call1.content[0] as any).text || '{}');
 
-      const raw = (message.content[0] as any).text || "{}";
-      const clean = raw.replace(/```json|```/g, "").trim();
-      const jsonMatch = clean.match(/\{[\s\S]*/);
-      let parsed: any = {};
-      try {
-        const jsonStr = jsonMatch ? jsonMatch[0] : clean;
-        parsed = JSON.parse(jsonStr);
-      } catch {
-        try {
-          const jsonStr = (jsonMatch ? jsonMatch[0] : clean)
-            .replace(/,\s*$/, '')
-            .replace(/\}\s*$/, '}}')
-            + ']}]}]}]}]}]}]}';
-          const fixed = jsonStr.match(/\{[\s\S]*/)?.[0] || '{}';
-          parsed = JSON.parse(fixed);
-        } catch {
-          console.error('[pulse] Could not parse Claude response, using empty object');
-          parsed = {};
-        }
-      }
+      // Call 2: Competitor Moves + Threat Radar & Watch List (with dim context)
+      const call2 = await withRetry(() => anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        messages: [{
+          role: "user",
+          content: `${baseContext}
+${dimContext ? '\n' + dimContext : ''}
+
+Generate 2 sections as JSON:
+{
+  "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move."}] },
+  "threat_watch": { "headline": "One sentence on threats and monitoring", "urgent": [{"title": "Threat name", "detail": "What it is, why urgent within 30 days, immediate response. [DIM:...] tag if relevant."}], "monitoring": [{"title": "Watch item", "detail": "Trigger that escalates it. Horizon: X months. Likelihood: High/Medium/Low. [DIM:...] tag if relevant."}] }
+}${dimTagInstruction}`
+        }]
+      }));
+      const p2 = parseJson((call2.content[0] as any).text || '{}');
+
+      // Call 3: Regional Intelligence + Roadmap Implications (with dim context)
+      const call3 = await withRetry(() => anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        messages: [{
+          role: "user",
+          content: `${baseContext}
+${dimContext ? '\n' + dimContext : ''}
+
+Generate 2 sections as JSON:
+{
+  "regional_intelligence": { "headline": "One sentence on the global picture", "items": [{"title": "North America", "detail": "Key regulatory, competitive and market developments. If no signals: No signals captured for this region."}, {"title": "United Kingdom", "detail": "..."}, {"title": "European Union", "detail": "..."}, {"title": "EMEA", "detail": "..."}, {"title": "APAC", "detail": "..."}, {"title": "South America", "detail": "..."}] },
+  "roadmap_implications": { "headline": "Product roadmap recommendations from this week's intelligence", "items": [{"title": "Based on [specific signal],", "detail": "Consider [specific action]. Reference dimension gaps (our_status: no) where relevant."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
+}${dimTagInstruction}`
+        }]
+      }));
+      const p3 = parseJson((call3.content[0] as any).text || '{}');
+
+      const parsed = { ...p1, ...p2, ...p3 };
 
       const insertResult = await db.execute(sql`
         INSERT INTO strategic_pulse (
