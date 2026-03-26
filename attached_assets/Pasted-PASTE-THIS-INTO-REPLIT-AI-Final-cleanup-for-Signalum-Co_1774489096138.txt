@@ -1,0 +1,103 @@
+PASTE THIS INTO REPLIT AI: 
+
+Final cleanup for Signalum Competitive Dimensions feature. Read 
+
+CLAUDE.md first. This is Phase 8 — only do this after 2+ weeks 
+
+of stable operation. 
+
+  
+
+CRITICAL SAFETY RULES: 
+
+- Take a database backup BEFORE starting 
+
+- Remove old code carefully, search for all references 
+
+- Do NOT delete database tables until all code references are 
+
+  removed and verified 
+
+  
+
+TASKS (in this order): 
+
+  
+
+1. REMOVE OLD SETTINGS TABS: Remove the separate "My Product" and 
+
+   "Capabilities" tabs from settings navigation. The "Product & 
+
+   Intelligence" page replaces them. Keep "Account", "Notifications", 
+
+   "Email capture". 
+
+  
+
+2. REMOVE OLD MATRIX COMPONENTS: Remove CapabilityMatrix and 
+
+   CapabilityMatrixCard components. Remove the feature flag 
+
+   conditional — DimensionMatrix is now the only matrix. 
+
+  
+
+3. REMOVE FEATURE FLAG from topic-view.tsx: Remove the conditional 
+
+   and old CapabilityMatrix render. DimensionComparisonCard is now 
+
+   the only comparison view. 
+
+  
+
+4. REMOVE OLD researchEntity function from ambientSearch.ts (the 
+
+   funding/geo/products one) ONLY IF that data is now captured 
+
+   through dimensions. If funding/geo/products are still separate 
+
+   concerns, KEEP researchEntity. 
+
+  
+
+5. REMOVE DEBUG LOGS: 
+
+   - console.log at ~line 1216 in routes.ts 
+
+   - console.log('[debug] entity object:...' in topic-view.tsx 
+
+  
+
+6. REMOVE the "PRODUCTS (AUTO-RESEARCHED)" section in topic-view.tsx 
+
+   that shows stale entity.products JSON data 
+
+  
+
+7. REMOVE the temporary /api/admin/fix-user-role endpoint 
+
+  
+
+8. AFTER all code changes are deployed and verified working: 
+
+   DROP TABLE IF EXISTS workspace_capabilities; 
+
+   DROP TABLE IF EXISTS competitor_capabilities; 
+
+   DROP TABLE IF EXISTS entrust_capabilities; 
+
+  
+
+   Run these in the shell manually: 
+
+   node -e "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL});p.query('DROP TABLE IF EXISTS workspace_capabilities, competitor_capabilities, entrust_capabilities CASCADE').then(()=>{console.log('Old tables dropped');p.end()})" 
+
+  
+
+9. Search the entire codebase for any remaining references to: 
+
+   workspace_capabilities, competitor_capabilities, 
+
+   entrust_capabilities, CapabilityMatrix, CapabilityMatrixCard 
+
+   Remove any orphaned imports or references. 
