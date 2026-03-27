@@ -6155,93 +6155,41 @@ Respond with only the summary, no preamble.`
         }
       };
 
-      // Call 1: Market Direction + Market Forces (with dim context) + Emerging Opportunities
-      let p1: any = {};
+      // Single Claude call for all 7 sections (avoids rate limiting from multiple calls)
+      let parsed: any = {};
       try {
-        const call1 = await withRetry(() => anthropic.messages.create({
+        const singleCall = await withRetry(() => anthropic.messages.create({
           model: "claude-sonnet-4-6",
-          max_tokens: 2000,
+          max_tokens: 4096,
           messages: [{
             role: "user",
             content: `${baseContext}
 ${dimContext ? '\n' + dimContext : ''}
 
-Generate 3 sections as JSON:
+Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 items minimum per section, 2 sentences max per detail. Respond ONLY with valid JSON. No markdown fences. No preamble text before the JSON. No explanation after the JSON.
+
 {
-  "market_direction": { "paragraphs": ["Para 1: where technology is heading and why.", "Para 2: how buyer demands are shifting.", "Para 3: market structure — consolidating or fragmenting? Take a position."] },
-  "market_forces": { "headline": "One sentence on structural forces shaping the market", "items": [{"title": "Force name", "detail": "Direction and evidence. [DIM:...] tag if relevant."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] },
-  "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
+  "market_direction": { "paragraphs": ["Para 1: where technology is heading and why.", "Para 2: how buyer demands are shifting.", "Para 3: market structure - consolidating or fragmenting? Take a position."] },
+  "market_forces": { "headline": "One sentence on structural forces shaping the market", "items": [{"title": "Force name", "detail": "Direction and evidence."}, {"title": "Force 2", "detail": "Direction and evidence."}, {"title": "Force 3", "detail": "Direction and evidence."}] },
+  "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise."}, {"title": "Opportunity 2", "detail": "Evidence."}, {"title": "Opportunity 3", "detail": "Evidence."}] },
+  "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move."}, {"title": "Entity 2", "detail": "Intent and next move."}, {"title": "Entity 3", "detail": "Intent and next move."}] },
+  "threat_watch": { "headline": "One sentence on threats and monitoring", "urgent": [{"title": "Threat name", "detail": "What it is, why urgent within 30 days, immediate response."}], "monitoring": [{"title": "Watch item", "detail": "Trigger that escalates it. Horizon and likelihood."}] },
+  "regional_intelligence": { "headline": "One sentence on the global picture", "items": [{"title": "North America", "detail": "Key developments."}, {"title": "United Kingdom", "detail": "Key developments."}, {"title": "European Union", "detail": "Key developments."}, {"title": "EMEA", "detail": "Key developments."}, {"title": "APAC", "detail": "Key developments."}, {"title": "South America", "detail": "Key developments."}] },
+  "roadmap_implications": { "headline": "Product roadmap recommendations", "items": [{"title": "Based on [signal],", "detail": "Consider [action]. Reference dimension gaps."}, {"title": "Based on [signal 2],", "detail": "Consider [action 2]."}, {"title": "Based on [signal 3],", "detail": "Consider [action 3]."}] }
 }${dimTagInstruction}`
           }]
         }));
-        const raw1 = (call1.content[0] as any).text || '';
-        console.log('[PULSE] Call 1 raw length:', raw1.length);
-        console.log('[PULSE] Call 1 first 300 chars:', raw1.substring(0, 300));
-        p1 = parseJson(raw1);
-        console.log('[PULSE] Call 1 parsed keys:', Object.keys(p1));
+        const raw = (singleCall.content[0] as any).text || '{}';
+        console.log('[PULSE] Raw response length:', raw.length);
+        console.log('[PULSE] First 200 chars:', raw.substring(0, 200));
+        parsed = parseJson(raw);
+        console.log('[PULSE] Parsed keys:', Object.keys(parsed));
+        console.log('[PULSE] Has market_direction:', !!parsed.market_direction);
+        console.log('[PULSE] Has competitor_moves:', !!parsed.competitor_moves);
       } catch (err: any) {
-        console.error('[PULSE] Call 1 FAILED:', err.message);
+        console.error('[PULSE] Single call FAILED:', err.message);
+        throw err;
       }
-
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Call 2: Competitor Moves + Threat Radar & Watch List (with dim context)
-      let p2: any = {};
-      try {
-        const call2 = await withRetry(() => anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 2000,
-          messages: [{
-            role: "user",
-            content: `${baseContext}
-${dimContext ? '\n' + dimContext : ''}
-
-Generate 2 sections as JSON:
-{
-  "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move."}] },
-  "threat_watch": { "headline": "One sentence on threats and monitoring", "urgent": [{"title": "Threat name", "detail": "What it is, why urgent within 30 days, immediate response. [DIM:...] tag if relevant."}], "monitoring": [{"title": "Watch item", "detail": "Trigger that escalates it. Horizon: X months. Likelihood: High/Medium/Low. [DIM:...] tag if relevant."}] }
-}${dimTagInstruction}`
-          }]
-        }));
-        const raw2 = (call2.content[0] as any).text || '';
-        console.log('[PULSE] Call 2 raw length:', raw2.length);
-        console.log('[PULSE] Call 2 first 300 chars:', raw2.substring(0, 300));
-        p2 = parseJson(raw2);
-        console.log('[PULSE] Call 2 parsed keys:', Object.keys(p2));
-      } catch (err: any) {
-        console.error('[PULSE] Call 2 FAILED:', err.message);
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Call 3: Regional Intelligence + Roadmap Implications (with dim context)
-      let p3: any = {};
-      try {
-        const call3 = await withRetry(() => anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 2000,
-          messages: [{
-            role: "user",
-            content: `${baseContext}
-${dimContext ? '\n' + dimContext : ''}
-
-Generate 2 sections as JSON:
-{
-  "regional_intelligence": { "headline": "One sentence on the global picture", "items": [{"title": "North America", "detail": "Key regulatory, competitive and market developments. If no signals: No signals captured for this region."}, {"title": "United Kingdom", "detail": "..."}, {"title": "European Union", "detail": "..."}, {"title": "EMEA", "detail": "..."}, {"title": "APAC", "detail": "..."}, {"title": "South America", "detail": "..."}] },
-  "roadmap_implications": { "headline": "Product roadmap recommendations from this week's intelligence", "items": [{"title": "Based on [specific signal],", "detail": "Consider [specific action]. Reference dimension gaps (our_status: no) where relevant."}, {"title": "...", "detail": "..."}, {"title": "...", "detail": "..."}] }
-}${dimTagInstruction}`
-          }]
-        }));
-        const raw3 = (call3.content[0] as any).text || '';
-        console.log('[PULSE] Call 3 raw length:', raw3.length);
-        console.log('[PULSE] Call 3 first 300 chars:', raw3.substring(0, 300));
-        p3 = parseJson(raw3);
-        console.log('[PULSE] Call 3 parsed keys:', Object.keys(p3));
-      } catch (err: any) {
-        console.error('[PULSE] Call 3 FAILED:', err.message);
-      }
-
-      const parsed = { ...p1, ...p2, ...p3 };
 
       const insertResult = await db.execute(sql`
         INSERT INTO strategic_pulse (
