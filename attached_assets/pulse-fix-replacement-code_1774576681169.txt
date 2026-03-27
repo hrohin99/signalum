@@ -1,0 +1,44 @@
+// ============================================================
+// INSTRUCTIONS FOR REPLIT:
+// 
+// In server/routes.ts, DELETE lines 6158 through 6244
+// (from "// Call 1:" through "const parsed = { ...p1, ...p2, ...p3 };")
+// 
+// Replace with EVERYTHING below this comment block.
+// ============================================================
+
+      // Single Claude call for all 7 sections (avoids rate limiting from multiple calls)
+      let parsed: any = {};
+      try {
+        const singleCall = await withRetry(() => anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 4096,
+          messages: [{
+            role: "user",
+            content: `${baseContext}
+${dimContext ? '\n' + dimContext : ''}
+
+Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 items minimum per section, 2 sentences max per detail. Respond ONLY with valid JSON. No markdown fences. No preamble text before the JSON. No explanation after the JSON.
+
+{
+  "market_direction": { "paragraphs": ["Para 1: where technology is heading and why.", "Para 2: how buyer demands are shifting.", "Para 3: market structure - consolidating or fragmenting? Take a position."] },
+  "market_forces": { "headline": "One sentence on structural forces shaping the market", "items": [{"title": "Force name", "detail": "Direction and evidence."}, {"title": "Force 2", "detail": "Direction and evidence."}, {"title": "Force 3", "detail": "Direction and evidence."}] },
+  "emerging_opportunities": { "headline": "One sentence framing the opportunity space", "items": [{"title": "Opportunity name", "detail": "Evidence and how to capitalise."}, {"title": "Opportunity 2", "detail": "Evidence."}, {"title": "Opportunity 3", "detail": "Evidence."}] },
+  "competitor_moves": { "headline": "One sentence on competitor activity", "items": [{"title": "Entity name", "detail": "Strategic intent, evidence, predicted next move."}, {"title": "Entity 2", "detail": "Intent and next move."}, {"title": "Entity 3", "detail": "Intent and next move."}] },
+  "threat_watch": { "headline": "One sentence on threats and monitoring", "urgent": [{"title": "Threat name", "detail": "What it is, why urgent within 30 days, immediate response."}], "monitoring": [{"title": "Watch item", "detail": "Trigger that escalates it. Horizon and likelihood."}] },
+  "regional_intelligence": { "headline": "One sentence on the global picture", "items": [{"title": "North America", "detail": "Key developments."}, {"title": "United Kingdom", "detail": "Key developments."}, {"title": "European Union", "detail": "Key developments."}, {"title": "EMEA", "detail": "Key developments."}, {"title": "APAC", "detail": "Key developments."}, {"title": "South America", "detail": "Key developments."}] },
+  "roadmap_implications": { "headline": "Product roadmap recommendations", "items": [{"title": "Based on [signal],", "detail": "Consider [action]. Reference dimension gaps."}, {"title": "Based on [signal 2],", "detail": "Consider [action 2]."}, {"title": "Based on [signal 3],", "detail": "Consider [action 3]."}] }
+}${dimTagInstruction}`
+          }]
+        }));
+        const raw = (singleCall.content[0] as any).text || '{}';
+        console.log('[PULSE] Raw response length:', raw.length);
+        console.log('[PULSE] First 200 chars:', raw.substring(0, 200));
+        parsed = parseJson(raw);
+        console.log('[PULSE] Parsed keys:', Object.keys(parsed));
+        console.log('[PULSE] Has market_direction:', !!parsed.market_direction);
+        console.log('[PULSE] Has competitor_moves:', !!parsed.competitor_moves);
+      } catch (err: any) {
+        console.error('[PULSE] Single call FAILED:', err.message);
+        throw err;
+      }
