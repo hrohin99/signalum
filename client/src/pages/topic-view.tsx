@@ -74,6 +74,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext, EntitySeoData } from "@shared/schema";
+import { UpdatesList } from "@/components/UpdatesList";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { PartnershipsCard } from "@/components/PartnershipsCard";
 import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
@@ -675,24 +676,47 @@ function TopicViewContent({
       )}
 
       {isCompetitor && (
-        <div style={{ display: 'flex', borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)', marginBottom: 20, marginTop: 16, gap: 0, overflowX: 'auto', whiteSpace: 'nowrap' }} data-testid="tab-bar-competitor">
-          {(['overview','profile','commercial','competitive','strategic','updates'] as const).map(tab => (
-            <div
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                fontSize: 13, padding: '10px 16px', cursor: 'pointer',
-                color: activeTab === tab ? '#534AB7' : 'var(--color-text-secondary, #64748b)',
-                borderBottom: activeTab === tab ? '2px solid #534AB7' : '2px solid transparent',
-                fontWeight: activeTab === tab ? 500 : 400,
-                marginBottom: -0.5, whiteSpace: 'nowrap',
-                textTransform: 'capitalize'
-              }}
-              data-testid={`tab-${tab}`}
-            >
-              {tab === 'updates' ? 'Updates' : tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </div>
-          ))}
+        <div style={{ position: 'relative', marginBottom: 20, marginTop: 16 }}>
+          <div
+            className="[&::-webkit-scrollbar]:hidden"
+            style={{
+              display: 'flex',
+              borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)',
+              gap: 0,
+              overflowX: 'auto',
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+            } as React.CSSProperties}
+            data-testid="tab-bar-competitor"
+          >
+            {(['overview','profile','commercial','competitive','strategic','updates'] as const).map(tab => (
+              <div
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                style={{
+                  fontSize: 13, padding: '10px 16px', cursor: 'pointer',
+                  color: activeTab === tab ? '#534AB7' : 'var(--color-text-secondary, #64748b)',
+                  borderBottom: activeTab === tab ? '2px solid #534AB7' : '2px solid transparent',
+                  fontWeight: activeTab === tab ? 500 : 400,
+                  marginBottom: -0.5, whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  textTransform: 'capitalize'
+                }}
+                data-testid={`tab-${tab}`}
+              >
+                {tab === 'updates' ? 'Updates' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </div>
+            ))}
+          </div>
+          <div
+            style={{
+              position: 'absolute',
+              right: 0, top: 0, bottom: 0,
+              width: 32,
+              background: 'linear-gradient(to right, transparent, white)',
+              pointerEvents: 'none',
+            }}
+          />
         </div>
       )}
 
@@ -2056,7 +2080,7 @@ function WidgetsSection({
       })}
 
       {hasUpdatesFeed && (
-        <UpdatesFeedWidget entity={entity} captures={captures} categoryName={categoryName} />
+        <UpdatesList captures={captures} entityType={entity.topic_type} />
       )}
     </div>
   );
@@ -3283,11 +3307,17 @@ function PricingSignalDetection({ entity, captures, categoryName }: { entity: Ex
   const { toast } = useToast();
   const [dismissed, setDismissed] = useState<Set<number>>(new Set());
 
+  if (entity.topic_type !== "competitor") return null;
+
   const pricingCaptures = captures.filter((cap) => {
     if (dismissed.has(cap.id)) return false;
     if (cap.type !== "web_search") return false;
-    const pricingKeywords = /\b(price|pricing|plan|tier|cost|per month|per year|per seat|per user|per call|per transaction|subscription|free trial|freemium)\b/i;
-    return pricingKeywords.test(cap.content);
+    const pricingKeywords = /\b(price|pricing|plan|tier|per month|per year|per seat|per user|per call|per transaction|subscription|free trial|freemium)\b/i;
+    if (!pricingKeywords.test(cap.content)) return false;
+    const financialNoise = /\b(revenue|valuation|funding|raised|market size|market cap|annual revenue|quarterly revenue|billion|million)\b/i;
+    if (financialNoise.test(cap.content)) return false;
+    const actualPricing = /\b(per (transaction|verification|user|seat|call|month|year|api call|use)|subscription (fee|plan|tier)|license fee|contact sales|custom pricing|free trial|freemium|pay-as-you-go|tiered pricing)\b/i;
+    return actualPricing.test(cap.content);
   }).slice(0, 3);
 
   const createMutation = useMutation({
