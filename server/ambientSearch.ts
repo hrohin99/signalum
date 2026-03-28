@@ -61,6 +61,97 @@ Only include information you are confident about. Use null for unknown fields. R
   }
 }
 
+async function extractMilestonesForEntity(
+  entityName: string,
+  workspaceId: string,
+  topicType: string,
+  categoryFocus?: string
+): Promise<void> {
+  const apiKey = process.env.PERPLEXITY_API_KEY;
+  if (!apiKey) return;
+
+  const systemPrompt =
+    'You are a research analyst. Return only valid JSON with no prose, no markdown, no code fences.';
+  const contextClause = categoryFocus ? ` in the context of ${categoryFocus}` : '';
+  const userPrompt = `List 3-5 significant milestones for "${entityName}"${contextClause}. Include key past events (launches, policy changes, deadlines, funding rounds, major announcements) and any known upcoming scheduled events or deadlines. Return as a JSON array only:
+[
+  {"date": "YYYY-MM-DD", "event": "brief one-sentence description", "note": "optional extra context or null"}
+]
+Use YYYY-MM-DD for the date (use -01 for unknown day/month). Return only the JSON array, no other text.`;
+
+  let rawData: { choices: Array<{ message: { content: string } }> };
+  try {
+    const response = await fetch('https://api.perplexity.ai/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'sonar',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        max_tokens: 800,
+      }),
+    });
+    if (!response.ok) {
+      console.error(`[milestones] Perplexity error for ${entityName}: ${response.status}`);
+      return;
+    }
+    rawData = await response.json();
+  } catch (fetchErr) {
+    console.error(`[milestones] Fetch error for ${entityName}:`, fetchErr);
+    return;
+  }
+
+  const content = rawData?.choices?.[0]?.message?.content || '';
+  let milestones: Array<{ date: string; event: string; note?: string | null }>;
+  try {
+    const cleaned = content
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    const parsed = JSON.parse(cleaned);
+    if (!Array.isArray(parsed)) {
+      console.error(`[milestones] Expected array for ${entityName}`);
+      return;
+    }
+    milestones = parsed;
+  } catch (parseErr) {
+    console.error(`[milestones] Failed to parse response for ${entityName}:`, parseErr);
+    return;
+  }
+
+  let inserted = 0;
+  for (const ms of milestones) {
+    if (typeof ms.date !== 'string' || typeof ms.event !== 'string') continue;
+    if (!ms.date.trim() || !ms.event.trim()) continue;
+
+    let normalizedDate = ms.date.trim();
+    if (/^\d{4}$/.test(normalizedDate)) {
+      normalizedDate = `${normalizedDate}-01-01`;
+    } else if (/^\d{4}-\d{2}$/.test(normalizedDate)) {
+      normalizedDate = `${normalizedDate}-01`;
+    }
+
+    try {
+      await db.execute(sql`
+        INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
+        VALUES (${workspaceId}, ${entityName}, ${normalizedDate}::date, ${ms.event.trim()}, 'perplexity')
+        ON CONFLICT (workspace_id, entity_id, date, event_text) DO NOTHING
+      `);
+      inserted++;
+    } catch (insertErr) {
+      console.error(`[milestones] Error inserting milestone for ${entityName}:`, insertErr);
+    }
+  }
+
+  console.log(`[milestones] ${entityName}: ${inserted}/${milestones.length} milestones upserted (source=perplexity)`);
+}
+
 class RateLimiter {
   private timestamps: number[] = [];
   private maxCalls: number;
@@ -386,6 +477,16 @@ export async function runAmbientSearchForUser(
             }
           }
         }
+        if (topicType !== 'competitor') {
+          await perplexityRateLimiter.waitForSlot();
+          await extractMilestonesForEntity(
+            entity.name,
+            workspace.id,
+            topicType,
+            categoryFocus
+          );
+        }
+
         const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
         const needsResearch = !entity.last_researched_at ||
           (Date.now() - new Date(entity.last_researched_at).getTime()) > THIRTY_DAYS_MS;

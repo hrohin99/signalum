@@ -593,6 +593,10 @@ export async function ensureDatabaseSchema(): Promise<void> {
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS idx_topic_milestones_entity ON topic_milestones(entity_id, workspace_id)
     `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_milestones_dedup
+        ON topic_milestones(workspace_id, entity_id, date, event_text)
+    `);
     console.log("[DBSafety] topic_milestones table verified.");
   } catch (error: any) {
     console.error("[DBSafety] Error ensuring topic_milestones table:", error?.message || error);
