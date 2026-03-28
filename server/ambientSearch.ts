@@ -335,9 +335,22 @@ export async function runAmbientSearchForUser(
         );
         const deduplicated = deduplicateFindings(findings, existingCaptures);
 
-        if (deduplicated.length > 0) {
+        let relevantFindings = deduplicated;
+        if (topicType === "competitor") {
+          const entityLower = entity.name.toLowerCase();
+          relevantFindings = deduplicated.filter((f) => {
+            const contentLower = (f.summary || "").toLowerCase();
+            if (!contentLower.includes(entityLower)) {
+              console.log(`[ambient] Skipping irrelevant result for ${entity.name}: ${f.summary.substring(0, 60)}...`);
+              return false;
+            }
+            return true;
+          });
+        }
+
+        if (relevantFindings.length > 0) {
           const captureRecords = findingsToCaptures(
-            deduplicated,
+            relevantFindings,
             entity.name,
             userId,
             category.name
@@ -348,12 +361,12 @@ export async function runAmbientSearchForUser(
           const captureIds = createdCaptures.map((c) => c.id);
           await storage.flagCapturesForBrief(captureIds);
 
-          const summaryParts = deduplicated.map((f) => f.summary);
+          const summaryParts = relevantFindings.map((f) => f.summary);
           const aiSummary = `Latest updates (${new Date().toLocaleDateString()}): ${summaryParts.slice(0, 3).join("; ")}`;
           await storage.updateEntityAiSummary(userId, entity.name, aiSummary);
 
           if (entity.alert_on_high_signal === true) {
-            const highSignalFindings = deduplicated.filter(
+            const highSignalFindings = relevantFindings.filter(
               (f) => f.signal_strength === "high"
             );
             for (const finding of highSignalFindings) {

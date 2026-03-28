@@ -1,0 +1,55 @@
+BUG FIX: Irrelevant captures matched to wrong competitors
+
+PROBLEM: When Perplexity ambient search runs for a competitor 
+(e.g., iProov), it returns some broader industry news that doesn't 
+mention the competitor at all. These get saved with 
+matchedEntity = "iProov" even though they're about Entrust, 
+Socure, CLEAR, etc. This affects ~15-30% of competitor captures.
+
+TWO-PART FIX:
+
+PART 1 — Prevent new irrelevant captures (server/ambientSearch.ts):
+
+Find where Perplexity search results are saved as captures. 
+Before inserting each capture, add a relevance check:
+
+  // Only save if the entity name appears in the content
+  const contentLower = (content || '').toLowerCase();
+  const entityLower = entityName.toLowerCase();
+  
+  // For competitors: entity name must appear in content
+  if (entity.topic_type === 'competitor') {
+    if (!contentLower.includes(entityLower)) {
+      console.log(`[ambient] Skipping irrelevant result for ${entityName}: ${content.substring(0, 60)}...`);
+      continue; // Skip this result
+    }
+  }
+
+This ONLY applies to competitor entities. For topics and 
+regulations, the matching is broader by design (an article about 
+age verification doesn't need to say "Age Assurance Technology" 
+verbatim).
+
+PART 2 — Clean up existing irrelevant captures:
+
+Create a one-time cleanup endpoint (admin only):
+
+  POST /api/admin/cleanup-irrelevant-captures
+  
+  For each capture where matchedEntity matches a competitor name:
+  - Check if entityName appears in the content (case-insensitive)
+  - If NOT, either:
+    a) Delete the capture, OR
+    b) Set matchedEntity to null (unmatched)
+  
+  Log how many captures were cleaned up per entity.
+  
+  Only run for entities with topic_type === 'competitor'.
+
+IMPORTANT:
+- Do NOT modify captures for topics or regulations
+- The entity names to check against are in workspaces.categories 
+  JSONB, filter by topic_type === 'competitor'
+- Some entity names have special characters (e.g., "Facetec" vs 
+  "FaceTec") — use case-insensitive matching
+- Log every skipped/cleaned capture for audit

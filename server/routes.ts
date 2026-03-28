@@ -4771,6 +4771,65 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
+  app.post("/api/admin/cleanup-irrelevant-captures", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const report: { entity: string; userId: string; deleted: number }[] = [];
+      let totalDeleted = 0;
+
+      const workspacesResult = await pool.query(`SELECT user_id, categories FROM workspaces WHERE categories IS NOT NULL`);
+
+      for (const row of workspacesResult.rows) {
+        const userId: string = row.user_id;
+        let categories: any[] = [];
+        try {
+          categories = Array.isArray(row.categories) ? row.categories : JSON.parse(row.categories);
+        } catch {
+          continue;
+        }
+
+        for (const category of categories) {
+          if (!Array.isArray(category.entities)) continue;
+          for (const entity of category.entities) {
+            const topicType = (entity.topic_type || "general").toLowerCase();
+            if (topicType !== "competitor") continue;
+            const entityName: string = entity.name;
+            if (!entityName) continue;
+
+            const capturesResult = await pool.query(
+              `SELECT id, content FROM captures WHERE user_id = $1 AND matched_entity ILIKE $2`,
+              [userId, entityName]
+            );
+
+            const irrelevantIds: number[] = [];
+            for (const cap of capturesResult.rows) {
+              const contentLower = (cap.content || "").toLowerCase();
+              const entityLower = entityName.toLowerCase();
+              if (!contentLower.includes(entityLower)) {
+                irrelevantIds.push(cap.id);
+                console.log(`[cleanup] Irrelevant capture ${cap.id} for ${entityName}: ${String(cap.content).substring(0, 60)}...`);
+              }
+            }
+
+            if (irrelevantIds.length > 0) {
+              await pool.query(
+                `DELETE FROM captures WHERE id = ANY($1::int[])`,
+                [irrelevantIds]
+              );
+              report.push({ entity: entityName, userId, deleted: irrelevantIds.length });
+              totalDeleted += irrelevantIds.length;
+              console.log(`[cleanup] Deleted ${irrelevantIds.length} irrelevant captures for ${entityName} (user ${userId})`);
+            }
+          }
+        }
+      }
+
+      return res.json({ success: true, totalDeleted, report });
+    } catch (error: any) {
+      console.error("Cleanup irrelevant captures error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   async function getEffectiveTenantId(userId: string): Promise<string> {
     const result = await pool.query(
       `SELECT COALESCE(
