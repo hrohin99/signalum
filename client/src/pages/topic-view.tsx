@@ -3013,7 +3013,9 @@ function CaptureSourceIndicator({ capture }: { capture: Capture }) {
     let displayDomain = label;
     try {
       displayDomain = new URL(sourceUrl).hostname.replace(/^www\./, '');
-    } catch {}
+    } catch (_) {
+      // sourceUrl may be malformed; fall back to generic label
+    }
     return (
       <a
         href={sourceUrl}
