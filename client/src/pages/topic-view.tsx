@@ -3010,19 +3010,23 @@ function CaptureSourceIndicator({ capture }: { capture: Capture }) {
   );
 
   if (sourceUrl) {
+    let displayDomain = label;
+    try {
+      displayDomain = new URL(sourceUrl).hostname.replace(/^www\./, '');
+    } catch {}
     return (
       <a
         href={sourceUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className={`inline-flex items-center gap-1 text-[11px] mt-2 transition-colors max-w-full overflow-hidden break-all ${isHiringSignal ? "text-amber-600 hover:text-amber-800" : "text-slate-500 hover:text-[#1e3a5f]"} hover:underline`}
+        className={`inline-flex items-center gap-1 text-[11px] mt-2 transition-colors max-w-full overflow-hidden ${isHiringSignal ? "text-amber-600 hover:text-amber-800" : "text-slate-500 hover:text-[#1e3a5f]"} hover:underline`}
         data-testid={`source-link-${capture.id}`}
       >
-        <SourceIcon className={`w-3 h-3 ${isHiringSignal ? "text-amber-600" : "text-[#1e3a5f]"}`} />
+        <SourceIcon className={`w-3 h-3 shrink-0 ${isHiringSignal ? "text-amber-600" : "text-[#1e3a5f]"}`} />
         {isHiringSignal ? (
           <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-medium">Hiring signal</span>
         ) : (
-          <span>{label}</span>
+          <span className="truncate max-w-[200px]">{displayDomain}</span>
         )}
       </a>
     );
@@ -3237,8 +3241,8 @@ function UpdatesFeedWidget({
                       <div className={`w-8 h-8 rounded-md flex items-center justify-center shrink-0 mt-1 ${isHiring ? "bg-amber-100" : "bg-[#1e3a5f]/10"}`}>
                         <Icon className={`w-4 h-4 ${isHiring ? "text-amber-600" : "text-[#1e3a5f]"}`} />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={`${styles.bodyTextClass} whitespace-pre-wrap break-words leading-relaxed`}>
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <p className={`${styles.bodyTextClass} whitespace-pre-wrap leading-relaxed`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
                           {cap.content}
                         </p>
                         <CaptureSourceIndicator capture={cap} />
