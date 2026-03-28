@@ -5,10 +5,11 @@ interface CollapsibleSectionProps {
   title: string;
   defaultOpen?: boolean;
   badge?: string | number;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function CollapsibleSection({ title, defaultOpen = true, badge, children }: CollapsibleSectionProps) {
+export function CollapsibleSection({ title, defaultOpen = true, badge, icon, children }: CollapsibleSectionProps) {
   const [open, setOpen] = useState(defaultOpen);
 
   return (
@@ -37,6 +38,7 @@ export function CollapsibleSection({ title, defaultOpen = true, badge, children 
         data-testid={`collapsible-toggle-${title.toLowerCase().replace(/\s+/g, "-")}`}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {icon && <span style={{ color: "#64748b", display: "inline-flex", alignItems: "center" }}>{icon}</span>}
           <span style={{ fontSize: 13, fontWeight: 600, color: "#1e293b" }}>{title}</span>
           {badge !== undefined && (
             <span

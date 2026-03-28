@@ -7020,18 +7020,23 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       const entityName = req.params.entityName;
       const { content } = req.body;
       if (typeof content !== "string") return res.status(400).json({ message: "content is required" });
+      const sanitized = content
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
+        .replace(/ on\w+="[^"]*"/gi, '')
+        .replace(/ on\w+='[^']*'/gi, '')
+        .replace(/javascript:/gi, '');
       const ws = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
         [userId]
       );
       const workspaceId = ws.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
-      await pool.query(
-        `INSERT INTO topic_notes (workspace_id, entity_id, content, updated_at)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (workspace_id, entity_id) DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()`,
-        [workspaceId, entityName, content]
-      );
+      await db.execute(sql`
+        INSERT INTO topic_notes (workspace_id, entity_id, content, updated_at)
+        VALUES (${workspaceId}, ${entityName}, ${sanitized}, NOW())
+        ON CONFLICT (workspace_id, entity_id) DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()
+      `);
       return res.json({ success: true });
     } catch (error: any) {
       console.error("Put topic notes error:", error);
@@ -7072,14 +7077,35 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       );
       const workspaceId = ws.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
-      const inserted = await pool.query(
-        `INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [workspaceId, entityName, date, event_text, source || "manual"]
-      );
-      return res.status(201).json({ milestone: inserted.rows[0] });
+      const src = source || "manual";
+      const result = await db.execute(sql`
+        INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
+        VALUES (${workspaceId}, ${entityName}, ${date}, ${event_text}, ${src})
+        RETURNING *
+      `);
+      return res.status(201).json({ milestone: (result as any).rows?.[0] ?? null });
     } catch (error: any) {
       console.error("Post topic milestone error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/topic-milestones/entity/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { entityName } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      await db.execute(sql`
+        DELETE FROM topic_milestones WHERE entity_id = ${entityName} AND workspace_id = ${workspaceId}
+      `);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete topic milestones by entity error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
@@ -7094,11 +7120,10 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       );
       const workspaceId = ws.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
-      const deleted = await pool.query(
-        `DELETE FROM topic_milestones WHERE id = $1 AND workspace_id = $2 RETURNING id`,
-        [milestoneId, workspaceId]
-      );
-      if (deleted.rowCount === 0) return res.status(404).json({ message: "Milestone not found" });
+      const result = await db.execute(sql`
+        DELETE FROM topic_milestones WHERE id = ${milestoneId} AND workspace_id = ${workspaceId} RETURNING id
+      `);
+      if (!((result as any).rows?.length ?? 0)) return res.status(404).json({ message: "Milestone not found" });
       return res.json({ success: true });
     } catch (error: any) {
       console.error("Delete topic milestone error:", error);
