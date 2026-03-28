@@ -75,6 +75,10 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext, EntitySeoData } from "@shared/schema";
 import { UpdatesList } from "@/components/UpdatesList";
+import { CollapsibleSection } from "@/components/CollapsibleSection";
+import { TopicImpactCard } from "@/components/TopicImpactCard";
+import { TopicNotes } from "@/components/TopicNotes";
+import { TopicMilestones } from "@/components/TopicMilestones";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { PartnershipsCard } from "@/components/PartnershipsCard";
 import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
@@ -264,6 +268,7 @@ function TopicViewContent({
   const [extractionNoDataDismissed, setExtractionNoDataDismissed] = useState(false);
   const [battlecardExpanded, setBattlecardExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'commercial' | 'competitive' | 'strategic' | 'updates'>('overview');
+  const [nonCompTab, setNonCompTab] = useState<'overview' | 'updates'>('overview');
   const isCompetitor = currentTopicType === 'competitor';
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
@@ -919,16 +924,9 @@ function TopicViewContent({
         </div>
       )}
 
-      {(!isCompetitor || activeTab === 'updates') && (
+      {isCompetitor && activeTab === 'updates' && (
         <div className="flex flex-col lg:flex-row gap-6 mt-6">
           <div className="lg:w-[65%] space-y-6">
-            {!isCompetitor && (
-              <>
-                <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
-                <SoWhatCard entity={entity} categoryName={categoryName} captureCount={captures.length} />
-                <PartnershipsCard entityId={entity.name} userRole={userRole} />
-              </>
-            )}
             <WidgetsSection
               entity={entity}
               categoryName={categoryName}
@@ -948,25 +946,74 @@ function TopicViewContent({
             />
             <RecentSignalsCard captures={captures} />
             <DatesAndDeadlinesCard entity={entity} categoryName={categoryName} />
-            {currentTopicType === "competitor" && (
-              <MonitoredUrlsCard entity={entity} />
-            )}
-            {false && (
-              entity.website_url && (
-                <DigitalPresenceCard entity={entity} categoryName={categoryName} isExtractionRunning={isExtractionRunning} />
-              )
-            )}
-            {false && (
-              entity.website_url && (
-                <SeoIntelligenceCard entity={entity} categoryName={categoryName} />
-              )
-            )}
-            {currentTopicType === "competitor" && (
-              <AIVisibilityCard />
-            )}
+            <MonitoredUrlsCard entity={entity} />
+            <AIVisibilityCard />
             <InlineCaptureCard entity={entity} categoryName={categoryName} />
           </div>
         </div>
+      )}
+
+      {!isCompetitor && (
+        <>
+          <div style={{ position: 'relative', marginBottom: 20, marginTop: 16 }}>
+            <div
+              className="[&::-webkit-scrollbar]:hidden"
+              style={{
+                display: 'flex',
+                borderBottom: '0.5px solid var(--color-border-tertiary, #e2e8f0)',
+                gap: 0,
+                overflowX: 'auto',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none',
+              } as React.CSSProperties}
+              data-testid="tab-bar-non-competitor"
+            >
+              {(['overview', 'updates'] as const).map(tab => (
+                <div
+                  key={tab}
+                  onClick={() => setNonCompTab(tab)}
+                  style={{
+                    fontSize: 13, padding: '10px 16px', cursor: 'pointer',
+                    color: nonCompTab === tab ? '#534AB7' : 'var(--color-text-secondary, #64748b)',
+                    borderBottom: nonCompTab === tab ? '2px solid #534AB7' : '2px solid transparent',
+                    fontWeight: nonCompTab === tab ? 500 : 400,
+                    marginBottom: -0.5, whiteSpace: 'nowrap',
+                    flexShrink: 0,
+                  }}
+                  data-testid={`tab-non-comp-${tab}`}
+                >
+                  {tab === 'updates' ? `Updates (${captures.length})` : 'Overview'}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {nonCompTab === 'overview' && (
+            <div className="space-y-3">
+              <CollapsibleSection title="AI Summary" defaultOpen={true}>
+                <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+              </CollapsibleSection>
+              <CollapsibleSection title="Impact on our product" defaultOpen={true}>
+                <TopicImpactCard entity={entity} captures={captures} />
+              </CollapsibleSection>
+              <CollapsibleSection title="My Notes" defaultOpen={true}>
+                <TopicNotes entityName={entity.name} />
+              </CollapsibleSection>
+              <CollapsibleSection title="Key Milestones" defaultOpen={false}>
+                <TopicMilestones entityName={entity.name} />
+              </CollapsibleSection>
+              <CollapsibleSection title="Latest Updates" defaultOpen={true} badge={captures.length}>
+                <UpdatesList captures={captures} entityType={entity.topic_type} />
+              </CollapsibleSection>
+            </div>
+          )}
+
+          {nonCompTab === 'updates' && (
+            <div className="mt-2">
+              <UpdatesList captures={captures} entityType={entity.topic_type} />
+            </div>
+          )}
+        </>
       )}
 
       {showCoachMarks && (

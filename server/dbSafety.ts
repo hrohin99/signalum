@@ -562,5 +562,41 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring competitor_dimension_status table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS topic_notes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(workspace_id, entity_id)
+      )
+    `);
+    console.log("[DBSafety] topic_notes table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring topic_notes table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS topic_milestones (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_id TEXT NOT NULL,
+        date DATE NOT NULL,
+        event_text TEXT NOT NULL,
+        source TEXT NOT NULL DEFAULT 'manual',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_topic_milestones_entity ON topic_milestones(entity_id, workspace_id)
+    `);
+    console.log("[DBSafety] topic_milestones table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring topic_milestones table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

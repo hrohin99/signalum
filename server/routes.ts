@@ -6993,5 +6993,118 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
     }
   });
 
+  app.get("/api/topic-notes/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.json({ content: "" });
+      const result = await pool.query(
+        `SELECT content FROM topic_notes WHERE entity_id = $1 AND workspace_id = $2`,
+        [entityName, workspaceId]
+      );
+      return res.json({ content: result.rows[0]?.content ?? "" });
+    } catch (error: any) {
+      console.error("Get topic notes error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/topic-notes/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+      const { content } = req.body;
+      if (typeof content !== "string") return res.status(400).json({ message: "content is required" });
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      await pool.query(
+        `INSERT INTO topic_notes (workspace_id, entity_id, content, updated_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (workspace_id, entity_id) DO UPDATE SET content = EXCLUDED.content, updated_at = NOW()`,
+        [workspaceId, entityName, content]
+      );
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Put topic notes error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.get("/api/topic-milestones/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.json({ milestones: [] });
+      const result = await pool.query(
+        `SELECT id, date, event_text, source, created_at FROM topic_milestones WHERE entity_id = $1 AND workspace_id = $2 ORDER BY date ASC, created_at ASC`,
+        [entityName, workspaceId]
+      );
+      return res.json({ milestones: result.rows });
+    } catch (error: any) {
+      console.error("Get topic milestones error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/topic-milestones/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+      const { date, event_text, source } = req.body;
+      if (!date || !event_text) return res.status(400).json({ message: "date and event_text are required" });
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const inserted = await pool.query(
+        `INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [workspaceId, entityName, date, event_text, source || "manual"]
+      );
+      return res.status(201).json({ milestone: inserted.rows[0] });
+    } catch (error: any) {
+      console.error("Post topic milestone error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.delete("/api/topic-milestones/:milestoneId", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { milestoneId } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const deleted = await pool.query(
+        `DELETE FROM topic_milestones WHERE id = $1 AND workspace_id = $2 RETURNING id`,
+        [milestoneId, workspaceId]
+      );
+      if (deleted.rowCount === 0) return res.status(404).json({ message: "Milestone not found" });
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete topic milestone error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }
