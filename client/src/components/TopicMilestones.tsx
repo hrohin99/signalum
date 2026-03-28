@@ -153,7 +153,7 @@ export function TopicMilestones({ entityName }: { entityName: string }) {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/topic-milestones/${id}`);
+      await apiRequest("DELETE", `/api/topic-milestones/by-id/${id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/topic-milestones", entityName] });

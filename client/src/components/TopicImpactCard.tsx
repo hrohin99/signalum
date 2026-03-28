@@ -57,7 +57,7 @@ export function TopicImpactCard({
 
   const allText = [
     entity.name,
-    entity.description || "",
+    entity.disambiguation_context || "",
     ...captures.map((c) => c.content),
   ]
     .join(" ")

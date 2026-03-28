@@ -7095,13 +7095,10 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
     }
   });
 
-  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-  app.delete("/api/topic-milestones/:id", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
-    const { id } = req.params;
-    if (!UUID_RE.test(id)) return next();
+  app.delete("/api/topic-milestones/by-id/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
+      const { id } = req.params;
       const ws = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
         [userId]

@@ -62,7 +62,6 @@ export function TopicNotes({ entityName }: { entityName: string }) {
       await apiRequest("PUT", `/api/topic-notes/${encodeURIComponent(entityName)}`, { content });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/topic-notes", entityName] });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     },
