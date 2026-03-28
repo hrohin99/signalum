@@ -64,7 +64,6 @@ Only include information you are confident about. Use null for unknown fields. R
 async function extractMilestonesForEntity(
   entityName: string,
   workspaceId: string,
-  topicType: string,
   categoryFocus?: string
 ): Promise<void> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
@@ -138,12 +137,13 @@ Use YYYY-MM-DD for the date (use -01 for unknown day/month). Return only the JSO
     }
 
     try {
-      await db.execute(sql`
+      const ins = await db.execute(sql`
         INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
         VALUES (${workspaceId}, ${entityName}, ${normalizedDate}::date, ${ms.event.trim()}, 'perplexity')
         ON CONFLICT (workspace_id, entity_id, date, event_text) DO NOTHING
-      `);
-      inserted++;
+        RETURNING id
+      `) as unknown as { rows: { id: string }[] };
+      if (ins.rows.length > 0) inserted++;
     } catch (insertErr) {
       console.error(`[milestones] Error inserting milestone for ${entityName}:`, insertErr);
     }
@@ -479,12 +479,7 @@ export async function runAmbientSearchForUser(
         }
         if (topicType !== 'competitor') {
           await perplexityRateLimiter.waitForSlot();
-          await extractMilestonesForEntity(
-            entity.name,
-            workspace.id,
-            topicType,
-            categoryFocus
-          );
+          await extractMilestonesForEntity(entity.name, workspace.id, categoryFocus);
         }
 
         const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;

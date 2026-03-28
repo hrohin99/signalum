@@ -594,6 +594,15 @@ export async function ensureDatabaseSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_topic_milestones_entity ON topic_milestones(entity_id, workspace_id)
     `);
     await db.execute(sql`
+      DELETE FROM topic_milestones a
+      USING topic_milestones b
+      WHERE a.ctid > b.ctid
+        AND a.workspace_id = b.workspace_id
+        AND a.entity_id = b.entity_id
+        AND a.date = b.date
+        AND a.event_text = b.event_text
+    `);
+    await db.execute(sql`
       CREATE UNIQUE INDEX IF NOT EXISTS idx_topic_milestones_dedup
         ON topic_milestones(workspace_id, entity_id, date, event_text)
     `);
