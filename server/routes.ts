@@ -7068,6 +7068,8 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
     }
   });
 
+  type MilestoneRow = { id: string; workspace_id: string; entity_id: string; date: string; event_text: string; source: string; created_at: string };
+
   app.post("/api/topic-milestones/:entityName", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
@@ -7081,12 +7083,12 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       const workspaceId = ws.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
       const src = source || "manual";
-      const inserted = await pool.query(
-        `INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
-         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-        [workspaceId, entityName, date, event_text, src]
-      );
-      return res.status(201).json({ milestone: inserted.rows[0] ?? null });
+      const result = await db.execute(sql`
+        INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
+        VALUES (${workspaceId}, ${entityName}, ${date}, ${event_text}, ${src})
+        RETURNING *
+      `) as unknown as { rows: MilestoneRow[] };
+      return res.status(201).json({ milestone: result.rows[0] ?? null });
     } catch (error: any) {
       console.error("Post topic milestone error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
@@ -7094,6 +7096,28 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
   });
 
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  app.delete("/api/topic-milestones/:id", requireAuth, async (req: Request, res: Response, next: NextFunction) => {
+    const { id } = req.params;
+    if (!UUID_RE.test(id)) return next();
+    try {
+      const userId = (req as any).userId;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+      const del = await db.execute(sql`
+        DELETE FROM topic_milestones WHERE id = ${id} AND workspace_id = ${workspaceId} RETURNING id
+      `) as unknown as { rows: { id: string }[] };
+      if (!del.rows.length) return res.status(404).json({ message: "Milestone not found" });
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete topic milestone error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
 
   app.delete("/api/topic-milestones/:entityName", requireAuth, async (req: Request, res: Response) => {
     try {
@@ -7105,21 +7129,12 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       );
       const workspaceId = ws.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
-
-      if (UUID_RE.test(entityName)) {
-        const del = await pool.query(
-          `DELETE FROM topic_milestones WHERE id = $1 AND workspace_id = $2 RETURNING id`,
-          [entityName, workspaceId]
-        );
-        if (!del.rows.length) return res.status(404).json({ message: "Milestone not found" });
-      } else {
-        await db.execute(sql`
-          DELETE FROM topic_milestones WHERE entity_id = ${entityName} AND workspace_id = ${workspaceId}
-        `);
-      }
+      await db.execute(sql`
+        DELETE FROM topic_milestones WHERE entity_id = ${entityName} AND workspace_id = ${workspaceId}
+      `);
       return res.json({ success: true });
     } catch (error: any) {
-      console.error("Delete topic milestone(s) error:", error);
+      console.error("Delete topic milestones by entity error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

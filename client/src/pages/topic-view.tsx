@@ -2100,7 +2100,6 @@ function WidgetsSection({
   const builtWidgets = ["battlecard", "quick_stats", "updates_feed"];
 
   const nonFeedWidgets = widgets.filter((w) => w !== "updates_feed");
-  const hasUpdatesFeed = widgets.includes("updates_feed");
 
   return (
     <div className="space-y-4" data-testid="section-widgets">
@@ -2126,9 +2125,7 @@ function WidgetsSection({
         );
       })}
 
-      {hasUpdatesFeed && (
-        <UpdatesList captures={captures} entityType={entity.topic_type} />
-      )}
+      <UpdatesList captures={captures} entityType={entity.topic_type} />
     </div>
   );
 }
