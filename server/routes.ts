@@ -6,6 +6,7 @@ import { randomUUID, createHmac } from "crypto";
 import multer from "multer";
 import jwt from "jsonwebtoken";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import sanitizeHtml from "sanitize-html";
 import mammoth from "mammoth";
 import path from "path";
 import { storage, pool, db } from "./storage";
@@ -7020,12 +7021,14 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       const entityName = req.params.entityName;
       const { content } = req.body;
       if (typeof content !== "string") return res.status(400).json({ message: "content is required" });
-      const sanitized = content
-        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
-        .replace(/ on\w+="[^"]*"/gi, '')
-        .replace(/ on\w+='[^']*'/gi, '')
-        .replace(/javascript:/gi, '');
+      const sanitized = sanitizeHtml(content, {
+        allowedTags: ["b", "i", "em", "strong", "u", "s", "p", "br", "ul", "ol", "li", "a", "span", "h1", "h2", "h3", "blockquote"],
+        allowedAttributes: {
+          a: ["href", "title", "target"],
+          span: ["style"],
+        },
+        allowedSchemes: ["https", "http", "mailto"],
+      });
       const ws = await pool.query(
         `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
         [userId]
@@ -7078,19 +7081,21 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       const workspaceId = ws.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
       const src = source || "manual";
-      const result = await db.execute(sql`
-        INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
-        VALUES (${workspaceId}, ${entityName}, ${date}, ${event_text}, ${src})
-        RETURNING *
-      `);
-      return res.status(201).json({ milestone: (result as any).rows?.[0] ?? null });
+      const inserted = await pool.query(
+        `INSERT INTO topic_milestones (workspace_id, entity_id, date, event_text, source)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [workspaceId, entityName, date, event_text, src]
+      );
+      return res.status(201).json({ milestone: inserted.rows[0] ?? null });
     } catch (error: any) {
       console.error("Post topic milestone error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });
 
-  app.delete("/api/topic-milestones/entity/:entityName", requireAuth, async (req: Request, res: Response) => {
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  app.delete("/api/topic-milestones/:entityName", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
       const { entityName } = req.params;
@@ -7100,33 +7105,21 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       );
       const workspaceId = ws.rows[0]?.id;
       if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
-      await db.execute(sql`
-        DELETE FROM topic_milestones WHERE entity_id = ${entityName} AND workspace_id = ${workspaceId}
-      `);
-      return res.json({ success: true });
-    } catch (error: any) {
-      console.error("Delete topic milestones by entity error:", error);
-      return res.status(500).json({ message: sanitizeErrorMessage(error) });
-    }
-  });
 
-  app.delete("/api/topic-milestones/:milestoneId", requireAuth, async (req: Request, res: Response) => {
-    try {
-      const userId = (req as any).userId;
-      const { milestoneId } = req.params;
-      const ws = await pool.query(
-        `SELECT id FROM workspaces WHERE user_id = $1 OR id::text = (SELECT parent_workspace_id::text FROM workspaces WHERE user_id = $1 LIMIT 1) LIMIT 1`,
-        [userId]
-      );
-      const workspaceId = ws.rows[0]?.id;
-      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
-      const result = await db.execute(sql`
-        DELETE FROM topic_milestones WHERE id = ${milestoneId} AND workspace_id = ${workspaceId} RETURNING id
-      `);
-      if (!((result as any).rows?.length ?? 0)) return res.status(404).json({ message: "Milestone not found" });
+      if (UUID_RE.test(entityName)) {
+        const del = await pool.query(
+          `DELETE FROM topic_milestones WHERE id = $1 AND workspace_id = $2 RETURNING id`,
+          [entityName, workspaceId]
+        );
+        if (!del.rows.length) return res.status(404).json({ message: "Milestone not found" });
+      } else {
+        await db.execute(sql`
+          DELETE FROM topic_milestones WHERE entity_id = ${entityName} AND workspace_id = ${workspaceId}
+        `);
+      }
       return res.json({ success: true });
     } catch (error: any) {
-      console.error("Delete topic milestone error:", error);
+      console.error("Delete topic milestone(s) error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
     }
   });

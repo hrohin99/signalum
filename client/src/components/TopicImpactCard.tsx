@@ -2,15 +2,15 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { Capture, ExtractedEntity } from "@shared/schema";
 
-interface DimensionItem {
-  name: string;
+interface RawDimensionItem {
+  name?: string;
   our_status?: string | null;
 }
 
-interface Dimension {
+interface RawDimension {
   id: string;
   name: string;
-  items: DimensionItem[];
+  items?: RawDimensionItem[] | string[];
 }
 
 function OurStatusPill({ status }: { status?: string | null }) {
@@ -46,10 +46,10 @@ export function TopicImpactCard({
   entity: ExtractedEntity;
   captures: Capture[];
 }) {
-  const { data: dimensionsData, isLoading } = useQuery<{ dimensions: Dimension[] }>({
-    queryKey: ["/api/matrix/dimensions"],
+  const { data: dimensionsRaw, isLoading } = useQuery<RawDimension[]>({
+    queryKey: ["/api/dimensions"],
     queryFn: async () => {
-      const res = await apiRequest("GET", "/api/matrix/dimensions");
+      const res = await apiRequest("GET", "/api/dimensions");
       return res.json();
     },
     staleTime: 5 * 60 * 1000,
@@ -65,11 +65,14 @@ export function TopicImpactCard({
 
   const matchedItems: { dimName: string; itemName: string; ourStatus?: string | null }[] = [];
 
-  if (dimensionsData?.dimensions) {
-    for (const dim of dimensionsData.dimensions) {
-      for (const item of dim.items || []) {
-        if (item.name && allText.includes(item.name.toLowerCase())) {
-          matchedItems.push({ dimName: dim.name, itemName: item.name, ourStatus: item.our_status });
+  if (Array.isArray(dimensionsRaw)) {
+    for (const dim of dimensionsRaw) {
+      const items = Array.isArray(dim.items) ? dim.items : [];
+      for (const rawItem of items) {
+        const itemName = typeof rawItem === "string" ? rawItem : rawItem.name;
+        const ourStatus = typeof rawItem === "object" ? (rawItem as RawDimensionItem).our_status : null;
+        if (itemName && allText.includes(itemName.toLowerCase())) {
+          matchedItems.push({ dimName: dim.name, itemName, ourStatus });
         }
       }
     }
