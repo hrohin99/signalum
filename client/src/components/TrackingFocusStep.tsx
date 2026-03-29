@@ -11,12 +11,13 @@ interface TrackingFocusStepProps {
   onSkip: () => void;
   initialSelectedFocuses?: string[];
   initialCustomFocus?: string;
+  isEditing?: boolean;
 }
 
 const PURPLE = "#723988";
 const PURPLE_BG = "#EEEDFE";
 
-export function TrackingFocusStep({ topicName, topicType, suggestionsPromise, onSave, onSkip, initialSelectedFocuses, initialCustomFocus }: TrackingFocusStepProps) {
+export function TrackingFocusStep({ topicName, topicType, suggestionsPromise, onSave, onSkip, initialSelectedFocuses, initialCustomFocus, isEditing }: TrackingFocusStepProps) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(true);
   const [selectedFocuses, setSelectedFocuses] = useState<Set<string>>(new Set(initialSelectedFocuses ?? []));
@@ -171,6 +172,7 @@ export function TrackingFocusStep({ topicName, topicType, suggestionsPromise, on
           Skip for now
         </button>
         <Button
+          type="button"
           onClick={handleSave}
           data-testid="button-set-focus-create"
           style={{
@@ -181,7 +183,7 @@ export function TrackingFocusStep({ topicName, topicType, suggestionsPromise, on
             fontWeight: 500,
           }}
         >
-          Set focus & create topic
+          {isEditing ? "Set focus & update topic" : "Set focus & create topic"}
         </Button>
       </div>
       <style>{`

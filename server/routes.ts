@@ -1657,9 +1657,11 @@ Respond with JSON only, no explanation:
       if (!wsResult.rows[0]) return res.status(404).json({ message: "Workspace not found" });
       const putWorkspaceRow = wsResult.rows[0] as { id: string };
       const workspaceId = putWorkspaceRow.id;
+      // Drizzle sql template cannot serialize JS arrays — build a PG array literal string
+      const pgArrayLiteral = `{${safeFocuses.map(f => `"${f.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`).join(',')}}`;
       await db.execute(sql`
         INSERT INTO entity_tracking_intent (workspace_id, entity_name, selected_focuses, custom_focus, updated_at)
-        VALUES (${workspaceId}::uuid, ${entityName}, ${safeFocuses}::text[], ${safeCustom}, NOW())
+        VALUES (${workspaceId}::uuid, ${entityName}, ${pgArrayLiteral}::text[], ${safeCustom}, NOW())
         ON CONFLICT (workspace_id, entity_name) DO UPDATE
           SET selected_focuses = EXCLUDED.selected_focuses,
               custom_focus = EXCLUDED.custom_focus,

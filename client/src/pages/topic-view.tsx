@@ -1066,6 +1066,7 @@ function TopicViewContent({
                       suggestionsPromise={focusSuggestionsPromise}
                       initialSelectedFocuses={trackingIntentData?.selectedFocuses}
                       initialCustomFocus={trackingIntentData?.customFocus ?? undefined}
+                      isEditing={true}
                       onSave={(selectedFocuses, customFocus) => {
                         saveTrackingIntentMutation.mutate({ selectedFocuses, customFocus });
                       }}
