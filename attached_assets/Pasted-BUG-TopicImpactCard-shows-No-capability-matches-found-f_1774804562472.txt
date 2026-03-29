@@ -1,0 +1,68 @@
+BUG: TopicImpactCard shows "No capability matches found" for all 
+topics, even when there are obvious connections (e.g., "Liveness 
+Detection" topic should match dimension items about liveness).
+
+PROBLEM: The matching is too strict — it checks for exact item 
+name substring in topic name. But item names are long 
+("Passive liveness detection support") and topic names are short 
+("Liveness Detection").
+
+FIX in TopicImpactCard.tsx:
+
+Replace the current matching logic with keyword-based matching:
+```typescript
+function findImpactedDimensions(entityName: string, captures: any[], dimensions: any[]) {
+  const matches = [];
+  const topicWords = entityName.toLowerCase().split(/\s+/);
+  
+  // Also extract keywords from recent capture titles
+  const captureText = captures
+    .slice(0, 20)
+    .map(c => (c.content || '').toLowerCase())
+    .join(' ');
+  
+  for (const dim of dimensions) {
+    const items = dim.items || [];
+    for (const item of items) {
+      const itemName = typeof item === 'string' ? item : item.name;
+      const itemWords = itemName.toLowerCase().split(/\s+/);
+      
+      // Match if ANY significant word (3+ chars) from the topic 
+      // appears in the item name, OR vice versa
+      const significantTopicWords = topicWords.filter(w => w.length >= 3);
+      const significantItemWords = itemWords.filter(w => w.length >= 3);
+      
+      const hasMatch = significantTopicWords.some(tw => 
+        significantItemWords.some(iw => 
+          iw.includes(tw) || tw.includes(iw)
+        )
+      ) || significantItemWords.some(iw => 
+        captureText.includes(iw)
+      );
+      
+      if (hasMatch) {
+        matches.push({
+          dimension: dim.name,
+          item: itemName,
+          our_status: (typeof item === 'object' ? item.our_status : null) || 'na'
+        });
+      }
+    }
+  }
+  
+  // Deduplicate and limit to most relevant
+  return matches.slice(0, 8);
+}
+```
+
+This means:
+- Topic "Liveness Detection" matches items containing "liveness"
+- Topic "Deepfake Threats" matches items containing "deepfake"
+- Topic "Document Verification" matches items containing "document", 
+  "verification", "OCR", "NFC"
+- Also checks recent capture text for broader matching
+
+Also make sure the component is fetching dimensions correctly — 
+use apiRequest("GET", "/api/dimensions") not raw fetch().
+
+ONLY modify TopicImpactCard.tsx. Do NOT touch other files.
