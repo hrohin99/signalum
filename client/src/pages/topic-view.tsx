@@ -419,6 +419,8 @@ function TopicViewContent({
       refetchTrackingIntent();
       setShowFocusEditModal(false);
       setShowRegeneratePrompt(true);
+      apiRequest("POST", `/api/topic-impact/${encodeURIComponent(entity.name)}/generate`).catch(() => {});
+      queryClient.invalidateQueries({ queryKey: ["/api/topic-impact", entity.name] });
     },
   });
 
@@ -1130,7 +1132,7 @@ function TopicViewContent({
                 )}
               </CollapsibleSection>
               <CollapsibleSection title="Impact on our product" defaultOpen={true}>
-                <TopicImpactCard entity={entity} captures={captures} />
+                <TopicImpactCard entityName={entity.name} hasIntent={trackingIntentData?.hasIntent} onSetFocusClick={handleOpenFocusEdit} />
               </CollapsibleSection>
               <CollapsibleSection title="My Notes" defaultOpen={true}>
                 <TopicNotes entityName={entity.name} />

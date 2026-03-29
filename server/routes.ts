@@ -1753,6 +1753,175 @@ Return only the JSON array, no other text.`
     }
   });
 
+  app.get("/api/topic-impact/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = decodeURIComponent(req.params.entityName);
+      const wsResult = await db.execute(sql`SELECT id FROM workspaces WHERE user_id = ${userId} LIMIT 1`);
+      if (!wsResult.rows[0]) return res.json({ exists: false });
+      const workspaceId = (wsResult.rows[0] as { id: string }).id;
+      const result = await db.execute(sql`
+        SELECT relevance, relevance_reason, insights, actions, generated_at
+        FROM topic_impact_analysis
+        WHERE workspace_id = ${workspaceId}::uuid AND entity_name = ${entityName}
+        LIMIT 1
+      `);
+      if (!result.rows[0]) return res.json({ exists: false });
+      const row = result.rows[0] as any;
+      return res.json({
+        exists: true,
+        relevance: row.relevance,
+        relevanceReason: row.relevance_reason,
+        insights: typeof row.insights === "string" ? JSON.parse(row.insights) : (row.insights || []),
+        actions: typeof row.actions === "string" ? JSON.parse(row.actions) : (row.actions || []),
+        generatedAt: row.generated_at,
+      });
+    } catch (error: any) {
+      console.error("GET topic-impact error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/topic-impact/:entityName/generate", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = decodeURIComponent(req.params.entityName);
+
+      const wsResult = await db.execute(sql`SELECT id, user_perspective, org_description, win_factors, vulnerability FROM workspaces WHERE user_id = ${userId} LIMIT 1`);
+      if (!wsResult.rows[0]) return res.status(404).json({ message: "Workspace not found" });
+      const wsRow = wsResult.rows[0] as any;
+      const workspaceId = wsRow.id as string;
+
+      // Fetch tracking intent focuses
+      const intentResult = await db.execute(sql`
+        SELECT selected_focuses, custom_focus FROM entity_tracking_intent
+        WHERE workspace_id = ${workspaceId}::uuid AND entity_name = ${entityName}
+        LIMIT 1
+      `);
+      const intentRow = intentResult.rows[0] as any;
+      const selectedFocuses: string[] = intentRow?.selected_focuses || [];
+      if (intentRow?.custom_focus) selectedFocuses.push(intentRow.custom_focus);
+
+      // Fetch competitive dimensions
+      const dimsResult = await db.execute(sql`
+        SELECT name, priority, items FROM competitive_dimensions
+        WHERE workspace_id = ${workspaceId}::uuid ORDER BY display_order
+      `);
+      const dims = dimsResult.rows as any[];
+      const dimLines = dims.map((d: any) => {
+        const items = (typeof d.items === "string" ? JSON.parse(d.items) : d.items) || [];
+        const itemsList = items.map((it: any) => `${it.name} [our status: ${it.our_status || "unknown"}]`).join(", ");
+        return `${d.name} (${d.priority || "medium"}): ${itemsList}`;
+      }).join("\n");
+
+      // Fetch recent captures
+      const capturesResult = await db.execute(sql`
+        SELECT content FROM captures
+        WHERE user_id = ${userId} AND matched_entity ILIKE ${entityName}
+        ORDER BY created_at DESC LIMIT 20
+      `);
+      const captureLines = (capturesResult.rows as any[])
+        .map((c: any) => (c.content || "").substring(0, 200))
+        .filter(Boolean)
+        .join("\n");
+
+      // Fetch product context
+      const pcResult = await db.execute(sql`
+        SELECT product_name, description, strengths, weaknesses FROM product_context
+        WHERE tenant_id = ${workspaceId}::uuid LIMIT 1
+      `);
+      const pc = pcResult.rows[0] as any;
+      const productName = pc?.product_name || "our product";
+      const productDesc = pc?.description || wsRow.org_description || "Not provided";
+      const strengths = pc?.strengths || wsRow.win_factors || "Not provided";
+      const weaknesses = pc?.weaknesses || wsRow.vulnerability || "Not provided";
+
+      const focusSection = selectedFocuses.length > 0
+        ? `USER'S TRACKING FOCUS for this topic:\n- ${selectedFocuses.join("\n- ")}`
+        : "No specific tracking focus set — provide a general analysis.";
+
+      const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+      if (!anthropicKey) return res.status(500).json({ message: "Anthropic API key not configured" });
+
+      const client = new Anthropic({ apiKey: anthropicKey });
+      const message = await client.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: `You are a strategic product analyst. Analyze the impact of "${entityName}" on the user's product.
+
+USER'S PRODUCT: ${productName} — ${productDesc}
+USER'S STRENGTHS: ${strengths}
+USER'S WEAKNESSES: ${weaknesses}
+
+${focusSection}
+
+USER'S COMPETITIVE DIMENSIONS:
+${dimLines || "No dimensions configured."}
+
+RECENT SIGNALS about ${entityName}:
+${captureLines || "No recent signals available."}
+
+Generate a structured impact analysis. Respond ONLY with valid JSON:
+{
+  "relevance": "high" | "medium" | "low",
+  "relevance_reason": "One sentence explaining why this is high/medium/low relevance to the user's product.",
+  "insights": [
+    {
+      "title": "Short headline (max 10 words)",
+      "description": "2-3 sentences explaining the insight. Reference specific dimension items and their status where relevant.",
+      "type": "risk" | "warning" | "strength",
+      "dimension": "Dimension name if directly related, or null"
+    }
+  ],
+  "actions": [
+    {
+      "title": "Specific actionable recommendation",
+      "description": "1-2 sentences with timeline, budget, or next step details."
+    }
+  ]
+}
+
+Rules:
+- Focus your analysis on the tracking focus areas listed above
+- Reference specific competitive dimension items and their status where relevant
+- 2-4 insights maximum, 1-3 actions maximum
+- "risk" = we have a gap this topic exposes; "warning" = monitor, could become a risk; "strength" = we are well positioned
+- Be specific to this user's product, not generic advice
+- Return only the JSON object, no markdown, no extra text`
+        }]
+      });
+
+      const textBlock = message.content.find((b: any) => b.type === "text");
+      const raw = textBlock && textBlock.type === "text" ? textBlock.text : "{}";
+      const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      let parsed: any = {};
+      try { parsed = JSON.parse(cleaned); } catch { parsed = { relevance: "medium", relevance_reason: "Analysis could not be parsed.", insights: [], actions: [] }; }
+
+      const relevance = ["high", "medium", "low"].includes(parsed.relevance) ? parsed.relevance : "medium";
+      const relevanceReason = parsed.relevance_reason || "";
+      const insights = JSON.stringify(Array.isArray(parsed.insights) ? parsed.insights.slice(0, 4) : []);
+      const actions = JSON.stringify(Array.isArray(parsed.actions) ? parsed.actions.slice(0, 3) : []);
+
+      await db.execute(sql`
+        INSERT INTO topic_impact_analysis (workspace_id, entity_name, relevance, relevance_reason, insights, actions, generated_at)
+        VALUES (${workspaceId}::uuid, ${entityName}, ${relevance}, ${relevanceReason}, ${insights}::jsonb, ${actions}::jsonb, NOW())
+        ON CONFLICT (workspace_id, entity_name) DO UPDATE SET
+          relevance = EXCLUDED.relevance,
+          relevance_reason = EXCLUDED.relevance_reason,
+          insights = EXCLUDED.insights,
+          actions = EXCLUDED.actions,
+          generated_at = NOW()
+      `);
+
+      return res.json({ exists: true, relevance, relevanceReason, insights: parsed.insights || [], actions: parsed.actions || [], generatedAt: new Date() });
+    } catch (error: any) {
+      console.error("POST topic-impact/generate error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/entity-summary", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;

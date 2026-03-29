@@ -637,5 +637,24 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring captures.focus_area column:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS topic_impact_analysis (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_name TEXT NOT NULL,
+        relevance TEXT NOT NULL DEFAULT 'medium',
+        relevance_reason TEXT,
+        insights JSONB DEFAULT '[]'::jsonb,
+        actions JSONB DEFAULT '[]'::jsonb,
+        generated_at TIMESTAMP DEFAULT now(),
+        UNIQUE(workspace_id, entity_name)
+      )
+    `);
+    console.log("[DBSafety] topic_impact_analysis table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring topic_impact_analysis table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }
