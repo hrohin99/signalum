@@ -55,13 +55,11 @@ export function TopicImpactCard({
     staleTime: 5 * 60 * 1000,
   });
 
-  const allText = [
-    entity.name,
-    entity.disambiguation_context || "",
-    ...captures.map((c) => c.content),
-  ]
-    .join(" ")
-    .toLowerCase();
+  const topicWords = entity.name.toLowerCase().split(/\s+/);
+  const captureText = captures
+    .slice(0, 20)
+    .map((c) => (c.content || "").toLowerCase())
+    .join(" ");
 
   const matchedItems: { dimName: string; itemName: string; ourStatus?: string | null }[] = [];
 
@@ -71,12 +69,26 @@ export function TopicImpactCard({
       for (const rawItem of items) {
         const itemName = typeof rawItem === "string" ? rawItem : rawItem.name;
         const ourStatus = typeof rawItem === "object" ? (rawItem as RawDimensionItem).our_status : null;
-        if (itemName && allText.includes(itemName.toLowerCase())) {
+        if (!itemName) continue;
+
+        const itemWords = itemName.toLowerCase().split(/\s+/);
+        const significantTopicWords = topicWords.filter((w) => w.length >= 3);
+        const significantItemWords = itemWords.filter((w) => w.length >= 3);
+
+        const hasMatch =
+          significantTopicWords.some((tw) =>
+            significantItemWords.some((iw) => iw.includes(tw) || tw.includes(iw))
+          ) ||
+          significantItemWords.some((iw) => captureText.includes(iw));
+
+        if (hasMatch) {
           matchedItems.push({ dimName: dim.name, itemName, ourStatus });
         }
       }
     }
   }
+
+  const dedupedItems = matchedItems.slice(0, 8);
 
   if (isLoading) {
     return (
@@ -86,7 +98,7 @@ export function TopicImpactCard({
     );
   }
 
-  if (matchedItems.length === 0) {
+  if (dedupedItems.length === 0) {
     return (
       <div
         style={{
@@ -106,7 +118,7 @@ export function TopicImpactCard({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 0 }} data-testid="topic-impact-list">
-      {matchedItems.map((item, i) => (
+      {dedupedItems.map((item, i) => (
         <div
           key={`${item.dimName}-${item.itemName}`}
           style={{
@@ -114,7 +126,7 @@ export function TopicImpactCard({
             alignItems: "center",
             justifyContent: "space-between",
             padding: "8px 0",
-            borderBottom: i < matchedItems.length - 1 ? "0.5px solid #f1f5f9" : "none",
+            borderBottom: i < dedupedItems.length - 1 ? "0.5px solid #f1f5f9" : "none",
             gap: 8,
           }}
           data-testid={`impact-item-${i}`}
