@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { TrackingFocusStep } from "@/components/TrackingFocusStep";
 import { DimensionMatrix } from "@/components/DimensionMatrix";
 import { OnboardingWelcomeModal as OnboardingWelcomeModalComponent } from "@/components/welcome-modal";
 import { useAuth } from "@/lib/auth-context";
@@ -356,6 +357,8 @@ function MapPageInner() {
   const [topAddTopicName, setTopAddTopicName] = useState("");
   const [topAddTopicType, setTopAddTopicType] = useState("general");
   const [topAddTopicWebsiteUrl, setTopAddTopicWebsiteUrl] = useState("");
+  const [addTopicStep, setAddTopicStep] = useState<1 | 2>(1);
+  const [suggestionsPromise, setSuggestionsPromise] = useState<Promise<{ suggestions: string[]; groundingContext: string }> | null>(null);
   const [justCreatedCategory, setJustCreatedCategory] = useState<string | null>(null);
   const [renameCategoryOpen, setRenameCategoryOpen] = useState(false);
   const [renameCategoryOldName, setRenameCategoryOldName] = useState("");
@@ -814,23 +817,77 @@ function MapPageInner() {
     addCategoryMutation.mutate({ categoryName: name });
   };
 
-  const handleTopAddTopic = () => {
+  const saveIntentMutation = useMutation({
+    mutationFn: async ({ entityName, selectedFocuses, customFocus }: { entityName: string; selectedFocuses: string[]; customFocus: string }) => {
+      const res = await apiRequest("PUT", `/api/tracking-intent/${encodeURIComponent(entityName)}`, { selectedFocuses, customFocus: customFocus || null });
+      return res.json();
+    },
+  });
+
+  const resetAddTopicForm = () => {
+    setTopAddTopicName("");
+    setTopAddTopicType("general");
+    setTopAddTopicWebsiteUrl("");
+    setAddTopicStep(1);
+    setSuggestionsPromise(null);
+    setShowTopAddTopic(false);
+  };
+
+  const handleTopAddTopicNext = () => {
     const name = topAddTopicName.trim();
     if (!name || !effectiveCategory) return;
-    const payload: { categoryName: string; entityName: string; entityType: string; topicType: string; website_url?: string } = {
+    if (topAddTopicType === "competitor") {
+      const payload: { categoryName: string; entityName: string; entityType: string; topicType: string; website_url?: string } = {
+        categoryName: effectiveCategory,
+        entityName: name,
+        entityType: "other",
+        topicType: topAddTopicType,
+      };
+      if (topAddTopicWebsiteUrl.trim()) {
+        payload.website_url = topAddTopicWebsiteUrl.trim();
+      }
+      addEntityMutation.mutate(payload);
+      resetAddTopicForm();
+    } else {
+      const promise = apiRequest("POST", "/api/tracking-intent/suggestions", { topicName: name, topicType: topAddTopicType })
+        .then((res) => res.json())
+        .catch(() => ({ suggestions: [], groundingContext: "" }));
+      setSuggestionsPromise(promise);
+      setAddTopicStep(2);
+      setShowTopAddTopic(true);
+    }
+  };
+
+  const handleTopAddTopic = () => {
+    handleTopAddTopicNext();
+  };
+
+  const handleFocusSave = (selectedFocuses: string[], customFocus: string) => {
+    const name = topAddTopicName.trim();
+    if (!name || !effectiveCategory) return;
+    saveIntentMutation.mutate({ entityName: name, selectedFocuses, customFocus }, {
+      onSuccess: () => {
+        addEntityMutation.mutate({
+          categoryName: effectiveCategory,
+          entityName: name,
+          entityType: "other",
+          topicType: topAddTopicType,
+        });
+        resetAddTopicForm();
+      },
+    });
+  };
+
+  const handleFocusSkip = () => {
+    const name = topAddTopicName.trim();
+    if (!name || !effectiveCategory) return;
+    addEntityMutation.mutate({
       categoryName: effectiveCategory,
       entityName: name,
       entityType: "other",
       topicType: topAddTopicType,
-    };
-    if (topAddTopicType === "competitor" && topAddTopicWebsiteUrl.trim()) {
-      payload.website_url = topAddTopicWebsiteUrl.trim();
-    }
-    addEntityMutation.mutate(payload);
-    setTopAddTopicName("");
-    setTopAddTopicType("general");
-    setTopAddTopicWebsiteUrl("");
-    setShowTopAddTopic(false);
+    });
+    resetAddTopicForm();
   };
 
   const handleNudgeAdd = (name: string) => {
@@ -1271,72 +1328,89 @@ function MapPageInner() {
 
                   {showTopAddTopic && (
                     <div className="border border-border rounded-lg p-3 space-y-3 bg-card" data-testid="inline-top-add-topic">
-                      <div className="flex gap-2">
-                        <Input
-                          placeholder="Topic name"
-                          value={topAddTopicName}
-                          onChange={(e) => setTopAddTopicName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleTopAddTopic();
-                            if (e.key === "Escape") { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); setTopAddTopicWebsiteUrl(""); }
-                          }}
-                          className="flex-1 h-9 text-sm"
-                          data-testid="input-top-add-topic-name"
-                          autoFocus
-                        />
-                      </div>
-                      <div className="flex flex-wrap gap-1.5" data-testid="pills-top-add-topic-type">
-                        {(["competitor", "regulation", "project", "person", "trend", "technology", "event", "general"] as const).map((t) => (
-                          <button
-                            key={t}
-                            type="button"
-                            onClick={() => { setTopAddTopicType(t); if (t !== "competitor") setTopAddTopicWebsiteUrl(""); }}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
-                              topAddTopicType === t
-                                ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
-                                : "bg-background text-foreground border-border hover:border-[#1e3a5f]/40"
-                            }`}
-                            data-testid={`pill-top-type-${t}`}
-                          >
-                            {topicTypeMap[t]?.icon} {topicTypeMap[t]?.displayName || t}
-                          </button>
-                        ))}
-                      </div>
-                      {topAddTopicType === "competitor" && (
-                        <div>
-                          <Input
-                            placeholder="Website URL (optional, e.g. https://competitor.com)"
-                            value={topAddTopicWebsiteUrl}
-                            onChange={(e) => setTopAddTopicWebsiteUrl(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") handleTopAddTopic();
-                            }}
-                            className="h-9 text-sm"
-                            data-testid="input-top-add-topic-website"
+                      {addTopicStep === 1 ? (
+                        <>
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Topic name"
+                              value={topAddTopicName}
+                              onChange={(e) => setTopAddTopicName(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleTopAddTopicNext();
+                                if (e.key === "Escape") resetAddTopicForm();
+                              }}
+                              className="flex-1 h-9 text-sm"
+                              data-testid="input-top-add-topic-name"
+                              autoFocus
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-1.5" data-testid="pills-top-add-topic-type">
+                            {(["competitor", "regulation", "project", "person", "trend", "technology", "event", "general"] as const).map((t) => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => { setTopAddTopicType(t); if (t !== "competitor") setTopAddTopicWebsiteUrl(""); }}
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-medium border transition-colors ${
+                                  topAddTopicType === t
+                                    ? "bg-[#1e3a5f] text-white border-[#1e3a5f]"
+                                    : "bg-background text-foreground border-border hover:border-[#1e3a5f]/40"
+                                }`}
+                                data-testid={`pill-top-type-${t}`}
+                              >
+                                {topicTypeMap[t]?.icon} {topicTypeMap[t]?.displayName || t}
+                              </button>
+                            ))}
+                          </div>
+                          {topAddTopicType === "competitor" && (
+                            <div>
+                              <Input
+                                placeholder="Website URL (optional, e.g. https://competitor.com)"
+                                value={topAddTopicWebsiteUrl}
+                                onChange={(e) => setTopAddTopicWebsiteUrl(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleTopAddTopicNext();
+                                }}
+                                className="h-9 text-sm"
+                                data-testid="input-top-add-topic-website"
+                              />
+                              <p className="text-[11px] text-muted-foreground mt-1">Providing a URL improves product and geo intelligence gathering</p>
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-4 h-8"
+                              disabled={!topAddTopicName.trim() || addEntityMutation.isPending}
+                              onClick={handleTopAddTopicNext}
+                              data-testid="button-top-add-topic-confirm"
+                            >
+                              {addEntityMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : null}
+                              {topAddTopicType === "competitor" ? <><Plus className="w-3.5 h-3.5 mr-1" />Add</> : "Next →"}
+                            </Button>
+                            <button
+                              type="button"
+                              onClick={resetAddTopicForm}
+                              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                              data-testid="button-top-add-topic-cancel"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>
+                            Adding: <strong style={{ color: "#1e293b" }}>{topAddTopicName}</strong>
+                          </div>
+                          <TrackingFocusStep
+                            topicName={topAddTopicName}
+                            topicType={topAddTopicType}
+                            suggestionsPromise={suggestionsPromise}
+                            onSave={handleFocusSave}
+                            onSkip={handleFocusSkip}
                           />
-                          <p className="text-[11px] text-muted-foreground mt-1">Providing a URL improves product and geo intelligence gathering</p>
-                        </div>
+                        </>
                       )}
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          className="bg-[#1e3a5f] hover:bg-[#1e3a5f]/90 text-white px-4 h-8"
-                          disabled={!topAddTopicName.trim() || addEntityMutation.isPending}
-                          onClick={handleTopAddTopic}
-                          data-testid="button-top-add-topic-confirm"
-                        >
-                          {addEntityMutation.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
-                          Add
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={() => { setShowTopAddTopic(false); setTopAddTopicName(""); setTopAddTopicType("general"); setTopAddTopicWebsiteUrl(""); }}
-                          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                          data-testid="button-top-add-topic-cancel"
-                        >
-                          Cancel
-                        </button>
-                      </div>
                     </div>
                   )}
 

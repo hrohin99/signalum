@@ -1568,7 +1568,18 @@ Respond with JSON only, no explanation:
     try {
       const userId = (req as any).userId;
       const captures = await storage.getCapturesByUserId(userId);
-      return res.json(captures);
+      const focusAreaResult = await db.execute(sql`
+        SELECT id, focus_area FROM captures WHERE user_id = ${userId} AND focus_area IS NOT NULL
+      `);
+      const focusAreaMap = new Map<number, string>();
+      for (const row of focusAreaResult.rows as { id: number; focus_area: string }[]) {
+        focusAreaMap.set(row.id, row.focus_area);
+      }
+      const enriched = captures.map((c) => {
+        const focusArea = focusAreaMap.get(c.id);
+        return focusArea !== undefined ? { ...c, focus_area: focusArea } : c;
+      });
+      return res.json(enriched);
     } catch (error: any) {
       console.error("Get captures error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });
@@ -1611,6 +1622,135 @@ Respond with JSON only, no explanation:
     }
   });
 
+  app.get("/api/tracking-intent/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = decodeURIComponent(req.params.entityName);
+      const wsResult = await db.execute(sql`SELECT id FROM workspaces WHERE user_id = ${userId} LIMIT 1`);
+      if (!wsResult.rows[0]) return res.json({ hasIntent: false, selectedFocuses: [], customFocus: null });
+      const workspaceRow = wsResult.rows[0] as { id: string };
+      const workspaceId = workspaceRow.id;
+      const result = await db.execute(sql`
+        SELECT selected_focuses, custom_focus FROM entity_tracking_intent
+        WHERE workspace_id = ${workspaceId}::uuid AND entity_name = ${entityName}
+        LIMIT 1
+      `);
+      const row = result.rows[0] as { selected_focuses: string[]; custom_focus: string | null } | undefined;
+      if (!row) return res.json({ hasIntent: false, selectedFocuses: [], customFocus: null });
+      const focuses = Array.isArray(row.selected_focuses) ? row.selected_focuses : [];
+      const hasEffectiveIntent = focuses.length > 0 || !!(row.custom_focus && row.custom_focus.trim());
+      return res.json({ hasIntent: hasEffectiveIntent, selectedFocuses: focuses, customFocus: row.custom_focus || null });
+    } catch (error: any) {
+      console.error("GET tracking-intent error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.put("/api/tracking-intent/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = decodeURIComponent(req.params.entityName);
+      const { selectedFocuses, customFocus } = req.body;
+      const safeFocuses = Array.isArray(selectedFocuses) ? selectedFocuses.filter((f: unknown) => typeof f === "string") as string[] : [];
+      const safeCustom = typeof customFocus === "string" ? customFocus.trim() || null : null;
+      const wsResult = await db.execute(sql`SELECT id FROM workspaces WHERE user_id = ${userId} LIMIT 1`);
+      if (!wsResult.rows[0]) return res.status(404).json({ message: "Workspace not found" });
+      const putWorkspaceRow = wsResult.rows[0] as { id: string };
+      const workspaceId = putWorkspaceRow.id;
+      await db.execute(sql`
+        INSERT INTO entity_tracking_intent (workspace_id, entity_name, selected_focuses, custom_focus, updated_at)
+        VALUES (${workspaceId}::uuid, ${entityName}, ${safeFocuses}::text[], ${safeCustom}, NOW())
+        ON CONFLICT (workspace_id, entity_name) DO UPDATE
+          SET selected_focuses = EXCLUDED.selected_focuses,
+              custom_focus = EXCLUDED.custom_focus,
+              updated_at = NOW()
+      `);
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("PUT tracking-intent error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/tracking-intent/suggestions", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const { topicName, topicType } = req.body;
+      if (!topicName) return res.status(400).json({ message: "Missing topicName" });
+
+      const perplexityApiKey = process.env.PERPLEXITY_API_KEY;
+      let groundingContext = "";
+      if (perplexityApiKey) {
+        try {
+          const perplexityRes = await fetch("https://api.perplexity.ai/chat/completions", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${perplexityApiKey}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "sonar",
+              messages: [{ role: "user", content: `What are the key aspects to track about "${topicName}" (type: ${topicType}) for business intelligence purposes in 2025? List main themes briefly.` }],
+              max_tokens: 400,
+            }),
+          });
+          if (perplexityRes.ok) {
+            const perplexityData = await perplexityRes.json();
+            groundingContext = perplexityData?.choices?.[0]?.message?.content || "";
+          }
+        } catch (e) {
+          console.warn("[tracking-intent/suggestions] Perplexity grounding failed:", e);
+        }
+      }
+
+      const anthropicKey = process.env.ANTHROPIC_API_KEY || process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY;
+      if (!anthropicKey) {
+        return res.status(500).json({ message: "Anthropic API key not configured" });
+      }
+      const suggestionsClient = new Anthropic({ apiKey: anthropicKey });
+      const groundingNote = groundingContext ? `\n\nContext from live web search:\n${groundingContext}` : "";
+      const message = await suggestionsClient.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 500,
+        messages: [{
+          role: "user",
+          content: `Generate exactly 5 specific, actionable focus areas for tracking "${topicName}" (topic type: ${topicType}) for business intelligence.${groundingNote}
+
+Return ONLY a JSON array of 5 strings, each being a concise focus area (5-10 words max). Example format:
+["Regulatory enforcement actions and penalties", "New compliance requirements and deadlines", "Industry response and lobbying efforts", "Implementation timelines and grace periods", "Cross-border harmonization efforts"]
+
+Return only the JSON array, no other text.`
+        }]
+      });
+
+      const defaultFocuses = [
+        `Latest news and updates about ${topicName}`,
+        `Strategic developments and partnerships`,
+        `Market impact and competitive positioning`,
+        `Regulatory or compliance implications`,
+        `Technology and innovation signals`,
+      ];
+
+      const textContent = message.content.find(b => b.type === "text");
+      let suggestions: string[] = [];
+      if (textContent && textContent.type === "text") {
+        try {
+          const cleaned = textContent.text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+          const parsed = JSON.parse(cleaned);
+          if (Array.isArray(parsed)) suggestions = parsed.filter((s): s is string => typeof s === "string");
+        } catch {
+          suggestions = [];
+        }
+      }
+      const padded = suggestions.slice(0, 5);
+      while (padded.length < 5) {
+        const fallback = defaultFocuses[padded.length];
+        if (fallback) padded.push(fallback);
+        else break;
+      }
+      return res.json({ suggestions: padded, groundingContext });
+    } catch (error: any) {
+      console.error("POST tracking-intent/suggestions error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/entity-summary", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
@@ -1618,6 +1758,41 @@ Respond with JSON only, no explanation:
 
       if (!entityName || !categoryName) {
         return res.status(400).json({ message: "Missing entityName or categoryName" });
+      }
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      const categories = workspace ? (workspace.categories as ExtractedCategory[]) : [];
+      let aiSumEntity: ExtractedEntity | undefined;
+      for (const cat of categories) {
+        const found = cat.entities.find((e: any) => e.name === entityName);
+        if (found) { aiSumEntity = found as ExtractedEntity; break; }
+      }
+
+      const entityTopicType = (aiSumEntity?.topic_type || "general").toLowerCase();
+      const isNonCompetitor = entityTopicType !== "competitor";
+
+      const wsProfileResult = await db.execute(sql`SELECT * FROM workspaces WHERE user_id = ${userId} LIMIT 1`);
+      const summaryWorkspaceRow = wsProfileResult.rows[0] as Record<string, unknown> | undefined;
+      const aiSumWorkspaceId = (summaryWorkspaceRow?.id as string) || null;
+
+      let allFocuses: string[] = [];
+      if (isNonCompetitor && aiSumWorkspaceId) {
+        const intentResult = await db.execute(sql`
+          SELECT selected_focuses, custom_focus FROM entity_tracking_intent
+          WHERE workspace_id = ${aiSumWorkspaceId}::uuid AND entity_name = ${entityName}
+          LIMIT 1
+        `);
+        const intentRow = intentResult.rows[0] as { selected_focuses: string[]; custom_focus: string | null } | undefined;
+        if (!intentRow) {
+          return res.status(400).json({ error: "tracking_intent_required" });
+        }
+        const focuses = Array.isArray(intentRow.selected_focuses) ? [...intentRow.selected_focuses] : [];
+        if (intentRow.custom_focus && intentRow.custom_focus.trim()) focuses.push(intentRow.custom_focus.trim());
+        const hasEffectiveIntent = focuses.length > 0;
+        if (!hasEffectiveIntent) {
+          return res.status(400).json({ error: "tracking_intent_required" });
+        }
+        allFocuses = focuses;
       }
 
       const allCaptures = await storage.getCapturesByUserId(userId);
@@ -1634,23 +1809,18 @@ Respond with JSON only, no explanation:
 
       const client = getAnthropicClient();
 
-      const workspace = await storage.getWorkspaceByUserId(userId);
-      const categories = workspace ? (workspace.categories as ExtractedCategory[]) : [];
       const category = categories.find(c => c.name === categoryName);
       const focusContext = category?.focus ? `\nCategory focus area: "${category.focus}". Weight your analysis toward this focus.\n` : "";
 
-      const wsProfileResult = await pool.query("SELECT * FROM workspaces WHERE user_id = $1 LIMIT 1", [userId]);
       const profileCtx = buildProfileContext(wsProfileResult.rows[0] || null);
       const profilePrefix = profileCtx ? `${profileCtx}\n\n` : "";
 
-      const aiSumWorkspaceId = wsProfileResult.rows[0]?.id || null;
-      let aiSumEntity: ExtractedEntity | undefined;
-      for (const cat of categories) {
-        const found = cat.entities.find((e: any) => e.name === entityName);
-        if (found) { aiSumEntity = found as ExtractedEntity; break; }
-      }
       const entityProfileCtx = aiSumEntity
         ? await buildCompetitorProfileContext(entityName, aiSumEntity, aiSumWorkspaceId)
+        : "";
+
+      const focusInstruction = allFocuses.length > 0
+        ? `\n\nTracking focus areas: ${allFocuses.join(", ")}. Structure your summary around these specific focus areas, addressing each one.\n`
         : "";
 
       const message = await client.messages.create({
@@ -1667,7 +1837,7 @@ One sentence overview of what this company is.
 Then 2-3 short paragraphs of 2-3 sentences each. Separate each paragraph with a blank line.
 
 Do not use bullet points. Do not use em dashes. Do not use headers. Return only the paragraphs.
-${focusContext}
+${focusContext}${focusInstruction}
 ${entityProfileCtx ? `Structured profile data:\n${entityProfileCtx}\n\n` : ""}Captured intel:
 ${contentSnippets}
 

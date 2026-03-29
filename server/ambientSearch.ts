@@ -9,6 +9,8 @@ import { runJinaCompetitorEnrichment } from "./jinaSearchService";
 import type { ExtractedCategory, ExtractedEntity, InsertNotification } from "@shared/schema";
 import { sql } from "drizzle-orm";
 
+type FindingWithFocusArea = Awaited<ReturnType<typeof searchTopicUpdates>>[number] & { focus_area?: string };
+
 async function researchEntity(entity: { name: string }, categoryContext: string = ''): Promise<{ funding: any; geo_presence: string[]; products: any[] } | null> {
   const apiKey = process.env.PERPLEXITY_API_KEY;
   if (!apiKey) return null;
@@ -401,12 +403,8 @@ export async function runAmbientSearchForUser(
 
         const categoryFocus = category.focus || category.description || undefined;
 
-        let findings;
-        if (isCommodity) {
-          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "commodity", categoryFocus });
-        } else if (isRegulation) {
-          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, entityType: "regulation", categoryFocus });
-        } else if (topicType === "competitor") {
+        let findings: FindingWithFocusArea[];
+        if (topicType === "competitor") {
           findings = await searchCompetitorNews(entity.name, category.name, lookbackDays, {
             websiteUrl,
             skipHiring: isLocalBusiness,
@@ -414,7 +412,34 @@ export async function runAmbientSearchForUser(
             categoryFocus,
           });
         } else {
-          findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, { websiteUrl, categoryFocus });
+          const baseOptions = isCommodity
+            ? { websiteUrl, entityType: "commodity" as const, categoryFocus }
+            : isRegulation
+              ? { websiteUrl, entityType: "regulation" as const, categoryFocus }
+              : { websiteUrl, categoryFocus };
+
+          const intentResult = await db.execute(sql`
+            SELECT selected_focuses, custom_focus FROM entity_tracking_intent
+            WHERE workspace_id = ${workspace.id}::uuid AND entity_name = ${entity.name}
+            LIMIT 1
+          `);
+          const intentRow = intentResult.rows[0] as { selected_focuses: string[]; custom_focus: string | null } | undefined;
+          const intentFocuses: string[] = intentRow
+            ? [...(Array.isArray(intentRow.selected_focuses) ? intentRow.selected_focuses : []), ...(intentRow.custom_focus ? [intentRow.custom_focus] : [])]
+            : [];
+
+          if (intentFocuses.length > 0) {
+            const maxFocuses = intentFocuses.slice(0, 5);
+            findings = [];
+            for (const focus of maxFocuses) {
+              await perplexityRateLimiter.waitForSlot();
+              const focusFindings = await searchTopicUpdates(`${entity.name} ${focus} 2025`, topicType, lookbackDays, baseOptions);
+              const taggedFindings = focusFindings.map(f => ({ ...f, focus_area: focus }));
+              findings = [...findings, ...taggedFindings];
+            }
+          } else {
+            findings = await searchTopicUpdates(entity.name, topicType, lookbackDays, baseOptions);
+          }
         }
 
         result.entitiesSearched++;
@@ -424,9 +449,9 @@ export async function runAmbientSearchForUser(
           entity.name,
           thirtyDaysAgo
         );
-        const deduplicated = deduplicateFindings(findings, existingCaptures);
+        const deduplicated = deduplicateFindings(findings, existingCaptures) as FindingWithFocusArea[];
 
-        let relevantFindings = deduplicated;
+        let relevantFindings: FindingWithFocusArea[] = deduplicated;
         if (topicType === "competitor") {
           const entityLower = entity.name.toLowerCase();
           relevantFindings = deduplicated.filter((f) => {
@@ -440,16 +465,37 @@ export async function runAmbientSearchForUser(
         }
 
         if (relevantFindings.length > 0) {
-          const captureRecords = findingsToCaptures(
-            relevantFindings,
-            entity.name,
-            userId,
-            category.name
-          );
-          const createdCaptures = await storage.createCaptures(captureRecords);
-          result.newCapturesCreated += createdCaptures.length;
+          const findingsWithFocus = relevantFindings.filter((f): f is FindingWithFocusArea & { focus_area: string } => !!f.focus_area);
+          const findingsWithoutFocus = relevantFindings.filter((f) => !f.focus_area);
 
-          const captureIds = createdCaptures.map((c) => c.id);
+          const captureIds: number[] = [];
+
+          if (findingsWithFocus.length > 0) {
+            for (const finding of findingsWithFocus) {
+              const rawContent = finding.source_url
+                ? `${finding.summary}\n\nSource: ${finding.source_url}`
+                : finding.summary;
+              const signalTag = finding.signal_type === "hiring_signal" ? " [signal_type:hiring_signal]" : "";
+              const dateTag = finding.approximate_date ? ` [news_date:${finding.approximate_date}]` : "";
+              const matchReason = `Automatically discovered via Perplexity web search [${finding.signal_strength}]${signalTag}${dateTag}`;
+              const insertResult = await db.execute(sql`
+                INSERT INTO captures (user_id, type, content, matched_entity, matched_category, match_reason, focus_area, created_at)
+                VALUES (${userId}, 'web_search', ${rawContent}, ${entity.name}, ${category.name}, ${matchReason}, ${finding.focus_area}, NOW())
+                RETURNING id
+              `);
+              const newId = (insertResult.rows[0] as { id: number }).id;
+              captureIds.push(newId);
+            }
+          }
+
+          if (findingsWithoutFocus.length > 0) {
+            const captureRecords = findingsToCaptures(findingsWithoutFocus, entity.name, userId, category.name);
+            const created = await storage.createCaptures(captureRecords);
+            captureIds.push(...created.map((c) => c.id));
+          }
+
+          result.newCapturesCreated += captureIds.length;
+
           await storage.flagCapturesForBrief(captureIds);
 
           const summaryParts = relevantFindings.map((f) => f.summary);

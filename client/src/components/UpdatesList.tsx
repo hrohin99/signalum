@@ -4,6 +4,8 @@ import { apiRequest } from "@/lib/queryClient";
 import { ChevronRight, Globe, Pencil, Briefcase, ExternalLink, ChevronDown } from "lucide-react";
 import type { Capture } from "@shared/schema";
 
+type CaptureWithFocusArea = Capture & { focus_area?: string | null };
+
 type TimeFilter = "all" | "week" | "month" | "90days";
 type CategoryFilter = "all" | "Product launch" | "Contract win" | "Partnership" | "Certification" | "R&D signal" | "Case study" | "Conference" | "Pricing" | "Other";
 
@@ -27,13 +29,13 @@ const CATEGORIES: CategoryFilter[] = [
   "Other",
 ];
 
-function getSignalStrength(cap: Capture): "high" | "medium" | "low" | null {
+function getSignalStrength(cap: CaptureWithFocusArea): "high" | "medium" | "low" | null {
   if (!cap.matchReason) return null;
   const match = cap.matchReason.match(/\[(high|medium|low)\]/);
   return match ? (match[1] as "high" | "medium" | "low") : null;
 }
 
-function getNewsDate(cap: Capture): Date | null {
+function getNewsDate(cap: CaptureWithFocusArea): Date | null {
   if (!cap.matchReason) return null;
   const match = cap.matchReason.match(/\[news_date:([^\]]+)\]/);
   if (!match) return null;
@@ -41,11 +43,11 @@ function getNewsDate(cap: Capture): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function getDisplayDate(cap: Capture): Date {
+function getDisplayDate(cap: CaptureWithFocusArea): Date {
   return getNewsDate(cap) ?? new Date(cap.createdAt);
 }
 
-function getCategory(cap: Capture): string {
+function getCategory(cap: CaptureWithFocusArea): string {
   const text = (cap.content || "").toLowerCase();
   if (/launch|release|announces/i.test(text)) return "Product launch";
   if (/contract|selected|awarded|wins/i.test(text)) return "Contract win";
@@ -58,12 +60,12 @@ function getCategory(cap: Capture): string {
   return "Other";
 }
 
-function getSourceUrl(cap: Capture): string | null {
+function getSourceUrl(cap: CaptureWithFocusArea): string | null {
   const match = cap.content.match(/\n\nSource: (https?:\/\/[^\s]+)/);
   return match ? match[1] : null;
 }
 
-function getSourceDomain(cap: Capture): string | null {
+function getSourceDomain(cap: CaptureWithFocusArea): string | null {
   const url = getSourceUrl(cap);
   if (!url) return null;
   try {
@@ -73,16 +75,16 @@ function getSourceDomain(cap: Capture): string | null {
   }
 }
 
-function getCaptureTitle(cap: Capture): string {
+function getCaptureTitle(cap: CaptureWithFocusArea): string {
   const firstLine = cap.content.split("\n")[0].trim();
   return firstLine.length > 0 ? firstLine : cap.content.slice(0, 80);
 }
 
-function getCaptureBody(cap: Capture): string {
+function getCaptureBody(cap: CaptureWithFocusArea): string {
   return cap.content.replace(/\n\nSource:.*$/, "").trim();
 }
 
-function SignalDot({ cap }: { cap: Capture }) {
+function SignalDot({ cap }: { cap: CaptureWithFocusArea }) {
   const strength = getSignalStrength(cap);
   let color = "#85B7EB";
   if (strength === "high") color = "#E24B4A";
@@ -107,7 +109,7 @@ function UpdateCard({
   cap,
   dimensionNames,
 }: {
-  cap: Capture;
+  cap: CaptureWithFocusArea;
   dimensionNames: string[];
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -318,12 +320,13 @@ export function UpdatesList({
   captures,
   entityType,
 }: {
-  captures: Capture[];
+  captures: CaptureWithFocusArea[];
   entityType?: string;
 }) {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [focusFilter, setFocusFilter] = useState<string>("all");
 
   const { data: dimensionsRaw } = useQuery<{ id: string; name: string; items?: { name: string }[] }[]>({
     queryKey: ["/api/dimensions"],
@@ -369,10 +372,19 @@ export function UpdatesList({
     if (categoryFilter !== "all") {
       if (getCategory(cap) !== categoryFilter) return false;
     }
+    if (focusFilter !== "all") {
+      if (cap.focus_area !== focusFilter) return false;
+    }
     return true;
   });
 
   const hasCategoryFilter = categoryFilter !== "all";
+  const hasFocusFilter = focusFilter !== "all";
+  const capturesFocusAreas = Array.from(
+    new Set(captures.map((c) => c.focus_area).filter((f): f is string => typeof f === "string" && f.trim().length > 0))
+  );
+  const showFocusFilter = capturesFocusAreas.length > 0;
+  const focusOptions = capturesFocusAreas;
 
   return (
     <div data-testid="updates-list">
@@ -481,6 +493,57 @@ export function UpdatesList({
             </div>
           )}
         </div>
+
+        {showFocusFilter && (
+          <>
+            <div
+              style={{
+                width: "0.5px",
+                height: 20,
+                backgroundColor: "#e2e8f0",
+                flexShrink: 0,
+              }}
+            />
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              <span style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500 }}>Focus:</span>
+              <button
+                onClick={() => setFocusFilter("all")}
+                style={{
+                  fontSize: 12,
+                  padding: "3px 10px",
+                  borderRadius: 999,
+                  border: focusFilter === "all" ? "none" : "1px solid #e2e8f0",
+                  backgroundColor: focusFilter === "all" ? "#723988" : "#fff",
+                  color: focusFilter === "all" ? "#fff" : "#64748b",
+                  cursor: "pointer",
+                  fontWeight: focusFilter === "all" ? 500 : 400,
+                }}
+                data-testid="focus-filter-all"
+              >
+                All
+              </button>
+              {focusOptions.map((focus) => (
+                <button
+                  key={focus}
+                  onClick={() => setFocusFilter(focus)}
+                  style={{
+                    fontSize: 12,
+                    padding: "3px 10px",
+                    borderRadius: 999,
+                    border: focusFilter === focus ? "none" : "1px solid #e2e8f0",
+                    backgroundColor: focusFilter === focus ? "#723988" : "#EEEDFE",
+                    color: focusFilter === focus ? "#fff" : "#723988",
+                    cursor: "pointer",
+                    fontWeight: focusFilter === focus ? 500 : 400,
+                  }}
+                  data-testid={`focus-filter-${focus}`}
+                >
+                  {focus}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {filtered.length === 0 ? (

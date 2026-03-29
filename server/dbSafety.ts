@@ -611,5 +611,31 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring topic_milestones table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS entity_tracking_intent (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        entity_name TEXT NOT NULL,
+        selected_focuses TEXT[] NOT NULL DEFAULT '{}',
+        custom_focus TEXT,
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(workspace_id, entity_name)
+      )
+    `);
+    console.log("[DBSafety] entity_tracking_intent table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring entity_tracking_intent table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      ALTER TABLE captures ADD COLUMN IF NOT EXISTS focus_area TEXT
+    `);
+    console.log("[DBSafety] captures.focus_area column verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring captures.focus_area column:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

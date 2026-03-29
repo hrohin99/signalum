@@ -75,6 +75,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import type { ExtractedCategory, ExtractedEntity, Capture, TopicTypeConfig, Battlecard, TopicDate, MonitoredUrl, WorkspaceCapability, CompetitorCapability, CompetitorPricing, StrategicDirection, ProductContext, EntitySeoData } from "@shared/schema";
 import { UpdatesList } from "@/components/UpdatesList";
+import { TrackingFocusStep } from "@/components/TrackingFocusStep";
+import { TrackingFocusEmptyState } from "@/components/TrackingFocusEmptyState";
 import { CollapsibleSection } from "@/components/CollapsibleSection";
 import { TopicImpactCard } from "@/components/TopicImpactCard";
 import { TopicNotes } from "@/components/TopicNotes";
@@ -270,6 +272,9 @@ function TopicViewContent({
   const [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'commercial' | 'competitive' | 'strategic' | 'updates'>('overview');
   const [nonCompTab, setNonCompTab] = useState<'overview' | 'updates'>('overview');
   const isCompetitor = currentTopicType === 'competitor';
+  const [showFocusEditModal, setShowFocusEditModal] = useState(false);
+  const [showRegeneratePrompt, setShowRegeneratePrompt] = useState(false);
+  const [focusSuggestionsPromise, setFocusSuggestionsPromise] = useState<Promise<{ suggestions: string[]; groundingContext: string }> | null>(null);
   const typeDropdownRef = useRef<HTMLDivElement>(null);
   const priorityDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -392,6 +397,39 @@ function TopicViewContent({
     retry: 2,
     retryDelay: 500
   });
+
+  const { data: trackingIntentData, refetch: refetchTrackingIntent } = useQuery<{ hasIntent: boolean; selectedFocuses: string[]; customFocus: string | null }>({
+    queryKey: ["/api/tracking-intent", entity.name],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/tracking-intent/${encodeURIComponent(entity.name)}`);
+      return res.json();
+    },
+    enabled: !!user && !isCompetitor,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+  });
+
+  const saveTrackingIntentMutation = useMutation({
+    mutationFn: async ({ selectedFocuses, customFocus }: { selectedFocuses: string[]; customFocus: string }) => {
+      const res = await apiRequest("PUT", `/api/tracking-intent/${encodeURIComponent(entity.name)}`, { selectedFocuses, customFocus: customFocus || null });
+      return res.json();
+    },
+    onSuccess: () => {
+      refetchTrackingIntent();
+      setShowFocusEditModal(false);
+      setShowRegeneratePrompt(true);
+    },
+  });
+
+  const handleOpenFocusEdit = () => {
+    const promise = apiRequest("POST", "/api/tracking-intent/suggestions", { topicName: entity.name, topicType: currentTopicType })
+      .then((res) => res.json())
+      .catch(() => ({ suggestions: [], groundingContext: "" }));
+    setFocusSuggestionsPromise(promise);
+    setShowFocusEditModal(true);
+    setShowRegeneratePrompt(false);
+  };
 
   useEffect(() => {
     if (extractionStatus?.extraction?.status === "completed" && extractionStatus?.extraction?.noDataFound) {
@@ -990,8 +1028,105 @@ function TopicViewContent({
 
           {nonCompTab === 'overview' && (
             <div className="space-y-3">
+              {showFocusEditModal && (
+                <div
+                  style={{
+                    position: "fixed",
+                    inset: 0,
+                    backgroundColor: "rgba(0,0,0,0.4)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    zIndex: 9999,
+                  }}
+                  data-testid="modal-focus-edit"
+                  onClick={(e) => { if (e.target === e.currentTarget) setShowFocusEditModal(false); }}
+                >
+                  <div
+                    style={{
+                      background: "#fff",
+                      borderRadius: 14,
+                      padding: 24,
+                      width: "100%",
+                      maxWidth: 480,
+                      boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
+                    }}
+                  >
+                    <div style={{ marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <h3 style={{ fontSize: 15, fontWeight: 600, color: "#1e293b", margin: 0 }}>Edit tracking focus</h3>
+                      <button
+                        onClick={() => setShowFocusEditModal(false)}
+                        style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 20, lineHeight: 1 }}
+                        data-testid="button-close-focus-modal"
+                      >×</button>
+                    </div>
+                    <TrackingFocusStep
+                      topicName={entity.name}
+                      topicType={currentTopicType}
+                      suggestionsPromise={focusSuggestionsPromise}
+                      initialSelectedFocuses={trackingIntentData?.selectedFocuses}
+                      initialCustomFocus={trackingIntentData?.customFocus ?? undefined}
+                      onSave={(selectedFocuses, customFocus) => {
+                        saveTrackingIntentMutation.mutate({ selectedFocuses, customFocus });
+                      }}
+                      onSkip={() => setShowFocusEditModal(false)}
+                    />
+                  </div>
+                </div>
+              )}
               <CollapsibleSection title="AI Summary" defaultOpen={true}>
-                <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+                {!isCompetitor && trackingIntentData === undefined ? (
+                  <div style={{ height: 64, borderRadius: 8, background: "linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%)", backgroundSize: "200% 100%", animation: "pulse 1.5s ease-in-out infinite" }} data-testid="intent-loading-skeleton" />
+                ) : !isCompetitor && !trackingIntentData!.hasIntent ? (
+                  <TrackingFocusEmptyState topicName={entity.name} onSetFocus={handleOpenFocusEdit} />
+                ) : (
+                  <>
+                    {!isCompetitor && trackingIntentData?.hasIntent && (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <button
+                          onClick={handleOpenFocusEdit}
+                          data-testid="button-edit-focus-areas"
+                          style={{
+                            fontSize: 12,
+                            color: "#723988",
+                            background: "#EEEDFE",
+                            border: "1px solid #723988",
+                            borderRadius: 20,
+                            padding: "3px 10px",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 4,
+                            fontWeight: 500,
+                          }}
+                        >
+                          📌 {[...(trackingIntentData.selectedFocuses || []), trackingIntentData.customFocus].filter(Boolean).length} focus area{[...(trackingIntentData.selectedFocuses || []), trackingIntentData.customFocus].filter(Boolean).length !== 1 ? "s" : ""} · Edit
+                        </button>
+                        {showRegeneratePrompt && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#64748b" }}>
+                            <span>Regenerate AI summary now?</span>
+                            <button
+                              onClick={() => {
+                                queryClient.invalidateQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
+                                queryClient.removeQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
+                                setShowRegeneratePrompt(false);
+                              }}
+                              data-testid="button-regenerate-summary-yes"
+                              style={{ fontSize: 12, color: "#723988", fontWeight: 600, background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                            >Yes, regenerate</button>
+                            <span>·</span>
+                            <button
+                              onClick={() => setShowRegeneratePrompt(false)}
+                              data-testid="button-save-focus-only"
+                              style={{ fontSize: 12, color: "#94a3b8", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                            >Save focus only</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+                  </>
+                )}
               </CollapsibleSection>
               <CollapsibleSection title="Impact on our product" defaultOpen={true}>
                 <TopicImpactCard entity={entity} captures={captures} />
