@@ -1922,10 +1922,34 @@ Rules:
     }
   });
 
+  app.get("/api/entity-summary/:entityName", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = decodeURIComponent(req.params.entityName);
+
+      const workspace = await storage.getWorkspaceByUserId(userId);
+      const categories = workspace ? (workspace.categories as ExtractedCategory[]) : [];
+      let foundEntity: ExtractedEntity | undefined;
+      for (const cat of categories) {
+        const found = cat.entities.find((e: any) => e.name === entityName);
+        if (found) { foundEntity = found as ExtractedEntity; break; }
+      }
+
+      if (foundEntity?.aiSummary) {
+        return res.json({ summary: foundEntity.aiSummary, updatedAt: foundEntity.aiSummaryUpdatedAt });
+      }
+
+      return res.json({ summary: null });
+    } catch (error: any) {
+      console.error("GET entity summary error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   app.post("/api/entity-summary", requireAuth, async (req: Request, res: Response) => {
     try {
       const userId = (req as any).userId;
-      const { entityName, categoryName } = req.body;
+      const { entityName, categoryName, regenerate } = req.body;
 
       if (!entityName || !categoryName) {
         return res.status(400).json({ message: "Missing entityName or categoryName" });
@@ -1937,6 +1961,10 @@ Rules:
       for (const cat of categories) {
         const found = cat.entities.find((e: any) => e.name === entityName);
         if (found) { aiSumEntity = found as ExtractedEntity; break; }
+      }
+
+      if (aiSumEntity?.aiSummary && !regenerate) {
+        return res.json({ summary: aiSumEntity.aiSummary, updatedAt: aiSumEntity.aiSummaryUpdatedAt });
       }
 
       const entityTopicType = (aiSumEntity?.topic_type || "general").toLowerCase();
@@ -2022,7 +2050,10 @@ Return only the summary paragraphs, no JSON, no formatting.`
         return res.status(500).json({ message: "No summary returned" });
       }
 
-      return res.json({ summary: textContent.text.trim() });
+      const generatedSummary = textContent.text.trim();
+      await storage.updateEntityAiSummary(userId, entityName, generatedSummary);
+
+      return res.json({ summary: generatedSummary, updatedAt: new Date().toISOString() });
     } catch (error: any) {
       console.error("Entity summary error:", error);
       return res.status(500).json({ message: sanitizeErrorMessage(error) });

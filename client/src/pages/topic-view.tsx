@@ -424,6 +424,20 @@ function TopicViewContent({
     },
   });
 
+  const regenerateSummaryMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/entity-summary", {
+        entityName: entity.name,
+        categoryName,
+        regenerate: true,
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["/api/entity-summary", entity.name, categoryName], data);
+    },
+  });
+
   const handleOpenFocusEdit = () => {
     const promise = apiRequest("POST", "/api/tracking-intent/suggestions", { topicName: entity.name, topicType: currentTopicType })
       .then((res) => res.json())
@@ -1110,8 +1124,7 @@ function TopicViewContent({
                             <span>Regenerate AI summary now?</span>
                             <button
                               onClick={() => {
-                                queryClient.invalidateQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
-                                queryClient.removeQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
+                                regenerateSummaryMutation.mutate();
                                 setShowRegeneratePrompt(false);
                               }}
                               data-testid="button-regenerate-summary-yes"
@@ -1514,16 +1527,16 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
   const [feedbackText, setFeedbackText] = useState("");
   const [summaryExpanded, setSummaryExpanded] = useState(false);
 
-  const { data: summaryData, isLoading, isError, dataUpdatedAt } = useQuery<{ summary: string }>({
+  const { data: summaryData, isLoading, isError } = useQuery<{ summary: string | null; updatedAt?: string }>({
     queryKey: ["/api/entity-summary", entity.name, categoryName],
     queryFn: async () => {
-      const res = await apiRequest("POST", "/api/entity-summary", {
-        entityName: entity.name,
-        categoryName,
-      });
+      const res = await apiRequest("GET", `/api/entity-summary/${encodeURIComponent(entity.name)}`);
       return res.json();
     },
     retry: false,
+    staleTime: Infinity,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
   const { data: wsContextData } = useQuery<{ workspaceContext: { primaryDomain?: string } | null }>({
@@ -1536,6 +1549,7 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
       const res = await apiRequest("POST", "/api/entity-summary", {
         entityName: entity.name,
         categoryName,
+        regenerate: true,
       });
       return res.json();
     },
@@ -1554,6 +1568,7 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
       const res = await apiRequest("POST", "/api/entity-summary", {
         entityName: entity.name,
         categoryName,
+        regenerate: true,
       });
       return res.json();
     },
@@ -1591,7 +1606,7 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
     confidenceState = 3;
   }
 
-  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
+  const lastUpdated = summaryData?.updatedAt ? new Date(summaryData.updatedAt) : null;
 
   return (
     <Card className="border-[#1e3a5f]/15 bg-[#1e3a5f]/[0.02]" data-testid="section-ai-summary" data-tour="ai-summary">
@@ -1612,8 +1627,14 @@ function AISummarySection({ entity, categoryName, onOpenAspectModal }: { entity:
               Unable to generate summary at this time. Try again later.
             </p>
           </div>
+        ) : !summaryData?.summary ? (
+          <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              No summary generated yet. Click <strong>Regenerate</strong> below to generate one.
+            </p>
+          </div>
         ) : (() => {
-          const summaryText = summaryData?.summary || `No updates available for ${entity.name} yet.`;
+          const summaryText = summaryData.summary;
           const summaryParagraphs = summaryText.split(/\n\n+/);
           const hasMoreParagraphs = summaryParagraphs.length > 3;
           const displayedSummary = hasMoreParagraphs && !summaryExpanded
@@ -4689,7 +4710,6 @@ function InlineCaptureCard({
       if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
       confirmTimerRef.current = window.setTimeout(() => setShowConfirmation(false), 3000);
       queryClient.invalidateQueries({ queryKey: ["/api/captures"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/entity-summary", entity.name, categoryName] });
       queryClient.invalidateQueries({ queryKey: ["/api/ai-insights", entity.name, categoryName] });
 
       setInlineDates([]);
