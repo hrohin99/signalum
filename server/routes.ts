@@ -1896,8 +1896,28 @@ Rules:
       const textBlock = message.content.find((b: any) => b.type === "text");
       const raw = textBlock && textBlock.type === "text" ? textBlock.text : "{}";
       const cleaned = raw.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "").trim();
+      console.log('[IMPACT] Raw response length:', raw.length);
+      console.log('[IMPACT] First 500 chars:', raw.substring(0, 500));
+      console.log('[IMPACT] Cleaned first 500:', cleaned.substring(0, 500));
       let parsed: any = {};
-      try { parsed = JSON.parse(cleaned); } catch { parsed = { relevance: "medium", relevance_reason: "Analysis could not be parsed.", insights: [], actions: [] }; }
+      try {
+        parsed = JSON.parse(cleaned);
+      } catch (e1) {
+        // Claude sometimes adds preamble text before JSON
+        // Try extracting JSON object from the response
+        const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          try {
+            parsed = JSON.parse(jsonMatch[0]);
+          } catch (e2) {
+            console.error('[IMPACT] Parse failed. Raw:', raw.substring(0, 300));
+            parsed = { relevance: "medium", relevance_reason: "Analysis could not be parsed.", insights: [], actions: [] };
+          }
+        } else {
+          console.error('[IMPACT] No JSON found in response:', raw.substring(0, 300));
+          parsed = { relevance: "medium", relevance_reason: "Analysis could not be parsed.", insights: [], actions: [] };
+        }
+      }
 
       const relevance = ["high", "medium", "low"].includes(parsed.relevance) ? parsed.relevance : "medium";
       const relevanceReason = parsed.relevance_reason || "";
