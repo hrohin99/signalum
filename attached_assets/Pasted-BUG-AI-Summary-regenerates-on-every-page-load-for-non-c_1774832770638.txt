@@ -1,0 +1,51 @@
+BUG: AI Summary regenerates on every page load for non-competitor 
+topics. This is expensive and unnecessary.
+
+CURRENT BEHAVIOR: Every time the topic page loads, it calls the 
+Claude API to generate a fresh AI summary. This wastes API tokens 
+and slows down page load.
+
+DESIRED BEHAVIOR: 
+1. AI Summary is generated ONCE and stored in the database
+2. On page load, fetch the stored summary (fast, no API call)
+3. Only regenerate when the user clicks a "Refresh" button
+4. Auto-generate when tracking focus is first set (same as impact)
+
+FIX:
+
+1. The AI summary should already be stored somewhere (check if 
+   there's a field in workspaces.categories entity, or a separate 
+   table). Find where the summary is currently stored/generated.
+
+2. If the summary is being generated on every page load via a 
+   useQuery that calls an API route which calls Claude:
+   - Change the API route to FIRST check for an existing stored 
+     summary. If one exists, return it immediately (no Claude call)
+   - Only call Claude if no summary exists OR if a "regenerate" 
+     query param is passed: GET /api/ai-summary/:entityName?regenerate=true
+   
+3. In the frontend:
+   - The useQuery for AI summary should fetch the STORED summary
+   - Remove any logic that auto-triggers generation on mount
+   - Add a small "Refresh" icon button in the AI Summary card 
+     header (next to the collapse chevron)
+   - Clicking Refresh calls the API with ?regenerate=true
+   - Show a loading spinner while regenerating
+   - After regeneration, invalidate the query to show new content
+
+4. Auto-generate triggers (these are the ONLY times it should 
+   generate):
+   - When tracking focus is first set/saved (already happening 
+     for impact card — do the same for summary)
+   - When user clicks the Refresh button
+   - NOT on page load
+   - NOT on navigation
+   - NOT on component mount
+
+5. If the summary generation is happening inside a useQuery 
+   queryFn, that's the bug — useQuery runs on mount. Change it to:
+   - useQuery fetches stored summary (cheap DB read)
+   - useMutation handles regeneration (expensive Claude call)
+
+SAFETY: Do NOT change the Claude prompt for the summary itself.
+Only change WHEN it's called (not on every load, only on demand).
