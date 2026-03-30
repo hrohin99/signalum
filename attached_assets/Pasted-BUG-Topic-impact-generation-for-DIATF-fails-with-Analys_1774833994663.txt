@@ -1,0 +1,60 @@
+BUG: Topic impact generation for DIATF fails with "Analysis could 
+not be parsed." The server logs show Claude returns valid JSON but 
+it gets TRUNCATED — the response is cut off before the closing }
+because max_tokens is too low.
+
+FIX (2 changes in server/routes.ts around line 1785-1900):
+
+1. INCREASE max_tokens on the Claude API call for impact generation.
+   Find the anthropic.messages.create call inside the 
+   POST /api/topic-impact/:entityName/generate route.
+   Change max_tokens from whatever it is (likely 1000 or 1500) 
+   to 2000.
+
+2. IMPROVE the JSON recovery for truncated responses. Replace the 
+   parse block with:
+
+   let parsed: any = {};
+   try { 
+     parsed = JSON.parse(cleaned); 
+   } catch (e1) {
+     // Try extracting JSON from preamble
+     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+     if (jsonMatch) {
+       try { 
+         parsed = JSON.parse(jsonMatch[0]); 
+       } catch (e2) {
+         // Response was likely truncated — try to fix it
+         let partial = jsonMatch[0];
+         // Close any open strings and arrays
+         const openBrackets = (partial.match(/\[/g) || []).length - (partial.match(/\]/g) || []).length;
+         const openBraces = (partial.match(/\{/g) || []).length - (partial.match(/\}/g) || []).length;
+         // Remove trailing comma or incomplete value
+         partial = partial.replace(/,\s*$/, '');
+         partial = partial.replace(/,\s*"[^"]*$/, '');
+         partial = partial.replace(/:\s*"[^"]*$/, ': ""');
+         // Close open structures
+         for (let i = 0; i < openBrackets; i++) partial += ']';
+         for (let i = 0; i < openBraces; i++) partial += '}';
+         try {
+           parsed = JSON.parse(partial);
+           console.log('[IMPACT] Recovered truncated JSON');
+         } catch (e3) {
+           console.error('[IMPACT] Could not recover JSON:', partial.substring(0, 200));
+           parsed = { relevance: "medium", relevance_reason: "Analysis generation was truncated. Try again.", insights: [], actions: [] };
+         }
+       }
+     } else {
+       console.error('[IMPACT] No JSON found:', raw.substring(0, 200));
+       parsed = { relevance: "medium", relevance_reason: "Analysis could not be parsed.", insights: [], actions: [] };
+     }
+   }
+
+3. Also add to the Claude prompt (before the closing backtick):
+   "Keep your response concise to fit within token limits. 
+   Maximum 2 insights and 2 actions."
+
+This reduces output length AND increases the token budget so 
+responses don't get truncated.
+
+ONLY modify the POST /api/topic-impact route. Nothing else.

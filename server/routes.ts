@@ -1846,7 +1846,7 @@ Return only the JSON array, no other text.`
       const client = new Anthropic({ apiKey: anthropicKey });
       const message = await client.messages.create({
         model: "claude-sonnet-4-6",
-        max_tokens: 1000,
+        max_tokens: 2000,
         messages: [{
           role: "user",
           content: `You are a strategic product analyst. Analyze the impact of "${entityName}" on the user's product.
@@ -1889,7 +1889,8 @@ Rules:
 - 2-4 insights maximum, 1-3 actions maximum
 - "risk" = we have a gap this topic exposes; "warning" = monitor, could become a risk; "strength" = we are well positioned
 - Be specific to this user's product, not generic advice
-- Return only the JSON object, no markdown, no extra text`
+- Return only the JSON object, no markdown, no extra text
+- Keep your response concise to fit within token limits. Maximum 2 insights and 2 actions.`
         }]
       });
 
@@ -1903,18 +1904,33 @@ Rules:
       try {
         parsed = JSON.parse(cleaned);
       } catch (e1) {
-        // Claude sometimes adds preamble text before JSON
-        // Try extracting JSON object from the response
+        // Try extracting JSON from preamble
         const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           try {
             parsed = JSON.parse(jsonMatch[0]);
           } catch (e2) {
-            console.error('[IMPACT] Parse failed. Raw:', raw.substring(0, 300));
-            parsed = { relevance: "medium", relevance_reason: "Analysis could not be parsed.", insights: [], actions: [] };
+            // Response was likely truncated — try to fix it
+            let partial = jsonMatch[0];
+            // Remove trailing comma or incomplete value
+            partial = partial.replace(/,\s*$/, '');
+            partial = partial.replace(/,\s*"[^"]*$/, '');
+            partial = partial.replace(/:\s*"[^"]*$/, ': ""');
+            // Close open structures
+            const openBrackets = (partial.match(/\[/g) || []).length - (partial.match(/\]/g) || []).length;
+            const openBraces = (partial.match(/\{/g) || []).length - (partial.match(/\}/g) || []).length;
+            for (let i = 0; i < openBrackets; i++) partial += ']';
+            for (let i = 0; i < openBraces; i++) partial += '}';
+            try {
+              parsed = JSON.parse(partial);
+              console.log('[IMPACT] Recovered truncated JSON');
+            } catch (e3) {
+              console.error('[IMPACT] Could not recover JSON:', partial.substring(0, 200));
+              parsed = { relevance: "medium", relevance_reason: "Analysis generation was truncated. Try again.", insights: [], actions: [] };
+            }
           }
         } else {
-          console.error('[IMPACT] No JSON found in response:', raw.substring(0, 300));
+          console.error('[IMPACT] No JSON found:', raw.substring(0, 200));
           parsed = { relevance: "medium", relevance_reason: "Analysis could not be parsed.", insights: [], actions: [] };
         }
       }
