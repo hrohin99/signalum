@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, type ReactNode } from "react";
+import { Info } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from "@/lib/auth-context";
 import { useRole } from "@/App";
@@ -271,6 +272,7 @@ function TopicViewContent({
   const [extractionNoDataDismissed, setExtractionNoDataDismissed] = useState(false);
   const [battlecardExpanded, setBattlecardExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'profile' | 'commercial' | 'competitive' | 'strategic' | 'updates'>('overview');
+  const [hoveredTab, setHoveredTab] = useState<string | null>(null);
   const [nonCompTab, setNonCompTab] = useState<'overview' | 'updates'>('overview');
   const isCompetitor = currentTopicType === 'competitor';
   const [showFocusEditModal, setShowFocusEditModal] = useState(false);
@@ -753,14 +755,17 @@ function TopicViewContent({
               <div
                 key={tab}
                 onClick={() => setActiveTab(tab)}
+                onMouseEnter={() => setHoveredTab(tab)}
+                onMouseLeave={() => setHoveredTab(null)}
                 style={{
-                  fontSize: 13, padding: '10px 16px', cursor: 'pointer',
-                  color: activeTab === tab ? '#534AB7' : 'var(--color-text-secondary, #64748b)',
-                  borderBottom: activeTab === tab ? '2px solid #534AB7' : '2px solid transparent',
-                  fontWeight: activeTab === tab ? 500 : 400,
+                  fontSize: 14, padding: '10px 18px', cursor: 'pointer',
+                  color: activeTab === tab ? '#7C3AED' : hoveredTab === tab ? '#374151' : 'var(--color-text-secondary, #64748b)',
+                  borderBottom: activeTab === tab ? '2px solid #7C3AED' : '2px solid transparent',
+                  fontWeight: activeTab === tab ? 600 : 400,
                   marginBottom: -0.5, whiteSpace: 'nowrap',
                   flexShrink: 0,
-                  textTransform: 'capitalize'
+                  textTransform: 'capitalize',
+                  transition: 'color 0.15s',
                 }}
                 data-testid={`tab-${tab}`}
               >
@@ -972,6 +977,15 @@ function TopicViewContent({
                 <DimensionSpiderChart entityName={entity.name} />
               </CollapsibleSection>
               <CollapsibleSection title="Competitive dimensions" defaultOpen={true}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', background: '#F5F3FF', borderLeft: '3px solid #7C3AED', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
+                  <Info size={14} style={{ color: '#7C3AED', flexShrink: 0, marginTop: 1 }} />
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#4C1D95', marginBottom: 3 }}>How to update "My Product" scores</div>
+                    <div style={{ fontSize: 11, color: '#6B7280', lineHeight: 1.5 }}>
+                      The "Us" column reflects your own product capabilities. To edit these, go to Settings → Competitive Dimensions and update the baseline scores for each dimension. Changes apply across all competitors.
+                    </div>
+                  </div>
+                </div>
                 <DimensionComparisonCard entityName={entity.name} />
               </CollapsibleSection>
             </>
