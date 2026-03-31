@@ -148,6 +148,7 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] });
+      queryClient.invalidateQueries({ queryKey: ["geo-presence", entityId] });
       setShowForm(false);
       setForm(EMPTY_FORM);
     }
@@ -164,6 +165,7 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] });
+      queryClient.invalidateQueries({ queryKey: ["geo-presence", entityId] });
       setEditingId(null);
       setForm(EMPTY_FORM);
     }
@@ -174,7 +176,10 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
       if (id.startsWith('perplexity-')) return;
       await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/geo-presence/${encodeURIComponent(id)}`);
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] })
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] });
+      queryClient.invalidateQueries({ queryKey: ["geo-presence", entityId] });
+    }
   });
 
   return (

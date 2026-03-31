@@ -71,7 +71,7 @@ export function GeoPresenceMap({ entityId }: { entityId: string }) {
   const mapRef = useRef<SVGSVGElement>(null);
 
   const { data: geoData, isLoading } = useQuery<GeoPresence[]>({
-    queryKey: [`/api/entities/${entityId}/geo-presence`],
+    queryKey: ["geo-presence", entityId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`);
       return res.json();

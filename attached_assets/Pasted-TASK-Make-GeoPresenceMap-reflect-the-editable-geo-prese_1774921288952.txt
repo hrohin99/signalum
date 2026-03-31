@@ -1,0 +1,84 @@
+TASK: Make GeoPresenceMap reflect the editable geo_presence data from the competitor_geo_presence table (same source as GeoPresenceCard), and ensure edits/adds/deletes update the map in real time.
+
+## PROBLEM
+GeoPresenceMap currently reads from `entity.geo_presence` (a static text field populated by Perplexity).
+GeoPresenceCard manages structured rows in the `competitor_geo_presence` table (with region, presence_type, channel, notes columns).
+These two components are out of sync — edits in GeoPresenceCard don't update the map.
+
+## FIX
+
+### 1. Update GeoPresenceMap.tsx
+
+Change the component's data source from the static `geoPresence` prop to a live query against the competitor_geo_presence table.
+
+New props interface:
+```typescript
+interface GeoPresenceMapProps {
+  entityId: number;  // use this to fetch live data
+}
+```
+
+Inside the component, add:
+```typescript
+const { data: geoItems = [] } = useQuery({
+  queryKey: ['geo-presence', entityId],
+  queryFn: () => apiRequest(`/api/competitor-geo-presence/${entityId}`),
+  staleTime: 0,
+  gcTime: 0,
+  refetchOnMount: 'always'
+});
+```
+
+Then replace the parsing logic. Instead of parsing `geo_presence` text strings, map the structured `geoItems` rows directly:
+```typescript
+// Build the presenceData array from geoItems
+const presenceData = geoItems.map((item: any) => ({
+  region: item.region,
+  level: item.presence_type === 'active' ? 'Strong' 
+       : item.presence_type === 'expanding' ? 'Growing'
+       : item.presence_type === 'limited' ? 'Limited'
+       : item.presence_type === 'hq' ? 'HQ'
+       : 'Limited',
+  description: item.notes || item.channel || ''
+}));
+```
+
+Keep the D3 choropleth map rendering logic exactly as-is — just feed it `presenceData` instead of the parsed text data.
+
+### 2. Update topic-view.tsx
+
+Wherever `GeoPresenceMap` is rendered, update the props:
+
+Old:
+```tsx
+<GeoPresenceMap geoPresence={entity.geo_presence} />
+```
+
+New:
+```tsx
+<GeoPresenceMap entityId={entity.id} />
+```
+
+### 3. Invalidate the map query when GeoPresenceCard mutates
+
+In GeoPresenceCard.tsx, find the mutation calls (add, edit, delete). After each `onSuccess`, add a query invalidation for the map's query key:
+```typescript
+import { useQueryClient } from '@tanstack/react-query';
+const queryClient = useQueryClient();
+
+// In each mutation's onSuccess:
+queryClient.invalidateQueries({ queryKey: ['geo-presence', entityId] });
+```
+
+This ensures when you add/edit/delete a region in GeoPresenceCard, the map re-fetches and re-renders immediately.
+
+### 4. Remove the old geoPresence prop entirely
+
+Remove any passing of `geoPresence={entity.geo_presence}` prop — it's no longer needed. The map now owns its own data fetch.
+
+RULES:
+- Do NOT change the D3 map rendering logic
+- Do NOT change the GeoPresenceCard component (only add invalidateQueries to its mutations)
+- Do NOT run drizzle-kit push
+- Use apiRequest() not raw fetch
+- Run npm run build and confirm no errors before republishing
