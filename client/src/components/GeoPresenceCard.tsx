@@ -202,8 +202,9 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input data-testid="input-geo-region-name" placeholder="Country / region name *" value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
             <select data-testid="select-geo-presence-type" value={form.presence_type} onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
-              <option value="active">Active</option>
-              <option value="expanding">Expanding</option>
+              <option value="hq">Headquarters</option>
+              <option value="active">Active (Strong presence)</option>
+              <option value="expanding">Expanding (Growing)</option>
               <option value="limited">Limited</option>
               <option value="exited">Exited</option>
             </select>
@@ -234,8 +235,9 @@ export function GeoPresenceCard({ entityId, userRole }: { entityId: string; user
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <input data-testid="input-geo-region-name" placeholder="Country / region name *" value={form.region} onChange={e => setForm(f => ({ ...f, region: e.target.value }))} style={inputStyle} />
                 <select data-testid="select-geo-presence-type" value={form.presence_type} onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))} style={inputStyle}>
-                  <option value="active">Active</option>
-                  <option value="expanding">Expanding</option>
+                  <option value="hq">Headquarters</option>
+                  <option value="active">Active (Strong presence)</option>
+                  <option value="expanding">Expanding (Growing)</option>
                   <option value="limited">Limited</option>
                   <option value="exited">Exited</option>
                 </select>
