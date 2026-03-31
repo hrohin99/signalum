@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface GeoPresence {
   id: string;
@@ -67,10 +67,27 @@ function resolvePresenceType(region: string, presence_type: string, notes: strin
   return presence_type;
 }
 
-export function GeoPresenceMap({ entityId }: { entityId: string }) {
-  const mapRef = useRef<SVGSVGElement>(null);
+const EMPTY_FORM = { region: "", presence_type: "active", channels: "", notes: "" };
 
-  const { data: geoData, isLoading } = useQuery<GeoPresence[]>({
+const inputStyle: React.CSSProperties = {
+  fontSize: 13,
+  padding: "7px 10px",
+  border: "0.5px solid #cbd5e1",
+  borderRadius: 6,
+  background: "#fff",
+  color: "#1e293b",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+export function GeoPresenceMap({ entityId, userRole }: { entityId: string; userRole: string }) {
+  const mapRef = useRef<SVGSVGElement>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const canEdit = userRole === "admin" || userRole === "sub_admin";
+
+  const { data: geoData = [], isLoading } = useQuery<GeoPresence[]>({
     queryKey: ["geo-presence", entityId],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`);
@@ -79,6 +96,39 @@ export function GeoPresenceMap({ entityId }: { entityId: string }) {
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: "always",
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: [`/api/entities/${entityId}/geo-presence`] });
+    queryClient.invalidateQueries({ queryKey: ["geo-presence", entityId] });
+  };
+
+  const addMutation = useMutation({
+    mutationFn: async (data: typeof EMPTY_FORM) => {
+      const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`, data);
+      return res.json();
+    },
+    onSuccess: () => { invalidate(); setShowForm(false); setForm(EMPTY_FORM); },
+  });
+
+  const editMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: typeof EMPTY_FORM }) => {
+      if (id.startsWith("perplexity-")) {
+        const res = await apiRequest("POST", `/api/entities/${encodeURIComponent(entityId)}/geo-presence`, data);
+        return res.json();
+      }
+      const res = await apiRequest("PUT", `/api/entities/${encodeURIComponent(entityId)}/geo-presence/${encodeURIComponent(id)}`, data);
+      return res.json();
+    },
+    onSuccess: () => { invalidate(); setEditingId(null); setForm(EMPTY_FORM); },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      if (id.startsWith("perplexity-")) return;
+      await apiRequest("DELETE", `/api/entities/${encodeURIComponent(entityId)}/geo-presence/${encodeURIComponent(id)}`);
+    },
+    onSuccess: () => invalidate(),
   });
 
   useEffect(() => {
@@ -126,13 +176,6 @@ export function GeoPresenceMap({ entityId }: { entityId: string }) {
       const projection = d3.geoNaturalEarth1().fitSize([900, 460], countries);
       const path = d3.geoPath().projection(projection);
 
-      const nameMap: Record<string, string> = {};
-      if (world.objects.countries.geometries) {
-        world.objects.countries.geometries.forEach((g: any) => {
-          if (g.properties?.name) nameMap[g.properties.name] = g.properties.name;
-        });
-      }
-
       svg.selectAll("path")
         .data(countries.features)
         .join("path")
@@ -146,84 +189,164 @@ export function GeoPresenceMap({ entityId }: { entityId: string }) {
     });
   }, [geoData]);
 
-  if (isLoading) {
-    return (
-      <div style={{ padding: "20px 0", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-        Loading geographic data…
+  const EntryForm = ({ onSave, onCancel, saving }: { onSave: () => void; onCancel: () => void; saving: boolean }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "12px 0" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <input
+          data-testid="input-geo-region-name"
+          placeholder="Country / region name *"
+          value={form.region}
+          onChange={e => setForm(f => ({ ...f, region: e.target.value }))}
+          style={inputStyle}
+        />
+        <select
+          data-testid="select-geo-presence-type"
+          value={form.presence_type}
+          onChange={e => setForm(f => ({ ...f, presence_type: e.target.value }))}
+          style={inputStyle}
+        >
+          <option value="active">Active</option>
+          <option value="expanding">Expanding</option>
+          <option value="limited">Limited</option>
+          <option value="exited">Exited</option>
+        </select>
       </div>
-    );
-  }
-
-  if (!geoData || geoData.length === 0) {
-    return (
-      <div style={{ padding: "20px 0", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>
-        No geographic presence data logged yet.
+      <input
+        data-testid="input-geo-channels"
+        placeholder="Channels (e.g. Direct, Partners, Online)"
+        value={form.channels}
+        onChange={e => setForm(f => ({ ...f, channels: e.target.value }))}
+        style={inputStyle}
+      />
+      <textarea
+        data-testid="input-geo-notes"
+        placeholder="Notes"
+        value={form.notes}
+        onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+        rows={2}
+        style={{ ...inputStyle, resize: "vertical", fontFamily: "inherit" }}
+      />
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+        <button
+          data-testid="button-cancel-geo"
+          onClick={onCancel}
+          style={{ fontSize: 12, padding: "4px 14px", border: "0.5px solid #e2e8f0", borderRadius: 6, background: "transparent", color: "#64748b", cursor: "pointer" }}
+        >
+          Cancel
+        </button>
+        <button
+          data-testid="button-save-geo"
+          onClick={onSave}
+          disabled={!form.region || saving}
+          style={{ fontSize: 12, padding: "4px 14px", background: "#534AB7", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", opacity: !form.region || saving ? 0.6 : 1 }}
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
       </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
-        {Object.entries(PRESENCE_COLORS).map(([key, val]) => (
-          <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: val.fill, display: "inline-block", flexShrink: 0 }} />
-            <span style={{ fontSize: 11, color: "#64748b" }}>{val.label}</span>
-          </div>
-        ))}
-      </div>
-
-      <svg
-        ref={mapRef}
-        viewBox="0 0 900 460"
-        style={{ width: "100%", height: "auto", borderRadius: 8, background: "transparent" }}
-      />
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-          gap: 8,
-          marginTop: 16,
-        }}
-      >
-        {geoData.map((entry) => {
-          const resolvedType = resolvePresenceType(entry.region, entry.presence_type, entry.notes);
-          const style = PRESENCE_COLORS[resolvedType] ?? PRESENCE_COLORS.limited;
-          return (
-            <div
-              key={entry.id}
-              style={{
-                border: "0.5px solid #e2e8f0",
-                borderRadius: 8,
-                padding: "10px 12px",
-                background: "#fafafa",
-              }}
-            >
-              <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b", marginBottom: 5 }}>
-                {entry.region}
-              </div>
-              {entry.notes && (
-                <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6, lineHeight: 1.4 }}>
-                  {entry.notes}
-                </div>
-              )}
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: "2px 8px",
-                  borderRadius: 20,
-                  fontWeight: 500,
-                  background: style.bg,
-                  color: style.text,
-                }}
-              >
-                {style.label}
-              </span>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+          {Object.entries(PRESENCE_COLORS).map(([key, val]) => (
+            <div key={key} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: 2, background: val.fill, display: "inline-block", flexShrink: 0 }} />
+              <span style={{ fontSize: 11, color: "#64748b" }}>{val.label}</span>
             </div>
-          );
-        })}
+          ))}
+        </div>
+        {canEdit && (
+          <button
+            data-testid="button-add-geo"
+            onClick={() => { setShowForm(true); setEditingId(null); setForm(EMPTY_FORM); }}
+            style={{ fontSize: 12, color: "#534AB7", border: "0.5px solid #AFA9EC", borderRadius: 6, padding: "3px 10px", cursor: "pointer", background: "transparent", flexShrink: 0 }}
+          >
+            + Add region
+          </button>
+        )}
       </div>
+
+      {showForm && canEdit && (
+        <div style={{ border: "0.5px solid #e2e8f0", borderRadius: 8, padding: "12px 14px", background: "#f8fafc", marginBottom: 12 }}>
+          <EntryForm
+            onSave={() => addMutation.mutate(form)}
+            onCancel={() => { setShowForm(false); setForm(EMPTY_FORM); }}
+            saving={addMutation.isPending}
+          />
+        </div>
+      )}
+
+      {isLoading ? (
+        <div style={{ padding: "20px 0", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>Loading geographic data…</div>
+      ) : geoData.length === 0 && !showForm ? (
+        <div style={{ padding: "20px 0", textAlign: "center", color: "#94a3b8", fontSize: 13 }}>No geographic presence data logged yet.</div>
+      ) : (
+        <>
+          <svg
+            ref={mapRef}
+            viewBox="0 0 900 460"
+            style={{ width: "100%", height: "auto", borderRadius: 8, background: "transparent" }}
+          />
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))", gap: 8, marginTop: 16 }}>
+            {geoData.map((entry) => {
+              const resolvedType = resolvePresenceType(entry.region, entry.presence_type, entry.notes);
+              const style = PRESENCE_COLORS[resolvedType] ?? PRESENCE_COLORS.limited;
+              const isEditing = editingId === entry.id;
+              return (
+                <div
+                  key={entry.id}
+                  data-testid={`card-geo-${entry.id}`}
+                  style={{ border: "0.5px solid #e2e8f0", borderRadius: 8, padding: "10px 12px", background: "#fafafa" }}
+                >
+                  {isEditing ? (
+                    <EntryForm
+                      onSave={() => editMutation.mutate({ id: entry.id, data: form })}
+                      onCancel={() => { setEditingId(null); setForm(EMPTY_FORM); }}
+                      saving={editMutation.isPending}
+                    />
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 5 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>{entry.region}</div>
+                        {canEdit && (
+                          <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                            <button
+                              data-testid={`button-edit-geo-${entry.id}`}
+                              onClick={() => { setEditingId(entry.id); setShowForm(false); setForm({ region: entry.region, presence_type: entry.presence_type || "active", channels: entry.channels || "", notes: entry.notes || "" }); }}
+                              style={{ fontSize: 11, color: "#534AB7", border: "0.5px solid #AFA9EC", borderRadius: 6, padding: "2px 7px", cursor: "pointer", background: "transparent" }}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              data-testid={`button-remove-geo-${entry.id}`}
+                              onClick={() => { if (confirm(`Remove ${entry.region}?`)) deleteMutation.mutate(entry.id); }}
+                              style={{ fontSize: 11, color: "#94a3b8", border: "0.5px solid #e2e8f0", borderRadius: 6, padding: "2px 7px", cursor: "pointer", background: "transparent" }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      {entry.notes && (
+                        <div style={{ fontSize: 11, color: "#64748b", marginBottom: 6, lineHeight: 1.4 }}>{entry.notes}</div>
+                      )}
+                      {entry.channels && (
+                        <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 6 }}>Channels: {entry.channels}</div>
+                      )}
+                      <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 20, fontWeight: 500, background: style.bg, color: style.text }}>
+                        {style.label}
+                      </span>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
     </div>
   );
 }

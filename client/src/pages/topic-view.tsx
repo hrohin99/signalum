@@ -858,7 +858,7 @@ function TopicViewContent({
 
           {/* Geographic Presence */}
           <ProfileCollapsibleSection title="Geographic Presence" defaultExpanded={true}>
-            <GeoPresenceMap entityId={entity.name} />
+            <GeoPresenceMap entityId={entity.name} userRole={userRole} />
           </ProfileCollapsibleSection>
 
           {/* Funding Intelligence */}
