@@ -86,10 +86,11 @@ import { PartnershipsCard } from "@/components/PartnershipsCard";
 import { SoWhatCard as SoWhatIntelCard } from "@/components/SoWhatCard";
 import { SwotCard } from "@/components/SwotCard";
 import { DimensionComparisonCard } from "@/components/DimensionComparisonCard";
-import { DimensionMatrix } from "@/components/DimensionMatrix";
+import { DimensionSpiderChart } from "@/components/DimensionSpiderChart";
 import { CertificationsCard } from "@/components/CertificationsCard";
 import { ProductsCard } from "@/components/ProductsCard";
 import { GeoPresenceCard, getRegionFlag } from "@/components/GeoPresenceCard";
+import { GeoPresenceMap } from "@/components/GeoPresenceMap";
 import { WinLossCard } from "@/components/WinLossCard";
 import { FundingCard, FundingOverviewPreview } from "@/components/FundingCard";
 import { CoachMarks } from "@/components/coach-marks";
@@ -857,7 +858,7 @@ function TopicViewContent({
 
           {/* Geographic Presence */}
           <ProfileCollapsibleSection title="Geographic Presence" defaultExpanded={true}>
-            <GeoPresenceCard entityId={entity.name} userRole={userRole} />
+            <GeoPresenceMap entityId={entity.name} />
           </ProfileCollapsibleSection>
 
           {/* Funding Intelligence */}
@@ -966,13 +967,15 @@ function TopicViewContent({
             <SwotCard entityId={entity.name} userRole={userRole} />
           </CollapsibleSection>
           {dimensionsExist && (
-            <CollapsibleSection title="Competitive dimensions" defaultOpen={true}>
-              <DimensionComparisonCard entityName={entity.name} />
-            </CollapsibleSection>
+            <>
+              <CollapsibleSection title="Competitive scoring" defaultOpen={true}>
+                <DimensionSpiderChart entityName={entity.name} />
+              </CollapsibleSection>
+              <CollapsibleSection title="Competitive dimensions" defaultOpen={true}>
+                <DimensionComparisonCard entityName={entity.name} />
+              </CollapsibleSection>
+            </>
           )}
-          <CollapsibleSection title="Dimension matrix" defaultOpen={false}>
-            <DimensionMatrix />
-          </CollapsibleSection>
           <CollapsibleSection title="Battlecard" defaultOpen={false}>
             <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
           </CollapsibleSection>
