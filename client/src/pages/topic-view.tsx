@@ -781,7 +781,9 @@ function TopicViewContent({
 
       {isCompetitor && activeTab === 'overview' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+          <CollapsibleSection title="AI summary" defaultOpen={true}>
+            <AISummarySection entity={entity} categoryName={categoryName} onOpenAspectModal={() => setShowAspectModal(true)} />
+          </CollapsibleSection>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
             <div style={{ background: '#fff', border: '1px solid #cbd5e1', borderRadius: 12, padding: '14px 18px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -942,52 +944,64 @@ function TopicViewContent({
       )}
 
       {isCompetitor && activeTab === 'commercial' && (
-        <div className="space-y-6">
-          <PricingCard entity={entity} />
-          <WinLossCard entityId={entity.name} userRole={userRole} />
-          <FundingCard entityId={entity.name} userRole={userRole} />
+        <div className="space-y-4">
+          <CollapsibleSection title="Pricing" defaultOpen={false}>
+            <PricingCard entity={entity} />
+          </CollapsibleSection>
+          <CollapsibleSection title="Win / Loss" defaultOpen={false}>
+            <WinLossCard entityId={entity.name} userRole={userRole} />
+          </CollapsibleSection>
+          <CollapsibleSection title="Funding & financials" defaultOpen={false}>
+            <FundingCard entityId={entity.name} userRole={userRole} />
+          </CollapsibleSection>
         </div>
       )}
 
       {isCompetitor && activeTab === 'competitive' && (
-        <div className="space-y-6">
-          <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
-          <SwotCard entityId={entity.name} userRole={userRole} />
+        <div className="space-y-4">
+          <CollapsibleSection title="So what for us?" defaultOpen={true}>
+            <SoWhatIntelCard entityId={entity.name} userRole={userRole} />
+          </CollapsibleSection>
+          <CollapsibleSection title="SWOT" defaultOpen={false}>
+            <SwotCard entityId={entity.name} userRole={userRole} />
+          </CollapsibleSection>
           {dimensionsExist && (
-            <DimensionComparisonCard entityName={entity.name} />
+            <CollapsibleSection title="Competitive dimensions" defaultOpen={true}>
+              <DimensionComparisonCard entityName={entity.name} />
+            </CollapsibleSection>
           )}
-          <DimensionMatrix />
-          <div className="space-y-4">
-            <BattlecardCollapsedHeader
-              entity={entity}
-              categoryName={categoryName}
-              expanded={battlecardExpanded}
-              onToggle={() => setBattlecardExpanded(!battlecardExpanded)}
-            />
-            {battlecardExpanded && (
-              <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
-            )}
-          </div>
-          <CertificationsCard entityId={entity.name} userRole={userRole} previewMode={false} />
+          <CollapsibleSection title="Dimension matrix" defaultOpen={false}>
+            <DimensionMatrix />
+          </CollapsibleSection>
+          <CollapsibleSection title="Battlecard" defaultOpen={false}>
+            <BattlecardWidget entity={entity} categoryName={categoryName} captures={captures} />
+          </CollapsibleSection>
+          <CollapsibleSection title="Certifications" defaultOpen={false}>
+            <CertificationsCard entityId={entity.name} userRole={userRole} previewMode={false} />
+          </CollapsibleSection>
         </div>
       )}
 
       {isCompetitor && activeTab === 'strategic' && (
-        <div className="space-y-6">
-          <PartnershipsCard entityId={entity.name} userRole={userRole} />
+        <div className="space-y-4">
+          <CollapsibleSection title="Partnerships" defaultOpen={false}>
+            <PartnershipsCard entityId={entity.name} userRole={userRole} />
+          </CollapsibleSection>
         </div>
       )}
 
       {isCompetitor && activeTab === 'updates' && (
         <div className="flex flex-col lg:flex-row gap-6 mt-6">
           <div className="lg:w-[65%] space-y-6">
-            <WidgetsSection
-              entity={entity}
-              categoryName={categoryName}
-              captures={captures}
-              widgetConfig={widgetConfig}
-              allCaptures={allCaptures}
-            />
+            <CollapsibleSection title="Updates" defaultOpen={true} badge={captures.length}>
+              <WidgetsSection
+                entity={entity}
+                categoryName={categoryName}
+                captures={captures}
+                widgetConfig={widgetConfig}
+                allCaptures={allCaptures}
+              />
+            </CollapsibleSection>
           </div>
 
           <div className="lg:w-[35%] space-y-6">
