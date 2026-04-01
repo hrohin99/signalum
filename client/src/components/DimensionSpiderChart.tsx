@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { calculateWeightedScore } from "@/lib/dimensionScoring";
 
 interface DimensionItem {
   name: string;
   our_status: string | null;
   competitor_status: string | null;
+  importance: string | null;
   status_id: string | null;
   source: string | null;
   evidence: string | null;
@@ -24,14 +26,12 @@ interface DimensionComparisonData {
 
 function calculateScore(items: DimensionItem[], field: "our_status" | "competitor_status"): number {
   if (items.length === 0) return 0;
-  const total = items.reduce((sum, item) => {
-    const s = item[field];
-    if (s === "yes") return sum + 100;
-    if (s === "partial") return sum + 50;
-    if (s === "unknown") return sum + 25;
-    return sum;
-  }, 0);
-  return Math.round(total / items.length);
+  return calculateWeightedScore(
+    items.map((item) => ({
+      status: item[field],
+      importance: item.importance,
+    }))
+  );
 }
 
 function AssessmentBadge({ ourScore, theirScore }: { ourScore: number; theirScore: number }) {

@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { StatusOverrideModal } from "@/components/StatusOverrideModal";
 import { AlertTriangle } from "lucide-react";
+import { IMPORTANCE_SHORT, IMPORTANCE_COLORS, type ImportanceTier } from "@/lib/dimensionScoring";
 
 interface DimensionItem {
   name: string;
   our_status: string | null;
   competitor_status: string | null;
+  importance: string | null;
   status_id: string | null;
   source: string | null;
   evidence: string | null;
@@ -45,11 +47,6 @@ const STATUS_LABELS: Record<string, string> = {
   na: "N/A",
 };
 
-const PRIORITY_BADGE: Record<string, { bg: string; text: string }> = {
-  high: { bg: "#fee2e2", text: "#dc2626" },
-  medium: { bg: "#fef3c7", text: "#d97706" },
-  low: { bg: "#f0fdf4", text: "#16a34a" },
-};
 
 function StatusPill({ status, clickable, onClick }: { status: string | null; clickable?: boolean; onClick?: () => void }) {
   const resolved = status ?? "unknown";
@@ -141,8 +138,6 @@ export function DimensionComparisonCard({ entityName, workspaceId }: DimensionCo
       {/* Dimension groups */}
       <div style={{ padding: "12px 0" }}>
         {dimensions.map((dim, dimIndex) => {
-          const priorityBadge = PRIORITY_BADGE[dim.priority] ?? PRIORITY_BADGE.medium;
-
           const hasVulnerability = dim.items.some(
             (item) =>
               (item.our_status === "no" || item.our_status === "na") &&
@@ -169,22 +164,6 @@ export function DimensionComparisonCard({ entityName, workspaceId }: DimensionCo
                 }}
               >
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>{dim.name}</span>
-                {dim.priority && dim.priority !== "medium" ? (
-                  <span
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      padding: "1px 7px",
-                      borderRadius: 20,
-                      background: priorityBadge.bg,
-                      color: priorityBadge.text,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.04em",
-                    }}
-                  >
-                    {dim.priority}
-                  </span>
-                ) : null}
               </div>
 
               {/* Table */}
@@ -224,7 +203,35 @@ export function DimensionComparisonCard({ entityName, workspaceId }: DimensionCo
                           }}
                         >
                           <td style={{ padding: "8px 18px", fontSize: 12, color: "#374151", verticalAlign: "middle" }}>
-                            {item.name}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                              <span>{item.name}</span>
+                              {(() => {
+                                const tier = (item.importance ?? "high") as ImportanceTier;
+                                const colors = IMPORTANCE_COLORS[tier] ?? IMPORTANCE_COLORS.high;
+                                return (
+                                  <span
+                                    title={tier.charAt(0).toUpperCase() + tier.slice(1)}
+                                    data-testid={`importance-badge-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      justifyContent: "center",
+                                      width: 16,
+                                      height: 16,
+                                      borderRadius: "50%",
+                                      background: colors.bg,
+                                      color: colors.text,
+                                      fontSize: 9,
+                                      fontWeight: 700,
+                                      flexShrink: 0,
+                                      border: `1px solid ${colors.dot}40`,
+                                    }}
+                                  >
+                                    {IMPORTANCE_SHORT[tier] ?? "H"}
+                                  </span>
+                                );
+                              })()}
+                            </div>
                           </td>
                           <td style={{ padding: "8px", textAlign: "center", verticalAlign: "middle" }}>
                             <StatusPill status={item.our_status} />

@@ -7263,10 +7263,12 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
           items: rawItems.map((item: any) => {
             const itemName = typeof item === 'string' ? item : item.name;
             const ourStatus = typeof item === 'object' ? (item.our_status ?? null) : null;
+            const importance = typeof item === 'object' ? (item.importance ?? 'high') : 'high';
             const statusRow = statusMap.get(`${dim.id}::${itemName}`);
             return {
               name: itemName,
               our_status: ourStatus,
+              importance,
               competitor_status: statusRow?.status ?? null,
               status_id: statusRow?.id ?? null,
               source: statusRow?.source ?? null,
@@ -7381,10 +7383,12 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
           items: rawItems.map((item: any) => {
             const itemName = typeof item === 'string' ? item : item.name;
             const ourStatus = typeof item === 'object' ? (item.our_status ?? null) : null;
+            const importance = typeof item === 'object' ? (item.importance ?? 'high') : 'high';
             const statuses = statusMap.get(`${dim.id}::${itemName}`) || [];
             return {
               name: itemName,
               our_status: ourStatus,
+              importance,
               competitors: statuses.map((s) => ({
                 entity_name: s.entity_name,
                 status: s.status,

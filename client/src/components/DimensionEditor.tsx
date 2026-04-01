@@ -14,8 +14,25 @@ import {
   Pencil,
   ArrowUp,
   ArrowDown,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { IMPORTANCE_LABELS, type ImportanceTier } from "@/lib/dimensionScoring";
 
 type ItemStatus = "yes" | "partial" | "no" | "na";
 
@@ -23,6 +40,7 @@ interface DimensionItem {
   name: string;
   our_status: ItemStatus;
   notes: string | null;
+  importance: ImportanceTier;
 }
 
 interface Dimension {
@@ -45,7 +63,7 @@ interface SuggestedDimension {
 }
 
 const STATUS_CYCLE: ItemStatus[] = ["yes", "partial", "no", "na"];
-const PRIORITY_CYCLE = ["high", "medium", "low"];
+const IMPORTANCE_TIERS: ImportanceTier[] = ["critical", "high", "medium", "low"];
 
 const statusColor: Record<ItemStatus, string> = {
   yes: "#16a34a",
@@ -61,12 +79,6 @@ const statusLabel: Record<ItemStatus, string> = {
   na: "N/A",
 };
 
-const priorityBadge: Record<string, { bg: string; text: string }> = {
-  high: { bg: "#fee2e2", text: "#dc2626" },
-  medium: { bg: "#fef3c7", text: "#d97706" },
-  low: { bg: "#f0fdf4", text: "#16a34a" },
-};
-
 const inputSm: React.CSSProperties = {
   border: "0.5px solid #d1d5db",
   borderRadius: "6px",
@@ -74,6 +86,18 @@ const inputSm: React.CSSProperties = {
   fontSize: "13px",
   outline: "none",
   fontFamily: "inherit",
+};
+
+const importanceSelectStyle: React.CSSProperties = {
+  border: "0.5px solid #d1d5db",
+  borderRadius: "4px",
+  padding: "1px 4px",
+  fontSize: "11px",
+  outline: "none",
+  fontFamily: "inherit",
+  cursor: "pointer",
+  background: "#f9fafb",
+  color: "#374151",
 };
 
 // ─── View-mode pill (cycles status on click) ─────────────────────────────────
@@ -106,7 +130,7 @@ function ViewPill({ item, onCycle }: { item: DimensionItem; onCycle: () => void 
   );
 }
 
-// ─── Edit-mode pill (shows X and move arrows) ────────────────────────────────
+// ─── Edit-mode pill (shows importance select, X and move arrows) ──────────────
 
 function EditPill({
   item,
@@ -116,6 +140,7 @@ function EditPill({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onImportanceChange,
 }: {
   item: DimensionItem;
   index: number;
@@ -124,6 +149,7 @@ function EditPill({
   onRemove: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onImportanceChange: (tier: ImportanceTier) => void;
 }) {
   const color = statusColor[item.our_status] || "#9ca3af";
   return (
@@ -146,6 +172,18 @@ function EditPill({
         <span>{item.name}</span>
         <span style={{ opacity: 0.7, fontSize: "11px", marginLeft: "4px" }}>· {statusLabel[item.our_status]}</span>
       </button>
+      <select
+        value={item.importance ?? "high"}
+        onChange={(e) => onImportanceChange(e.target.value as ImportanceTier)}
+        title="Importance tier"
+        data-testid={`select-importance-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{ ...importanceSelectStyle, marginLeft: "4px" }}
+      >
+        {IMPORTANCE_TIERS.map((t) => (
+          <option key={t} value={t}>{IMPORTANCE_LABELS[t]}</option>
+        ))}
+      </select>
       <button
         onClick={onMoveUp}
         disabled={index === 0}
@@ -190,15 +228,13 @@ function DimensionInlineEditor({
   isSaving: boolean;
 }) {
   const [name, setName] = useState(dim.name);
-  const [priority, setPriority] = useState(dim.priority);
-  const [items, setItems] = useState<DimensionItem[]>(Array.isArray(dim.items) ? dim.items : []);
+  const [items, setItems] = useState<DimensionItem[]>(
+    Array.isArray(dim.items)
+      ? dim.items.map((it) => ({ ...it, importance: it.importance ?? "high" }))
+      : []
+  );
   const [newItemName, setNewItemName] = useState("");
   const newItemRef = useRef<HTMLInputElement>(null);
-
-  const cyclePriority = () => {
-    const idx = PRIORITY_CYCLE.indexOf(priority);
-    setPriority(PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length]);
-  };
 
   const cycleItemStatus = (index: number) => {
     setItems((prev) => prev.map((it, i) => {
@@ -206,6 +242,10 @@ function DimensionInlineEditor({
       const idx = STATUS_CYCLE.indexOf(it.our_status);
       return { ...it, our_status: STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] };
     }));
+  };
+
+  const setItemImportance = (index: number, tier: ImportanceTier) => {
+    setItems((prev) => prev.map((it, i) => i === index ? { ...it, importance: tier } : it));
   };
 
   const removeItem = (index: number) => {
@@ -229,12 +269,10 @@ function DimensionInlineEditor({
       setNewItemName("");
       return;
     }
-    setItems((prev) => [...prev, { name: trimmed, our_status: "na", notes: null }]);
+    setItems((prev) => [...prev, { name: trimmed, our_status: "na", notes: null, importance: "high" }]);
     setNewItemName("");
     newItemRef.current?.focus();
   };
-
-  const pb = priorityBadge[priority] || priorityBadge.medium;
 
   return (
     <div style={{ padding: "12px 16px", borderTop: "0.5px solid #f3f4f6", background: "#fafafa" }}>
@@ -250,32 +288,11 @@ function DimensionInlineEditor({
               data-testid="input-edit-dimension-name"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-            <button
-              onClick={cyclePriority}
-              title="Click to cycle priority"
-              data-testid="button-cycle-priority"
-              style={{
-                fontSize: "11px",
-                padding: "4px 12px",
-                borderRadius: "999px",
-                background: pb.bg,
-                color: pb.text,
-                fontWeight: 700,
-                cursor: "pointer",
-                border: `1px solid ${pb.text}40`,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {priority.toUpperCase()} ↻
-            </button>
-          </div>
         </div>
 
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-2">
-            Items <span className="text-gray-400 font-normal">(click pill to cycle status · arrows to reorder · × to remove)</span>
+            Items <span className="text-gray-400 font-normal">(click pill to cycle status · select importance · arrows to reorder · × to remove)</span>
           </label>
           {items.length === 0 ? (
             <p className="text-xs text-gray-400 italic mb-2">No items yet. Add one below.</p>
@@ -291,6 +308,7 @@ function DimensionInlineEditor({
                   onRemove={() => removeItem(i)}
                   onMoveUp={() => moveItem(i, "up")}
                   onMoveDown={() => moveItem(i, "down")}
+                  onImportanceChange={(tier) => setItemImportance(i, tier)}
                 />
               ))}
             </div>
@@ -324,7 +342,7 @@ function DimensionInlineEditor({
           </Button>
           <Button
             size="sm"
-            onClick={() => onSave({ name: name.trim() || dim.name, priority, items, display_order: dim.display_order })}
+            onClick={() => onSave({ name: name.trim() || dim.name, priority: dim.priority, items, display_order: dim.display_order })}
             disabled={isSaving || !name.trim()}
             style={{ backgroundColor: "#534AB7", color: "#fff" }}
             data-testid="button-save-edit"
@@ -338,7 +356,7 @@ function DimensionInlineEditor({
   );
 }
 
-// ─── Single dimension card ───────────────────────────────────────────────────
+// ─── Single dimension card (sortable) ───────────────────────────────────────
 
 function DimensionCard({
   dim,
@@ -351,12 +369,24 @@ function DimensionCard({
   const [editing, setEditing] = useState(false);
   const { toast } = useToast();
 
-  const pb = priorityBadge[dim.priority] || priorityBadge.medium;
-  const items: DimensionItem[] = Array.isArray(dim.items) ? dim.items : [];
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: dim.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    border: "0.5px solid #e5e7eb",
+    borderRadius: "10px",
+    background: "#fff",
+    overflow: "hidden",
+  };
+
+  const items: DimensionItem[] = Array.isArray(dim.items)
+    ? dim.items.map((it) => ({ ...it, importance: it.importance ?? "high" }))
+    : [];
 
   const saveMutation = useMutation({
     mutationFn: async (body: { name: string; priority: string; items: DimensionItem[]; display_order: number }) => {
-      console.log("[DIM] Saving dimension:", dim.id, body);
       const res = await apiRequest("PUT", `/api/dimensions/${dim.id}`, body);
       return res.json();
     },
@@ -366,7 +396,6 @@ function DimensionCard({
       toast({ title: "Dimension saved", className: "bg-green-50 border-green-200 text-green-800" });
     },
     onError: (err: Error) => {
-      console.error("[DIM] Save error:", err);
       toast({ title: "Error saving dimension", description: err.message, variant: "destructive" });
     },
   });
@@ -378,7 +407,6 @@ function DimensionCard({
         const idx = STATUS_CYCLE.indexOf(it.our_status);
         return { ...it, our_status: STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length] };
       });
-      console.log("[DIM] Cycling item status:", dim.id, "item index:", itemIndex);
       const res = await apiRequest("PUT", `/api/dimensions/${dim.id}`, {
         name: dim.name,
         priority: dim.priority,
@@ -391,7 +419,6 @@ function DimensionCard({
       queryClient.invalidateQueries({ queryKey: ["/api/dimensions"] });
     },
     onError: (err: Error) => {
-      console.error("[DIM] Cycle error:", err);
       toast({ title: "Error updating status", description: err.message, variant: "destructive" });
     },
   });
@@ -410,32 +437,29 @@ function DimensionCard({
   };
 
   return (
-    <div style={{ border: "0.5px solid #e5e7eb", borderRadius: "10px", background: "#fff", overflow: "hidden" }}>
+    <div ref={setNodeRef} style={style}>
       <div
         className="flex items-center gap-2 px-4 py-3 cursor-pointer select-none"
         onClick={() => { if (!editing) setExpanded((v) => !v); }}
         data-testid={`dimension-card-${dim.id}`}
         style={{ borderBottom: expanded ? "0.5px solid #f3f4f6" : "none" }}
       >
+        <button
+          {...attributes}
+          {...listeners}
+          title="Drag to reorder"
+          data-testid={`drag-handle-${dim.id}`}
+          onClick={(e) => e.stopPropagation()}
+          style={{ cursor: "grab", color: "#d1d5db", padding: "0 2px", display: "flex", alignItems: "center" }}
+        >
+          <GripVertical className="w-4 h-4" />
+        </button>
         {expanded ? (
           <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
         ) : (
           <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
         )}
         <span className="text-sm font-medium flex-1 truncate">{dim.name}</span>
-        <span
-          style={{
-            fontSize: "11px",
-            padding: "2px 8px",
-            borderRadius: "999px",
-            background: pb.bg,
-            color: pb.text,
-            fontWeight: 600,
-            whiteSpace: "nowrap",
-          }}
-        >
-          {dim.priority.toUpperCase()}
-        </span>
         <span
           style={{
             fontSize: "11px",
@@ -509,7 +533,7 @@ function DimensionCard({
   );
 }
 
-// ─── Add dimension form (one-by-one item entry) ──────────────────────────────
+// ─── Add dimension form ──────────────────────────────────────────────────────
 
 function AddDimensionForm({
   onSave,
@@ -521,15 +545,9 @@ function AddDimensionForm({
   isSaving: boolean;
 }) {
   const [name, setName] = useState("");
-  const [priority, setPriority] = useState("medium");
   const [items, setItems] = useState<DimensionItem[]>([]);
   const [newItemName, setNewItemName] = useState("");
   const newItemRef = useRef<HTMLInputElement>(null);
-
-  const cyclePriority = () => {
-    const idx = PRIORITY_CYCLE.indexOf(priority);
-    setPriority(PRIORITY_CYCLE[(idx + 1) % PRIORITY_CYCLE.length]);
-  };
 
   const addItem = () => {
     const trimmed = newItemName.trim();
@@ -538,7 +556,7 @@ function AddDimensionForm({
       setNewItemName("");
       return;
     }
-    setItems((prev) => [...prev, { name: trimmed, our_status: "na", notes: null }]);
+    setItems((prev) => [...prev, { name: trimmed, our_status: "na", notes: null, importance: "high" }]);
     setNewItemName("");
     newItemRef.current?.focus();
   };
@@ -549,10 +567,8 @@ function AddDimensionForm({
 
   const handleSubmit = () => {
     if (!name.trim()) return;
-    onSave({ name: name.trim(), priority, items, source: "custom", display_order: 0 });
+    onSave({ name: name.trim(), priority: "medium", items, source: "custom", display_order: 0 });
   };
-
-  const pb = priorityBadge[priority] || priorityBadge.medium;
 
   return (
     <div style={{ border: "1px solid #534AB7", borderRadius: "10px", padding: "16px", background: "#faf9ff" }}>
@@ -570,26 +586,6 @@ function AddDimensionForm({
               data-testid="input-new-dimension-name"
               style={{ ...inputSm, width: "100%" }}
             />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">Priority</label>
-            <button
-              onClick={cyclePriority}
-              data-testid="button-new-dimension-cycle-priority"
-              style={{
-                fontSize: "11px",
-                padding: "5px 12px",
-                borderRadius: "999px",
-                background: pb.bg,
-                color: pb.text,
-                fontWeight: 700,
-                cursor: "pointer",
-                border: `1px solid ${pb.text}40`,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {priority.toUpperCase()} ↻
-            </button>
           </div>
         </div>
 
@@ -678,23 +674,10 @@ function SuggestedDimensionCard({
   onAccept: (s: SuggestedDimension) => void;
   onDismiss: () => void;
 }) {
-  const pb = priorityBadge[suggestion.priority] || priorityBadge.medium;
   return (
     <div style={{ border: "1px dashed #534AB7", borderRadius: "10px", background: "#faf9ff", padding: "14px 16px" }}>
       <div className="flex items-start gap-2 mb-2">
         <span className="text-sm font-medium flex-1 text-[#534AB7]">{suggestion.name}</span>
-        <span
-          style={{
-            fontSize: "11px",
-            padding: "2px 8px",
-            borderRadius: "999px",
-            background: pb.bg,
-            color: pb.text,
-            fontWeight: 600,
-          }}
-        >
-          {suggestion.priority.toUpperCase()}
-        </span>
       </div>
       {suggestion.rationale && <p className="text-xs text-gray-500 mb-3">{suggestion.rationale}</p>}
       <div className="flex flex-wrap gap-1.5 mb-3">
@@ -751,11 +734,12 @@ export function DimensionEditor() {
     refetchOnMount: "always",
   });
 
-  console.log("[DIM] Dimensions loaded:", dimensions);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
+  );
 
   const createMutation = useMutation({
     mutationFn: async (body: Partial<Dimension>) => {
-      console.log("[DIM] Creating dimension:", body);
       const res = await apiRequest("POST", "/api/dimensions", body);
       return res.json();
     },
@@ -765,7 +749,6 @@ export function DimensionEditor() {
       toast({ title: "Dimension added", className: "bg-green-50 border-green-200 text-green-800" });
     },
     onError: (err: Error) => {
-      console.error("[DIM] Create error:", err);
       toast({ title: "Error saving dimension", description: err.message, variant: "destructive" });
     },
   });
@@ -783,6 +766,39 @@ export function DimensionEditor() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (reordered: Dimension[]) => {
+      await Promise.all(
+        reordered.map((dim, index) =>
+          apiRequest("PUT", `/api/dimensions/${dim.id}`, {
+            name: dim.name,
+            priority: String(index + 1),
+            items: dim.items,
+            display_order: index,
+          })
+        )
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dimensions"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error reordering dimensions", description: err.message, variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/dimensions"] });
+    },
+  });
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = dimensions.findIndex((d) => d.id === active.id);
+    const newIndex = dimensions.findIndex((d) => d.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(dimensions, oldIndex, newIndex);
+    queryClient.setQueryData(["/api/dimensions"], reordered);
+    reorderMutation.mutate(reordered);
+  };
 
   const handleSuggest = async () => {
     setIsSuggesting(true);
@@ -802,7 +818,7 @@ export function DimensionEditor() {
   };
 
   const acceptSuggestion = (s: SuggestedDimension) => {
-    const items: DimensionItem[] = s.items.map((it) => ({ name: it.name, our_status: "na", notes: null }));
+    const items: DimensionItem[] = s.items.map((it) => ({ name: it.name, our_status: "na", notes: null, importance: "high" }));
     createMutation.mutate({
       name: s.name,
       priority: s.priority,
@@ -811,18 +827,6 @@ export function DimensionEditor() {
       display_order: dimensions.length,
     });
     setSuggestions((prev) => prev.filter((x) => x.name !== s.name));
-  };
-
-  const grouped: Record<string, Dimension[]> = { universal: [], ai: [], custom: [] };
-  for (const dim of dimensions) {
-    const key = dim.source === "ai" ? "ai" : dim.source === "universal" ? "universal" : "custom";
-    grouped[key].push(dim);
-  }
-
-  const sourceLabels: Record<string, string> = {
-    universal: "Universal",
-    ai: "AI-Suggested",
-    custom: "Custom",
   };
 
   return (
@@ -858,7 +862,7 @@ export function DimensionEditor() {
           </div>
         </div>
         <p className="text-sm text-gray-500 mb-5">
-          Track capabilities across competitive dimensions. Click a status pill to cycle Yes / Partial / No / N/A. Use the pencil icon to edit a dimension.
+          Track capabilities across competitive dimensions. Click a status pill to cycle Yes / Partial / No / N/A. Drag the handle to reorder. Use the pencil icon to edit a dimension.
         </p>
 
         {suggestions.length > 0 && (
@@ -897,28 +901,19 @@ export function DimensionEditor() {
             <p className="text-xs mt-1">Add one manually or use AI suggestions.</p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {(["universal", "ai", "custom"] as const).map((group) => {
-              const groupDims = grouped[group];
-              if (groupDims.length === 0) return null;
-              return (
-                <div key={group}>
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">
-                    {sourceLabels[group]}
-                  </p>
-                  <div className="space-y-2">
-                    {groupDims.map((dim) => (
-                      <DimensionCard
-                        key={dim.id}
-                        dim={dim}
-                        onDelete={(id) => deleteMutation.mutate(id)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={dimensions.map((d) => d.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {dimensions.map((dim) => (
+                  <DimensionCard
+                    key={dim.id}
+                    dim={dim}
+                    onDelete={(id) => deleteMutation.mutate(id)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
     </div>
