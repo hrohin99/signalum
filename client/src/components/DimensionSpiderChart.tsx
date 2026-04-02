@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { calculateWeightedScore } from "@/lib/dimensionScoring";
@@ -58,9 +58,58 @@ function ScoreBar({ score, color }: { score: number; color: string }) {
   );
 }
 
+function DimensionPill({
+  name,
+  active,
+  disabled,
+  onToggle,
+}: {
+  name: string;
+  active: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  const [shake, setShake] = useState(false);
+
+  function handleClick() {
+    if (disabled && active) {
+      setShake(true);
+      setTimeout(() => setShake(false), 400);
+      return;
+    }
+    onToggle();
+  }
+
+  return (
+    <button
+      data-testid={`pill-dimension-${name}`}
+      onClick={handleClick}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "4px 12px",
+        borderRadius: 20,
+        fontSize: 12,
+        fontWeight: 500,
+        cursor: disabled && active ? "not-allowed" : "pointer",
+        border: active ? "1.5px solid #723988" : "1.5px solid #cbd5e1",
+        background: active ? "#723988" : "transparent",
+        color: active ? "#ffffff" : "#64748b",
+        transition: "all 0.15s ease",
+        outline: "none",
+        animation: shake ? "pillShake 0.4s ease" : "none",
+        userSelect: "none",
+      }}
+    >
+      {name}
+    </button>
+  );
+}
+
 export function DimensionSpiderChart({ entityName }: { entityName: string }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chartInstanceRef = useRef<any>(null);
+  const [activeDimensions, setActiveDimensions] = useState<Set<string> | null>(null);
 
   const { data, isLoading } = useQuery<DimensionComparisonData>({
     queryKey: ["/api/competitor-dimensions", entityName],
@@ -75,11 +124,22 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
 
   const dimensions = data?.dimensions ?? [];
 
-  const scores = dimensions.map((dim) => ({
+  // Initialise activeDimensions to all dimensions once data loads
+  useEffect(() => {
+    if (dimensions.length > 0 && activeDimensions === null) {
+      setActiveDimensions(new Set(dimensions.map((d) => d.name)));
+    }
+  }, [dimensions.length]);
+
+  const allScores = dimensions.map((dim) => ({
     name: dim.name,
     our: calculateScore(dim.items, "our_status"),
     their: calculateScore(dim.items, "competitor_status"),
   }));
+
+  const activeSet = activeDimensions ?? new Set(dimensions.map((d) => d.name));
+
+  const scores = allScores.filter((s) => activeSet.has(s.name));
 
   const overallOur = scores.length > 0
     ? Math.round(scores.reduce((s, d) => s + d.our, 0) / scores.length)
@@ -87,6 +147,20 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
   const overallTheir = scores.length > 0
     ? Math.round(scores.reduce((s, d) => s + d.their, 0) / scores.length)
     : 0;
+
+  function toggleDimension(name: string) {
+    setActiveDimensions((prev) => {
+      const current = prev ?? new Set(dimensions.map((d) => d.name));
+      const next = new Set(current);
+      if (next.has(name)) {
+        if (next.size <= 2) return current; // enforce minimum
+        next.delete(name);
+      } else {
+        next.add(name);
+      }
+      return next;
+    });
+  }
 
   useEffect(() => {
     if (scores.length < 2 || !canvasRef.current) return;
@@ -199,6 +273,42 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
 
   return (
     <div>
+      <style>{`
+        @keyframes pillShake {
+          0%   { transform: translateX(0); }
+          20%  { transform: translateX(-4px); }
+          40%  { transform: translateX(4px); }
+          60%  { transform: translateX(-3px); }
+          80%  { transform: translateX(3px); }
+          100% { transform: translateX(0); }
+        }
+      `}</style>
+
+      {/* Dimension filter pills */}
+      <div
+        data-testid="dimension-filter-pills"
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 6,
+          marginBottom: 14,
+        }}
+      >
+        {allScores.map((dim) => {
+          const isActive = activeSet.has(dim.name);
+          const wouldBeAtMin = isActive && activeSet.size <= 2;
+          return (
+            <DimensionPill
+              key={dim.name}
+              name={dim.name}
+              active={isActive}
+              disabled={wouldBeAtMin}
+              onToggle={() => toggleDimension(dim.name)}
+            />
+          );
+        })}
+      </div>
+
       <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#534AB7", display: "inline-block" }} />
@@ -225,6 +335,7 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
         {scores.map((dim) => (
           <div
             key={dim.name}
+            data-testid={`score-card-${dim.name}`}
             style={{
               border: "0.5px solid #e2e8f0",
               borderRadius: 8,
