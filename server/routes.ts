@@ -4890,10 +4890,14 @@ Verdict guide:
               }),
             });
             const data = await resp.json();
+            console.log(`[RESEARCH] Perplexity raw response for "${itemName}":`, JSON.stringify(data).substring(0, 300));
             const raw = data.choices?.[0]?.message?.content || "{}";
             const clean = raw.replace(/```json|```/g, "").trim();
             parsed = JSON.parse(clean);
-          } catch (_) {}
+          } catch (err: any) {
+            console.error(`[RESEARCH] Perplexity call failed for "${itemName}":`, err.message);
+            console.error(`[RESEARCH] Full error:`, err);
+          }
 
           results.push({
             dimensionId: dim.id,
