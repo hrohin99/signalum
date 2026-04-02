@@ -4797,6 +4797,186 @@ Return only the bullet points, no JSON, no headers.`
     }
   });
 
+  app.post("/api/competitors/:entityName/research-dimensions-ondemand", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+      const { dimensionIds } = req.body;
+
+      if (!Array.isArray(dimensionIds) || dimensionIds.length === 0) {
+        return res.status(400).json({ error: "dimensionIds must be a non-empty array" });
+      }
+
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`, [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const prodContext = await storage.getProductContext(workspaceId);
+      const industryContext = (prodContext as any)?.industry || "software";
+      const productName = prodContext?.productName || "our product";
+
+      const dimsResult = await db.execute(sql`
+        SELECT id, name, items FROM competitive_dimensions
+        WHERE workspace_id = ${workspaceId}::uuid
+        ORDER BY display_order ASC
+      `);
+      const allDims = dimsResult.rows as any[];
+      const dims = allDims.filter((d: any) => dimensionIds.includes(d.id));
+
+      const currentStatuses = await db.execute(sql`
+        SELECT item_name, dimension_id::text AS dimension_id, status, source
+        FROM competitor_dimension_status
+        WHERE entity_name = ${entityName}
+      `);
+      const statusMap: Record<string, any> = {};
+      for (const row of currentStatuses.rows as any[]) {
+        statusMap[`${row.dimension_id}__${row.item_name}`] = row;
+      }
+
+      const results: any[] = [];
+      for (const dim of dims) {
+        const rawItems = (typeof dim.items === "string" ? JSON.parse(dim.items) : dim.items) || [];
+        for (const rawItem of rawItems) {
+          const itemName = typeof rawItem === "string" ? rawItem : rawItem.name;
+          const importance = (typeof rawItem === "object" ? rawItem.importance : null) || "high";
+          const currentRow = statusMap[`${dim.id}__${itemName}`];
+
+          const perplexityPrompt = `You are a competitive intelligence researcher.
+
+Industry context: ${industryContext}
+Our product: ${productName}
+
+Research whether ${entityName} has the following capability: "${itemName}" (within the category: "${dim.name}").
+
+Search for evidence in:
+- Official product pages and documentation
+- Independent certifications, audits, or third-party test results
+- Press releases and announcements from the last 3 years
+- Analyst reports, reviews, or credible secondary sources
+
+Return ONLY a JSON object, no markdown, no preamble:
+{
+  "verdict": "yes" | "partial" | "no" | "unknown",
+  "confidence": "high" | "medium" | "low",
+  "evidence": "1-2 sentence summary of what you found and why you reached this verdict",
+  "source_url": "most authoritative URL found, or null",
+  "source_date": "Month YYYY of the most relevant source, or null"
+}
+
+Verdict guide:
+- yes = clear confirmed evidence the capability exists
+- partial = capability exists but limited, outdated, or only partially meets the criterion
+- no = explicitly confirmed the capability does not exist
+- unknown = insufficient public evidence to make a determination
+- confidence high = primary source or official certification found
+- confidence medium = secondary source or indirect evidence
+- confidence low = inference only, no direct source`;
+
+          let parsed: any = { verdict: "unknown", confidence: "low", evidence: "No response", source_url: null, source_date: null };
+          try {
+            const resp = await fetch("https://api.perplexity.ai/chat/completions", {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                model: "sonar",
+                max_tokens: 300,
+                messages: [{ role: "user", content: perplexityPrompt }],
+              }),
+            });
+            const data = await resp.json();
+            const raw = data.choices?.[0]?.message?.content || "{}";
+            const clean = raw.replace(/```json|```/g, "").trim();
+            parsed = JSON.parse(clean);
+          } catch (_) {}
+
+          results.push({
+            dimensionId: dim.id,
+            dimensionName: dim.name,
+            itemName,
+            importance,
+            verdict: parsed.verdict || "unknown",
+            confidence: parsed.confidence || "low",
+            evidence: parsed.evidence || "",
+            source_url: parsed.source_url || null,
+            source_date: parsed.source_date || null,
+            current_status: currentRow?.status || "unknown",
+            current_source: currentRow?.source || null,
+          });
+
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+
+      return res.json({ results });
+    } catch (error: any) {
+      console.error("Research dimensions ondemand error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  app.post("/api/competitors/:entityName/research-dimensions-save", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const entityName = req.params.entityName;
+      const { accepted } = req.body;
+
+      if (!Array.isArray(accepted)) {
+        return res.status(400).json({ error: "accepted must be an array" });
+      }
+
+      const wsResult = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`, [userId]
+      );
+      const workspaceId = wsResult.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      let saved = 0;
+      for (const item of accepted) {
+        try {
+          const existingResult = await db.execute(sql`
+            SELECT id, source, status FROM competitor_dimension_status
+            WHERE dimension_id = ${item.dimensionId}::uuid
+              AND entity_name = ${entityName}
+              AND item_name = ${item.itemName}
+            LIMIT 1
+          `);
+          const existing = existingResult.rows[0] as any;
+
+          if (existing?.source === "manual" && ["yes", "partial", "no"].includes(existing?.status)) {
+            continue;
+          } else if (existing) {
+            await db.execute(sql`
+              UPDATE competitor_dimension_status
+              SET status = ${item.verdict},
+                  source = 'ai_confirmed',
+                  evidence = ${item.evidence || null},
+                  last_updated = NOW()
+              WHERE id = ${existing.id}::uuid
+            `);
+          } else {
+            await db.execute(sql`
+              INSERT INTO competitor_dimension_status (dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+              VALUES (${item.dimensionId}::uuid, ${entityName}, ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence || null}, NOW())
+            `);
+          }
+          saved++;
+        } catch (err) {
+          console.error(`Error saving dimension status for ${entityName} / ${item.itemName}:`, err);
+        }
+      }
+
+      return res.json({ saved });
+    } catch (error: any) {
+      console.error("Research dimensions save error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   const createMonitoredUrlSchema = z.object({
     url: z.string().url("Please enter a valid URL"),
     urlCategory: z.enum(["pricing", "product", "news", "careers", "custom"]),

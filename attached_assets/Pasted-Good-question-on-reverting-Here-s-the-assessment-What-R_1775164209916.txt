@@ -1,0 +1,234 @@
+Good question on reverting. Here's the assessment:
+
+**What Replit changed that needs reverting:**
+- `ambientSearch.ts` — the per-item Perplexity prompt was changed from a batch call to individual calls. This actually needs to **stay** since it improves the cron quality too. No revert needed.
+- The skip condition fix (`manual+unknown` overwritable) in `ambientSearch.ts` — also **keep**, it's correct.
+
+**What was never built and needs building from scratch:**
+- The two new `routes.ts` endpoints (ondemand + save)
+- The frontend modal in `DimensionComparisonCard.tsx`
+
+So no revert needed — just build forward. Here's the single consolidated prompt:
+
+---
+
+> **Task: Build "Research with AI" on-demand dimension research feature**
+>
+> Do NOT modify `ambientSearch.ts`, `schema.ts`, or `storage.ts`. Do NOT touch the existing `/api/search/research-dimensions/:entityName` admin route.
+>
+> ---
+>
+> **Part 1 — Add two new endpoints in `server/routes.ts`**
+>
+> **Endpoint 1: Research (returns results, saves nothing)**
+> ```
+> POST /api/competitors/:entityName/research-dimensions-ondemand
+> requireAuth only
+> Body: { dimensionIds: string[] }
+> ```
+>
+> Logic:
+> ```typescript
+> // 1. Get workspaceId
+> const wsResult = await pool.query(
+>   `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`, [userId]
+> );
+> const workspaceId = wsResult.rows[0]?.id;
+> if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+>
+> // 2. Fetch workspace/product context for generic prompt
+> const wsProfileResult = await pool.query(
+>   `SELECT * FROM workspaces WHERE user_id = $1`, [userId]
+> );
+> const prodContext = await storage.getProductContext(workspaceId);
+> const industryContext = prodContext?.industry || wsProfileResult.rows[0]?.industry || 'software';
+> const productName = prodContext?.productName || 'our product';
+>
+> // 3. Fetch selected dimensions
+> const { dimensionIds } = req.body;
+> const dimsResult = await db.execute(sql`
+>   SELECT id, name, items FROM competitive_dimensions
+>   WHERE workspace_id = ${workspaceId}
+>   AND id::text = ANY(${dimensionIds})
+> `);
+> const dims = dimsResult.rows as any[];
+>
+> // 4. Fetch current statuses for this competitor
+> const currentStatuses = await db.execute(sql`
+>   SELECT item_name, dimension_id, status, source
+>   FROM competitor_dimension_status
+>   WHERE workspace_id = ${workspaceId}
+>   AND entity_id = ${req.params.entityName}
+> `);
+> const statusMap: Record<string, any> = {};
+> for (const row of currentStatuses.rows as any[]) {
+>   statusMap[`${row.dimension_id}__${row.item_name}`] = row;
+> }
+>
+> // 5. Research each item sequentially
+> const results: any[] = [];
+> for (const dim of dims) {
+>   const items = (typeof dim.items === 'string' ? JSON.parse(dim.items) : dim.items) || [];
+>   for (const item of items) {
+>     const currentRow = statusMap[`${dim.id}__${item.name}`];
+>
+>     const perplexityPrompt = `You are a competitive intelligence researcher.
+>
+> Industry context: ${industryContext}
+> Our product: ${productName}
+>
+> Research whether ${req.params.entityName} has the following capability: "${item.name}" (within the category: "${dim.name}").
+>
+> Search for evidence in:
+> - Official product pages and documentation
+> - Independent certifications, audits, or third-party test results
+> - Press releases and announcements from the last 3 years
+> - Analyst reports, reviews, or credible secondary sources
+>
+> Return ONLY a JSON object, no markdown, no preamble:
+> {
+>   "verdict": "yes" | "partial" | "no" | "unknown",
+>   "confidence": "high" | "medium" | "low",
+>   "evidence": "1-2 sentence summary of what you found and why you reached this verdict",
+>   "source_url": "most authoritative URL found, or null",
+>   "source_date": "Month YYYY of the most relevant source, or null"
+> }
+>
+> Verdict guide:
+> - yes = clear confirmed evidence the capability exists
+> - partial = capability exists but limited, outdated, or only partially meets the criterion
+> - no = explicitly confirmed the capability does not exist
+> - unknown = insufficient public evidence to make a determination
+> - confidence high = primary source or official certification found
+> - confidence medium = secondary source or indirect evidence
+> - confidence low = inference only, no direct source`;
+>
+>     let parsed = { verdict: 'unknown', confidence: 'low', evidence: 'No response', source_url: null, source_date: null };
+>     try {
+>       const resp = await fetch("https://api.perplexity.ai/chat/completions", {
+>         method: "POST",
+>         headers: {
+>           "Authorization": `Bearer ${process.env.PERPLEXITY_API_KEY}`,
+>           "Content-Type": "application/json"
+>         },
+>         body: JSON.stringify({
+>           model: "sonar",
+>           max_tokens: 300,
+>           messages: [{ role: "user", content: perplexityPrompt }]
+>         })
+>       });
+>       const data = await resp.json();
+>       const raw = data.choices?.[0]?.message?.content || '{}';
+>       const clean = raw.replace(/```json|```/g, '').trim();
+>       parsed = JSON.parse(clean);
+>     } catch (_) {}
+>
+>     results.push({
+>       dimensionId: dim.id,
+>       dimensionName: dim.name,
+>       itemName: item.name,
+>       importance: item.importance || 'high',
+>       verdict: parsed.verdict,
+>       confidence: parsed.confidence,
+>       evidence: parsed.evidence,
+>       source_url: parsed.source_url,
+>       source_date: parsed.source_date,
+>       current_status: currentRow?.status || 'unknown',
+>       current_source: currentRow?.source || null
+>     });
+>
+>     await new Promise(r => setTimeout(r, 500));
+>   }
+> }
+>
+> return res.json({ results });
+> ```
+>
+> ---
+>
+> **Endpoint 2: Save accepted results**
+> ```
+> POST /api/competitors/:entityName/research-dimensions-save
+> requireAuth only
+> Body: { accepted: ResultItem[] }
+> ```
+>
+> Logic:
+> ```typescript
+> const { accepted } = req.body;
+> const wsResult = await pool.query(
+>   `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`, [userId]
+> );
+> const workspaceId = wsResult.rows[0]?.id;
+>
+> for (const item of accepted) {
+>   await db.execute(sql`
+>     INSERT INTO competitor_dimension_status
+>       (workspace_id, entity_id, dimension_id, item_name, status, source, evidence, updated_at)
+>     VALUES
+>       (${workspaceId}, ${req.params.entityName}, ${item.dimensionId},
+>        ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence}, NOW())
+>     ON CONFLICT (workspace_id, entity_id, dimension_id, item_name)
+>     DO UPDATE SET
+>       status = EXCLUDED.status,
+>       source = 'ai_confirmed',
+>       evidence = EXCLUDED.evidence,
+>       updated_at = NOW()
+>     WHERE NOT (
+>       competitor_dimension_status.source = 'manual'
+>       AND competitor_dimension_status.status IN ('yes', 'partial', 'no')
+>     )
+>   `);
+> }
+>
+> return res.json({ saved: accepted.length });
+> ```
+>
+> ---
+>
+> **Part 2 — Frontend in `DimensionComparisonCard.tsx`**
+>
+> Add a "Research with AI" button in the Competitive Dimensions section header. Style: `background:#EEEDFE; border-color:#AFA9EC; color:#3C3489`.
+>
+> **Flow:**
+>
+> **Step A — Dimension selector modal**
+> - Shows all dimensions as checkboxes with item count
+> - Selected rows: purple border `#AFA9EC`, background `#EEEDFE`
+> - Shows estimated item count below: `~N items · est. X sec`
+> - Cancel + "Start research" buttons
+> - Minimum 1 dimension selected to enable Start
+>
+> **Step B — Loading state**
+> - Replace modal content with progress indicator: `Researching item X of N...` + progress bar
+> - Keep Cancel available (aborts and closes modal)
+>
+> **Step C — Review modal**
+> Results grouped by dimension. Each item row shows:
+> - Item name + importance badge (C/H/M/L)
+> - Evidence text + source URL + source date (linked, opens in new tab)
+> - Verdict pill: Yes=green, Partial=amber, No=red, Unknown=grey
+> - Confidence pill: High=purple, Med=amber, Low=grey
+> - Current → proposed status change
+> - Accept (✓) / Reject (✕) buttons per row
+>
+> Row states:
+> - Pending: white bg, buttons visible
+> - Accepted: `#EAF3DE` bg, checkmark, "Accepted" label
+> - Rejected: `#FCEBEB` bg at 60% opacity, X, "Rejected" label
+>
+> Header: "Accept all" button + running tally `N accepted · N rejected · N pending`
+> Footer: Cancel + "Save N accepted results" button (disabled if 0 accepted)
+>
+> **Step D — Save**
+> - Calls `POST /api/competitors/:entityName/research-dimensions-save` via `apiRequest()` with only accepted items
+> - On success: close modal, invalidate dimension status query so card refreshes with new values, show brief success toast
+>
+> ---
+>
+> **Critical rules:**
+> - Never run `drizzle-kit push`
+> - All DB writes in routes.ts use `db.execute(sql\`...\`)`
+> - No changes to `schema.ts`, `storage.ts`, `ambientSearch.ts`, or the existing `/api/search/research-dimensions/:entityName` route
+> - Use `apiRequest()` for all frontend fetches — never raw `fetch()`
+> - `buildProfileContext` and `storage.getProductContext` are already imported in `routes.ts` — do not re-import
