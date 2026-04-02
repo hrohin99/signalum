@@ -2,6 +2,16 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { calculateWeightedScore } from "@/lib/dimensionScoring";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 
 interface DimensionItem {
   name: string;
@@ -61,29 +71,16 @@ function ScoreBar({ score, color }: { score: number; color: string }) {
 function DimensionPill({
   name,
   active,
-  disabled,
   onToggle,
 }: {
   name: string;
   active: boolean;
-  disabled: boolean;
   onToggle: () => void;
 }) {
-  const [shake, setShake] = useState(false);
-
-  function handleClick() {
-    if (disabled && active) {
-      setShake(true);
-      setTimeout(() => setShake(false), 400);
-      return;
-    }
-    onToggle();
-  }
-
   return (
     <button
       data-testid={`pill-dimension-${name}`}
-      onClick={handleClick}
+      onClick={onToggle}
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -91,18 +88,75 @@ function DimensionPill({
         borderRadius: 20,
         fontSize: 12,
         fontWeight: 500,
-        cursor: disabled && active ? "not-allowed" : "pointer",
+        cursor: "pointer",
         border: active ? "1.5px solid #723988" : "1.5px solid #cbd5e1",
         background: active ? "#723988" : "transparent",
         color: active ? "#ffffff" : "#64748b",
         transition: "all 0.15s ease",
         outline: "none",
-        animation: shake ? "pillShake 0.4s ease" : "none",
         userSelect: "none",
       }}
     >
       {name}
     </button>
+  );
+}
+
+interface ScoreEntry {
+  name: string;
+  our: number;
+  their: number;
+}
+
+function HorizontalBarChart({ scores, entityName }: { scores: ScoreEntry[]; entityName: string }) {
+  const chartData = scores.map((s) => ({
+    name: s.name,
+    Us: s.our,
+    [entityName]: s.their,
+  }));
+
+  const barHeight = 28;
+  const groupGap = 12;
+  const chartHeight = scores.length * (barHeight * 2 + groupGap) + 40;
+
+  return (
+    <div style={{ width: "100%", height: Math.max(chartHeight, 120), marginBottom: 20 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart
+          layout="vertical"
+          data={chartData}
+          margin={{ top: 4, right: 24, left: 8, bottom: 4 }}
+          barCategoryGap="28%"
+          barGap={4}
+        >
+          <CartesianGrid horizontal={false} strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" />
+          <XAxis
+            type="number"
+            domain={[0, 100]}
+            ticks={[0, 25, 50, 75, 100]}
+            tick={{ fontSize: 10, fill: "#94a3b8" }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            type="category"
+            dataKey="name"
+            width={120}
+            tick={{ fontSize: 12, fill: "#334155", fontWeight: 500 }}
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={(v: string) => v.length > 18 ? v.slice(0, 17) + "…" : v}
+          />
+          <Tooltip
+            cursor={{ fill: "rgba(0,0,0,0.03)" }}
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #e2e8f0" }}
+            formatter={(value: number, name: string) => [`${value}`, name]}
+          />
+          <Bar dataKey="Us" fill="#723988" radius={[0, 3, 3, 0]} maxBarSize={barHeight} />
+          <Bar dataKey={entityName} fill="#D85A30" radius={[0, 3, 3, 0]} maxBarSize={barHeight} />
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -153,7 +207,6 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
       const current = prev ?? new Set(dimensions.map((d) => d.name));
       const next = new Set(current);
       if (next.has(name)) {
-        if (next.size <= 2) return current; // enforce minimum
         next.delete(name);
       } else {
         next.add(name);
@@ -162,8 +215,17 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
     });
   }
 
+  const useRadar = scores.length >= 3;
+
+  // Radar chart effect — only active when 3+ dimensions selected
   useEffect(() => {
-    if (scores.length < 2 || !canvasRef.current) return;
+    if (!useRadar || !canvasRef.current) {
+      if (chartInstanceRef.current) {
+        chartInstanceRef.current.destroy();
+        chartInstanceRef.current = null;
+      }
+      return;
+    }
 
     const loadScript = (src: string): Promise<void> =>
       new Promise((resolve) => {
@@ -237,7 +299,7 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
         chartInstanceRef.current = null;
       }
     };
-  }, [scores.map((s) => `${s.name}${s.our}${s.their}`).join(",")]);
+  }, [useRadar, scores.map((s) => `${s.name}${s.our}${s.their}`).join(",")]);
 
   if (isLoading) {
     return (
@@ -273,17 +335,6 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
 
   return (
     <div>
-      <style>{`
-        @keyframes pillShake {
-          0%   { transform: translateX(0); }
-          20%  { transform: translateX(-4px); }
-          40%  { transform: translateX(4px); }
-          60%  { transform: translateX(-3px); }
-          80%  { transform: translateX(3px); }
-          100% { transform: translateX(0); }
-        }
-      `}</style>
-
       {/* Dimension filter pills */}
       <div
         data-testid="dimension-filter-pills"
@@ -294,24 +345,20 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
           marginBottom: 14,
         }}
       >
-        {allScores.map((dim) => {
-          const isActive = activeSet.has(dim.name);
-          const wouldBeAtMin = isActive && activeSet.size <= 2;
-          return (
-            <DimensionPill
-              key={dim.name}
-              name={dim.name}
-              active={isActive}
-              disabled={wouldBeAtMin}
-              onToggle={() => toggleDimension(dim.name)}
-            />
-          );
-        })}
+        {allScores.map((dim) => (
+          <DimensionPill
+            key={dim.name}
+            name={dim.name}
+            active={activeSet.has(dim.name)}
+            onToggle={() => toggleDimension(dim.name)}
+          />
+        ))}
       </div>
 
+      {/* Legend */}
       <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#534AB7", display: "inline-block" }} />
+          <span style={{ width: 12, height: 12, borderRadius: "50%", background: "#723988", display: "inline-block" }} />
           <span style={{ fontSize: 12, color: "#334155", fontWeight: 500 }}>Us</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -320,83 +367,98 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
         </div>
       </div>
 
-      <div style={{ position: "relative", width: "100%", height: 320, marginBottom: 20 }}>
-        <canvas ref={canvasRef} />
-      </div>
+      {/* Chart area — radar for 3+, horizontal bars for 1-2 */}
+      {scores.length === 0 ? (
+        <div style={{ padding: "16px 0", textAlign: "center", color: "#94a3b8", fontSize: 13, marginBottom: 20 }}>
+          Select at least one dimension above to see the chart.
+        </div>
+      ) : useRadar ? (
+        <div style={{ position: "relative", width: "100%", height: 320, marginBottom: 20 }}>
+          <canvas ref={canvasRef} />
+        </div>
+      ) : (
+        <HorizontalBarChart scores={scores} entityName={entityName} />
+      )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          gap: 8,
-          marginBottom: 16,
-        }}
-      >
-        {scores.map((dim) => (
-          <div
-            key={dim.name}
-            data-testid={`score-card-${dim.name}`}
-            style={{
-              border: "0.5px solid #e2e8f0",
-              borderRadius: 8,
-              padding: "10px 12px",
-              background: "#fafafa",
-            }}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 500, color: "#1e293b" }}>{dim.name}</span>
-              <AssessmentBadge ourScore={dim.our} theirScore={dim.their} />
+      {/* Score cards */}
+      {scores.length > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+            gap: 8,
+            marginBottom: 16,
+          }}
+        >
+          {scores.map((dim) => (
+            <div
+              key={dim.name}
+              data-testid={`score-card-${dim.name}`}
+              style={{
+                border: "0.5px solid #e2e8f0",
+                borderRadius: 8,
+                padding: "10px 12px",
+                background: "#fafafa",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 500, color: "#1e293b" }}>{dim.name}</span>
+                <AssessmentBadge ourScore={dim.our} theirScore={dim.their} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <ScoreBar score={dim.our} color="#723988" />
+                <ScoreBar score={dim.their} color="#D85A30" />
+              </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              <ScoreBar score={dim.our} color="#534AB7" />
-              <ScoreBar score={dim.their} color="#D85A30" />
+          ))}
+        </div>
+      )}
+
+      {/* Overall score */}
+      {scores.length > 0 && (
+        <div
+          style={{
+            border: "1px solid #e2e8f0",
+            borderRadius: 10,
+            padding: "14px 16px",
+            background: "#f8fafc",
+            display: "flex",
+            alignItems: "center",
+            gap: 16,
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: 1, minWidth: 120 }}>
+            <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
+              Overall competitive score
+            </div>
+            <div style={{ display: "flex", gap: 16, alignItems: "baseline", marginTop: 6 }}>
+              <div>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#723988" }}>{overallOur}</span>
+                <span style={{ fontSize: 11, color: "#64748b", marginLeft: 3 }}>Us</span>
+              </div>
+              <div>
+                <span style={{ fontSize: 22, fontWeight: 700, color: "#D85A30" }}>{overallTheir}</span>
+                <span style={{ fontSize: 11, color: "#64748b", marginLeft: 3 }}>{entityName}</span>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
-
-      <div
-        style={{
-          border: "1px solid #e2e8f0",
-          borderRadius: 10,
-          padding: "14px 16px",
-          background: "#f8fafc",
-          display: "flex",
-          alignItems: "center",
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 120 }}>
-          <div style={{ fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>
-            Overall competitive score
-          </div>
-          <div style={{ display: "flex", gap: 16, alignItems: "baseline", marginTop: 6 }}>
-            <div>
-              <span style={{ fontSize: 22, fontWeight: 700, color: "#534AB7" }}>{overallOur}</span>
-              <span style={{ fontSize: 11, color: "#64748b", marginLeft: 3 }}>Us</span>
-            </div>
-            <div>
-              <span style={{ fontSize: 22, fontWeight: 700, color: "#D85A30" }}>{overallTheir}</span>
-              <span style={{ fontSize: 11, color: "#64748b", marginLeft: 3 }}>{entityName}</span>
-            </div>
+          <div>
+            <span
+              style={{
+                fontSize: 13,
+                padding: "4px 14px",
+                borderRadius: 20,
+                fontWeight: 700,
+                background: overallBadgeStyle.bg,
+                color: overallBadgeStyle.text,
+              }}
+            >
+              {overallLabel} ({overallDiff > 0 ? "+" : ""}{overallDiff} pts)
+            </span>
           </div>
         </div>
-        <div>
-          <span
-            style={{
-              fontSize: 13,
-              padding: "4px 14px",
-              borderRadius: 20,
-              fontWeight: 700,
-              background: overallBadgeStyle.bg,
-              color: overallBadgeStyle.text,
-            }}
-          >
-            {overallLabel} ({overallDiff > 0 ? "+" : ""}{overallDiff} pts)
-          </span>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
