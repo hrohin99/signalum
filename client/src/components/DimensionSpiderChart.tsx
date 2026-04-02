@@ -12,6 +12,8 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { Info } from "lucide-react";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 interface DimensionItem {
   name: string;
@@ -335,24 +337,99 @@ export function DimensionSpiderChart({ entityName }: { entityName: string }) {
 
   return (
     <div>
-      {/* Dimension filter pills */}
-      <div
-        data-testid="dimension-filter-pills"
-        style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 6,
-          marginBottom: 14,
-        }}
-      >
-        {allScores.map((dim) => (
-          <DimensionPill
-            key={dim.name}
-            name={dim.name}
-            active={activeSet.has(dim.name)}
-            onToggle={() => toggleDimension(dim.name)}
-          />
-        ))}
+      {/* Dimension filter pills + scoring info icon */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 14 }}>
+        <div
+          data-testid="dimension-filter-pills"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            flex: 1,
+          }}
+        >
+          {allScores.map((dim) => (
+            <DimensionPill
+              key={dim.name}
+              name={dim.name}
+              active={activeSet.has(dim.name)}
+              onToggle={() => toggleDimension(dim.name)}
+            />
+          ))}
+        </div>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              data-testid="scoring-info-trigger"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                padding: 4,
+                borderRadius: 6,
+                border: "none",
+                background: "transparent",
+                color: "#94a3b8",
+                cursor: "pointer",
+                flexShrink: 0,
+                marginTop: 2,
+              }}
+              aria-label="How scores are calculated"
+            >
+              <Info size={16} />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" style={{ width: 300, padding: "14px 16px" }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: "#1e293b", marginBottom: 10 }}>
+              How scores are calculated
+            </p>
+
+            <p style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>
+              Status score
+            </p>
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10 }}>
+              <thead>
+                <tr>
+                  <th style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textAlign: "left", paddingBottom: 3 }}>Status</th>
+                  <th style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textAlign: "right", paddingBottom: 3 }}>Score</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[["Yes", "100"], ["Partial", "50"], ["Unknown", "25"], ["No", "0"]].map(([label, val]) => (
+                  <tr key={label}>
+                    <td style={{ fontSize: 12, color: "#334155", padding: "2px 0" }}>{label}</td>
+                    <td style={{ fontSize: 12, color: "#334155", textAlign: "right", fontWeight: 600 }}>{val}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p style={{ fontSize: 12, fontWeight: 600, color: "#475569", marginBottom: 4 }}>
+              Importance weighting
+            </p>
+            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 10 }}>
+              <thead>
+                <tr>
+                  <th style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textAlign: "left", paddingBottom: 3 }}>Importance</th>
+                  <th style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", textAlign: "right", paddingBottom: 3 }}>Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[["Critical", "3×"], ["High", "2×"], ["Medium", "1×"], ["Low", "0.5×"]].map(([label, val]) => (
+                  <tr key={label}>
+                    <td style={{ fontSize: 12, color: "#334155", padding: "2px 0" }}>{label}</td>
+                    <td style={{ fontSize: 12, color: "#334155", textAlign: "right", fontWeight: 600 }}>{val}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <p style={{ fontSize: 11, color: "#64748b", lineHeight: 1.5, borderTop: "1px solid #f1f5f9", paddingTop: 8, margin: 0 }}>
+              A <strong>dimension score</strong> is the weighted average of its item scores. The <strong>overall score</strong> is the average across all selected dimensions.
+            </p>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Legend */}
