@@ -4828,7 +4828,8 @@ Return only the bullet points, no JSON, no headers.`
       const currentStatuses = await db.execute(sql`
         SELECT item_name, dimension_id::text AS dimension_id, status, source
         FROM competitor_dimension_status
-        WHERE entity_name = ${entityName}
+        WHERE workspace_id = ${workspaceId}
+        AND entity_name = ${entityName}
       `);
       const statusMap: Record<string, any> = {};
       for (const row of currentStatuses.rows as any[]) {
@@ -4938,32 +4939,23 @@ Verdict guide:
       let saved = 0;
       for (const item of accepted) {
         try {
-          const existingResult = await db.execute(sql`
-            SELECT id, source, status FROM competitor_dimension_status
-            WHERE dimension_id = ${item.dimensionId}::uuid
-              AND entity_name = ${entityName}
-              AND item_name = ${item.itemName}
-            LIMIT 1
+          await db.execute(sql`
+            INSERT INTO competitor_dimension_status
+              (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+            VALUES
+              (${workspaceId}, ${item.dimensionId}::uuid, ${entityName},
+               ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence || null}, NOW())
+            ON CONFLICT (workspace_id, dimension_id, entity_name, item_name)
+            DO UPDATE SET
+              status = EXCLUDED.status,
+              source = 'ai_confirmed',
+              evidence = EXCLUDED.evidence,
+              last_updated = NOW()
+            WHERE NOT (
+              competitor_dimension_status.source = 'manual'
+              AND competitor_dimension_status.status IN ('yes', 'partial', 'no')
+            )
           `);
-          const existing = existingResult.rows[0] as any;
-
-          if (existing?.source === "manual" && ["yes", "partial", "no"].includes(existing?.status)) {
-            continue;
-          } else if (existing) {
-            await db.execute(sql`
-              UPDATE competitor_dimension_status
-              SET status = ${item.verdict},
-                  source = 'ai_confirmed',
-                  evidence = ${item.evidence || null},
-                  last_updated = NOW()
-              WHERE id = ${existing.id}::uuid
-            `);
-          } else {
-            await db.execute(sql`
-              INSERT INTO competitor_dimension_status (dimension_id, entity_name, item_name, status, source, evidence, last_updated)
-              VALUES (${item.dimensionId}::uuid, ${entityName}, ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence || null}, NOW())
-            `);
-          }
           saved++;
         } catch (err) {
           console.error(`Error saving dimension status for ${entityName} / ${item.itemName}:`, err);
@@ -7399,7 +7391,9 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       `);
 
       const statusResult = await db.execute(sql`
-        SELECT * FROM competitor_dimension_status WHERE entity_name = ${entityName}
+        SELECT * FROM competitor_dimension_status
+        WHERE workspace_id = ${workspaceId}
+        AND entity_name = ${entityName}
       `);
       const statusMap = new Map<string, any>();
       for (const row of statusResult.rows as any[]) {
@@ -7493,7 +7487,8 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
       const statusResult = dimIds.length > 0
         ? await db.execute(sql`
             SELECT * FROM competitor_dimension_status
-            WHERE dimension_id IN (${sql.join(dimIds.map(id => sql`${id}::uuid`), sql`, `)})
+            WHERE workspace_id = ${workspaceId}
+            AND dimension_id IN (${sql.join(dimIds.map(id => sql`${id}::uuid`), sql`, `)})
           `)
         : { rows: [] };
 

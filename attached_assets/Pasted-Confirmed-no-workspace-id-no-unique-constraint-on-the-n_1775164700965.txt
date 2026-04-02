@@ -1,0 +1,97 @@
+Confirmed — no workspace_id, no unique constraint on the natural key. Here's the fix prompt:
+
+
+Task: Add workspace_id and unique constraint to competitor_dimension_status, fix all references
+Part 1 — server/dbSafety.ts
+Find the competitor_dimension_status table block. After the existing CREATE TABLE, add these statements:
+typescriptawait db.execute(sql`
+  ALTER TABLE competitor_dimension_status
+  ADD COLUMN IF NOT EXISTS workspace_id uuid
+`);
+
+await db.execute(sql`
+  UPDATE competitor_dimension_status css
+  SET workspace_id = cd.workspace_id
+  FROM competitive_dimensions cd
+  WHERE css.dimension_id = cd.id
+  AND css.workspace_id IS NULL
+`);
+
+await db.execute(sql`
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_comp_dim_status_unique
+  ON competitor_dimension_status(workspace_id, dimension_id, entity_name, item_name)
+  WHERE workspace_id IS NOT NULL
+`);
+
+await db.execute(sql`
+  CREATE INDEX IF NOT EXISTS idx_comp_dim_status_workspace
+  ON competitor_dimension_status(workspace_id)
+`);
+The UPDATE backfills workspace_id for any existing rows by joining to competitive_dimensions which already has workspace_id.
+
+Part 2 — server/routes.ts — fix both new endpoints
+Find POST /api/competitors/:entityName/research-dimensions-ondemand.
+Update the current status fetch to scope by workspace_id:
+typescriptconst currentStatuses = await db.execute(sql`
+  SELECT item_name, dimension_id, status, source
+  FROM competitor_dimension_status
+  WHERE workspace_id = ${workspaceId}
+  AND entity_name = ${req.params.entityName}
+`);
+Find POST /api/competitors/:entityName/research-dimensions-save.
+Replace the INSERT with:
+typescriptawait db.execute(sql`
+  INSERT INTO competitor_dimension_status
+    (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+  VALUES
+    (${workspaceId}, ${item.dimensionId}, ${req.params.entityName},
+     ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence}, NOW())
+  ON CONFLICT (workspace_id, dimension_id, entity_name, item_name)
+  DO UPDATE SET
+    status = EXCLUDED.status,
+    source = 'ai_confirmed',
+    evidence = EXCLUDED.evidence,
+    last_updated = NOW()
+  WHERE NOT (
+    competitor_dimension_status.source = 'manual'
+    AND competitor_dimension_status.status IN ('yes', 'partial', 'no')
+  )
+`);
+
+Part 3 — server/ambientSearch.ts — fix researchEntityDimensions()
+Find where it reads from and writes to competitor_dimension_status. Add workspace_id to all reads and writes:
+Reads:
+typescriptWHERE workspace_id = ${workspaceId}
+AND dimension_id = ${dim.id}
+AND entity_name = ${entityName}
+Writes — replace existing INSERT/UPDATE with:
+typescriptawait db.execute(sql`
+  INSERT INTO competitor_dimension_status
+    (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+  VALUES
+    (${workspaceId}, ${dim.id}, ${entityName},
+     ${item.name}, ${verdict}, 'perplexity', ${evidence}, NOW())
+  ON CONFLICT (workspace_id, dimension_id, entity_name, item_name)
+  DO UPDATE SET
+    status = EXCLUDED.status,
+    source = 'perplexity',
+    evidence = EXCLUDED.evidence,
+    last_updated = NOW()
+  WHERE NOT (
+    competitor_dimension_status.source = 'manual'
+    AND competitor_dimension_status.status IN ('yes', 'partial', 'no')
+  )
+`);
+
+Part 4 — server/routes.ts — fix any other reads of competitor_dimension_status
+Search for all other places that SELECT from competitor_dimension_status (the DimensionComparisonCard fetch, DimensionMatrix fetch, DimensionSpiderChart fetch). Add workspace_id = ${workspaceId} to all WHERE clauses that don't already have it.
+Run this to find them:
+grep -n "competitor_dimension_status" server/routes.ts
+And add workspace scoping to every SELECT that's missing it.
+
+Critical rules:
+
+Never run drizzle-kit push
+All DB writes use db.execute(sql\...`)`
+No changes to schema.ts or storage.ts
+The unique index uses WHERE workspace_id IS NOT NULL as a partial index so existing null rows don't conflict during migration

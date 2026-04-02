@@ -557,6 +557,26 @@ export async function ensureDatabaseSchema(): Promise<void> {
     await db.execute(sql`
       CREATE INDEX IF NOT EXISTS idx_comp_dim_status_entity ON competitor_dimension_status(entity_name)
     `);
+    await db.execute(sql`
+      ALTER TABLE competitor_dimension_status
+      ADD COLUMN IF NOT EXISTS workspace_id uuid
+    `);
+    await db.execute(sql`
+      UPDATE competitor_dimension_status css
+      SET workspace_id = cd.workspace_id
+      FROM competitive_dimensions cd
+      WHERE css.dimension_id = cd.id
+      AND css.workspace_id IS NULL
+    `);
+    await db.execute(sql`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_comp_dim_status_unique
+      ON competitor_dimension_status(workspace_id, dimension_id, entity_name, item_name)
+      WHERE workspace_id IS NOT NULL
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_comp_dim_status_workspace
+      ON competitor_dimension_status(workspace_id)
+    `);
     console.log("[DBSafety] competitor_dimension_status table verified.");
   } catch (error: any) {
     console.error("[DBSafety] Error ensuring competitor_dimension_status table:", error?.message || error);
