@@ -6486,7 +6486,7 @@ Return ONLY the JSON object, no other text.`
       for (const c of captures) {
         const key = c.matched_entity || 'Unknown';
         if (!grouped[key]) grouped[key] = [];
-        grouped[key].push((c.content || '').substring(0, 400));
+        grouped[key].push((c.content || '').substring(0, 300));
       }
       const entityCount = Object.keys(grouped).length;
 
@@ -6512,45 +6512,17 @@ Return ONLY the JSON object, no other text.`
 
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-      const pulseWsCategories = (wsProfileResult.rows[0]?.categories || []) as ExtractedEntity[];
-
-      // Pass 1: Summarise each entity — cap to top 15 by signal count to stay within timeout
+      // Build inline entity context — top 12 entities, 6 signals each (single API call, no Pass 1)
       const sortedEntities = Object.entries(grouped)
         .sort(([, a], [, b]) => b.length - a.length)
-        .slice(0, 15);
+        .slice(0, 12);
 
-      const entitySummaries: string[] = [];
+      const inlineContext: string[] = [];
       for (const [entityKey, items] of sortedEntities) {
-        const captureText = items.slice(0, 8).map((c, i) => `${i + 1}. ${c}`).join('\n');
-
-        let pulseEntityObj: ExtractedEntity | undefined;
-        for (const cat of (pulseWsCategories as any[])) {
-          const found = (cat.entities || []).find((e: any) => e.name === entityKey);
-          if (found) { pulseEntityObj = found as ExtractedEntity; break; }
-        }
-        const pulseProfileCtx = pulseEntityObj
-          ? await buildCompetitorProfileContext(entityKey, pulseEntityObj, workspaceId)
-          : "";
-
-        const msg = await withRetry(() => anthropic.messages.create({
-          model: "claude-sonnet-4-6",
-          max_tokens: 300,
-          messages: [{
-            role: "user",
-            content: `Competitive intelligence analyst. Summarise "${entityKey}" in 100-120 words: recent activity, strategic direction, notable moves. Be specific.
-${pulseProfileCtx ? `Known profile (context only):\n${pulseProfileCtx}\n` : ""}
-SIGNALS (${items.length} total, showing top ${Math.min(items.length, 8)}):
-${captureText}
-
-Respond with only the summary, no preamble.`
-          }]
-        }));
-        const summary = (msg.content[0] as any).text || '';
-        entitySummaries.push(`## ${entityKey}\n${summary}`);
+        const signals = items.slice(0, 6).map((c, i) => `  ${i + 1}. ${c}`).join('\n');
+        inlineContext.push(`## ${entityKey} (${items.length} signals)\n${signals}`);
       }
-
-      // Pass 2: Synthesise into 7 sections — 3 batched API calls to stay within gateway timeout
-      const consolidatedContext = entitySummaries.join('\n\n');
+      const consolidatedContext = inlineContext.join('\n\n');
       const baseContext = `${profileCtx ? profileCtx + '\n\n' : ''}ENTITY SUMMARIES (${entityCount} entities, ${captureCount} signals):\n${consolidatedContext}\n\nRULES: Each headline = 1 sentence. Each item title < 8 words. Each detail = 2 sentences max. Respond ONLY with valid JSON, no markdown fences.`;
 
       const parseJson = (text: string): any => {
