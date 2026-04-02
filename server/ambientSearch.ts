@@ -295,23 +295,38 @@ Verdict guide:
       const evidence = itemResult.evidence || '';
 
       try {
-        await db.execute(sql`
-          INSERT INTO competitor_dimension_status
-            (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
-          VALUES
-            (${workspaceId}::uuid, ${dimensionId}::uuid, ${entityName},
-             ${itemName}, ${status}, 'perplexity', ${evidence || null}, NOW())
-          ON CONFLICT (workspace_id, dimension_id, entity_name, item_name)
-          DO UPDATE SET
-            status = EXCLUDED.status,
-            source = 'perplexity',
-            evidence = EXCLUDED.evidence,
-            last_updated = NOW()
-          WHERE NOT (
-            competitor_dimension_status.source = 'manual'
-            AND competitor_dimension_status.status IN ('yes', 'partial', 'no')
-          )
+        const existing = await db.execute(sql`
+          SELECT id, source, status FROM competitor_dimension_status
+          WHERE workspace_id = ${workspaceId}::uuid
+          AND dimension_id = ${dimensionId}::uuid
+          AND entity_name = ${entityName}
+          AND item_name = ${itemName}
+          LIMIT 1
         `);
+        const existingRow = existing.rows[0] as any;
+
+        if (existingRow) {
+          if (existingRow.source === 'manual' && ['yes', 'partial', 'no'].includes(existingRow.status)) {
+            console.log(`[dimensions-research] Skipping deliberate manual override for ${entityName} / ${itemName}`);
+          } else {
+            await db.execute(sql`
+              UPDATE competitor_dimension_status
+              SET status = ${status},
+                  source = 'perplexity',
+                  evidence = ${evidence || null},
+                  last_updated = NOW()
+              WHERE id = ${existingRow.id}::uuid
+            `);
+          }
+        } else {
+          await db.execute(sql`
+            INSERT INTO competitor_dimension_status
+              (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+            VALUES
+              (${workspaceId}::uuid, ${dimensionId}::uuid, ${entityName},
+               ${itemName}, ${status}, 'perplexity', ${evidence || null}, NOW())
+          `);
+        }
       } catch (err) {
         console.error(`[dimensions-research] Error upserting ${entityName} / ${itemName}:`, err);
       }

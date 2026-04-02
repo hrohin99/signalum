@@ -1,0 +1,55 @@
+Clear error: `there is no unique or exclusion constraint matching the ON CONFLICT specification`. The unique index `idx_comp_dim_status_unique` is a **partial index** (`WHERE workspace_id IS NOT NULL`), and PostgreSQL doesn't allow partial indexes to be used in ON CONFLICT clauses.
+
+The fix is to change the ON CONFLICT to use a DO UPDATE without specifying the conflict target, or better — use a plain INSERT with a prior DELETE, or change the conflict target to the primary key.
+
+Simplest fix — replace ON CONFLICT with a SELECT then INSERT or UPDATE pattern:
+
+---
+
+> **Task: Fix competitor_dimension_status upsert in research-dimensions-save — partial index incompatible with ON CONFLICT**
+>
+> In `server/routes.ts`, find `POST /api/competitors/:entityName/research-dimensions-save`. Replace the entire `db.execute` inside the per-item loop with this SELECT-then-INSERT/UPDATE pattern:
+>
+> ```typescript
+> const existing = await db.execute(sql`
+>   SELECT id, source, status FROM competitor_dimension_status
+>   WHERE workspace_id = ${workspaceId}
+>   AND dimension_id = ${item.dimensionId}::uuid
+>   AND entity_name = ${entityName}
+>   AND item_name = ${item.itemName}
+>   LIMIT 1
+> `);
+>
+> const existingRow = existing.rows[0] as any;
+>
+> if (existingRow) {
+>   // Never overwrite deliberate manual decisions
+>   if (existingRow.source === 'manual' && ['yes', 'partial', 'no'].includes(existingRow.status)) {
+>     continue;
+>   }
+>   await db.execute(sql`
+>     UPDATE competitor_dimension_status
+>     SET status = ${item.verdict},
+>         source = 'ai_confirmed',
+>         evidence = ${item.evidence || null},
+>         last_updated = NOW()
+>     WHERE id = ${existingRow.id}::uuid
+>   `);
+> } else {
+>   await db.execute(sql`
+>     INSERT INTO competitor_dimension_status
+>       (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+>     VALUES
+>       (${workspaceId}, ${item.dimensionId}::uuid, ${entityName},
+>        ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence || null}, NOW())
+>   `);
+> }
+> saved++;
+> ```
+>
+> Apply the same SELECT-then-UPDATE/INSERT pattern to `ambientSearch.ts` in `researchEntityDimensions()` — replace any ON CONFLICT clause there with the same approach, using `source = 'perplexity'` instead of `'ai_confirmed'`.
+>
+> **Critical rules:**
+> - Never run `drizzle-kit push`
+> - All DB writes use `db.execute(sql\`...\`)`
+> - No changes to `schema.ts` or `storage.ts`

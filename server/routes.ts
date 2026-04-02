@@ -4942,23 +4942,37 @@ Verdict guide:
       let saved = 0;
       for (const item of accepted) {
         try {
-          await db.execute(sql`
-            INSERT INTO competitor_dimension_status
-              (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
-            VALUES
-              (${workspaceId}, ${item.dimensionId}::uuid, ${entityName},
-               ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence || null}, NOW())
-            ON CONFLICT (workspace_id, dimension_id, entity_name, item_name)
-            DO UPDATE SET
-              status = EXCLUDED.status,
-              source = 'ai_confirmed',
-              evidence = EXCLUDED.evidence,
-              last_updated = NOW()
-            WHERE NOT (
-              competitor_dimension_status.source = 'manual'
-              AND competitor_dimension_status.status IN ('yes', 'partial', 'no')
-            )
+          const existing = await db.execute(sql`
+            SELECT id, source, status FROM competitor_dimension_status
+            WHERE workspace_id = ${workspaceId}
+            AND dimension_id = ${item.dimensionId}::uuid
+            AND entity_name = ${entityName}
+            AND item_name = ${item.itemName}
+            LIMIT 1
           `);
+          const existingRow = existing.rows[0] as any;
+
+          if (existingRow) {
+            if (existingRow.source === 'manual' && ['yes', 'partial', 'no'].includes(existingRow.status)) {
+              continue;
+            }
+            await db.execute(sql`
+              UPDATE competitor_dimension_status
+              SET status = ${item.verdict},
+                  source = 'ai_confirmed',
+                  evidence = ${item.evidence || null},
+                  last_updated = NOW()
+              WHERE id = ${existingRow.id}::uuid
+            `);
+          } else {
+            await db.execute(sql`
+              INSERT INTO competitor_dimension_status
+                (workspace_id, dimension_id, entity_name, item_name, status, source, evidence, last_updated)
+              VALUES
+                (${workspaceId}, ${item.dimensionId}::uuid, ${entityName},
+                 ${item.itemName}, ${item.verdict}, 'ai_confirmed', ${item.evidence || null}, NOW())
+            `);
+          }
           saved++;
         } catch (err) {
           console.error(`Error saving dimension status for ${entityName} / ${item.itemName}:`, err);
