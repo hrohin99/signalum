@@ -1,0 +1,90 @@
+Here are two clean standalone prompts:
+
+---
+
+**Prompt 1 — Fix save logic for manual+unknown rows**
+
+> **Task: Update competitor_dimension_status save logic to allow AI research to overwrite manual+unknown rows**
+>
+> In `server/routes.ts`, find the `POST /api/competitors/:entityId/research-dimensions` endpoint (the AI dimension research route added recently).
+>
+> In the upsert into `competitor_dimension_status`, update the ON CONFLICT condition so that saves are blocked ONLY when `source = 'manual'` AND `status` is a deliberate value (yes/partial/no). Manual rows set to `unknown` are not a deliberate decision and should be overwritable.
+>
+> Change the upsert to:
+> ```sql
+> INSERT INTO competitor_dimension_status (workspace_id, entity_id, dimension_id, item_name, status, source, evidence, updated_at)
+> VALUES (...)
+> ON CONFLICT (workspace_id, entity_id, dimension_id, item_name)
+> DO UPDATE SET
+>   status = EXCLUDED.status,
+>   source = 'ai_confirmed',
+>   evidence = EXCLUDED.evidence,
+>   updated_at = NOW()
+> WHERE NOT (competitor_dimension_status.source = 'manual' AND competitor_dimension_status.status IN ('yes', 'partial', 'no'))
+> ```
+>
+> Then in `server/ambientSearch.ts`, find the `researchEntityDimensions()` function where it skips rows before writing. Update the skip condition from `source = 'manual'` to:
+> ```sql
+> WHERE NOT (source = 'manual' AND status IN ('yes', 'partial', 'no'))
+> ```
+> So the cron also respects this same rule — it can fill in manual+unknown rows but never overwrites deliberate manual decisions.
+>
+> **Critical rules:**
+> - Never run `drizzle-kit push`
+> - All DB writes use `db.execute(sql\`...\`)`
+> - No changes to `schema.ts` or `storage.ts`
+
+---
+
+**Prompt 2 — Perplexity search prompt quality for AI dimension research**
+
+> **Task: Improve the Perplexity search prompt in the AI dimension research endpoint**
+>
+> In `server/routes.ts`, find `POST /api/competitors/:entityId/research-dimensions`. For each item, it calls Perplexity to research whether a competitor has a capability.
+>
+> Replace the current per-item Perplexity prompt with this improved version:
+>
+> ```typescript
+> const perplexityPrompt = `You are a competitive intelligence researcher specialising in biometric identity verification (IDV) software and government digital identity systems.
+>
+> Research whether ${competitorName} has the following capability: "${itemName}" (within the dimension: "${dimensionName}").
+>
+> Search for evidence in:
+> - Official product documentation and datasheets
+> - Independent lab certifications (iBeta, BixeLab, Ingenium, TÜV, BSI, NIST)
+> - Government tender awards and accreditations
+> - Press releases and announcements from the last 3 years
+> - Third-party reviews and analyst reports
+>
+> Return ONLY a JSON object with no markdown, no preamble, no explanation:
+> {
+>   "verdict": "yes" | "partial" | "no" | "unknown",
+>   "confidence": "high" | "medium" | "low",
+>   "evidence": "1-2 sentence summary of what you found and why you reached this verdict",
+>   "source_url": "most authoritative URL found, or null",
+>   "source_date": "Month YYYY of the most relevant source, or null"
+> }
+>
+> Verdict guide:
+> - "yes" = clear confirmed evidence the capability exists
+> - "partial" = capability exists but limited, outdated, or only partially meets the criterion
+> - "no" = explicitly confirmed the capability does not exist or competitor has not pursued it
+> - "unknown" = insufficient public evidence found to make a determination
+> - "confidence: high" = primary source or official certification found
+> - "confidence: medium" = secondary source or indirect evidence
+> - "confidence: low" = inference only, no direct source
+> `;
+> ```
+>
+> Also ensure:
+> - The Perplexity call uses model `"sonar"` (not `"sonar-pro"` — stays within rate limits)
+> - `max_tokens: 300` per item call
+> - Sequential calls with `500ms` delay between items using `await new Promise(r => setTimeout(r, 500))`
+> - Strip any markdown fences from the response before JSON.parse: `.replace(/```json|```/g, '').trim()`
+> - If JSON.parse fails for an item, return `{ verdict: 'unknown', confidence: 'low', evidence: 'Could not parse research response', source_url: null, source_date: null }` for that item rather than failing the whole request
+>
+> **Critical rules:**
+> - Never run `drizzle-kit push`
+> - All DB writes use `db.execute(sql\`...\`)`
+> - No changes to `schema.ts` or `storage.ts`
+> - Use `apiRequest()` for all frontend fetches
