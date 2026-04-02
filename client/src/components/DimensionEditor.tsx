@@ -12,8 +12,6 @@ import {
   Check,
   X,
   Pencil,
-  ArrowUp,
-  ArrowDown,
   GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -32,7 +30,7 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { IMPORTANCE_LABELS, type ImportanceTier } from "@/lib/dimensionScoring";
+import { IMPORTANCE_LABELS, IMPORTANCE_COLORS, type ImportanceTier } from "@/lib/dimensionScoring";
 
 type ItemStatus = "yes" | "partial" | "no" | "na";
 
@@ -130,28 +128,21 @@ function ViewPill({ item, onCycle }: { item: DimensionItem; onCycle: () => void 
   );
 }
 
-// ─── Edit-mode pill (shows importance select, X and move arrows) ──────────────
+// ─── Edit-mode pill (shows importance select + X) ────────────────────────────
 
 function EditPill({
   item,
-  index,
-  total,
   onCycle,
   onRemove,
-  onMoveUp,
-  onMoveDown,
   onImportanceChange,
 }: {
   item: DimensionItem;
-  index: number;
-  total: number;
   onCycle: () => void;
   onRemove: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
   onImportanceChange: (tier: ImportanceTier) => void;
 }) {
-  const color = statusColor[item.our_status] || "#9ca3af";
+  const tier = item.importance ?? "high";
+  const ic = IMPORTANCE_COLORS[tier] ?? IMPORTANCE_COLORS.high;
   return (
     <div
       style={{
@@ -160,20 +151,20 @@ function EditPill({
         gap: "2px",
         padding: "2px 6px 2px 10px",
         borderRadius: "999px",
-        border: `1.5px solid ${color}`,
-        color,
+        border: `1.5px solid ${ic.dot}`,
+        color: ic.text,
         fontSize: "12px",
-        background: `${color}14`,
+        background: ic.bg,
         fontWeight: 500,
         whiteSpace: "nowrap",
       }}
     >
-      <button onClick={onCycle} title="Cycle status" style={{ color, fontWeight: 500 }}>
+      <button onClick={onCycle} title="Cycle status" style={{ color: ic.text, fontWeight: 500 }}>
         <span>{item.name}</span>
         <span style={{ opacity: 0.7, fontSize: "11px", marginLeft: "4px" }}>· {statusLabel[item.our_status]}</span>
       </button>
       <select
-        value={item.importance ?? "high"}
+        value={tier}
         onChange={(e) => onImportanceChange(e.target.value as ImportanceTier)}
         title="Importance tier"
         data-testid={`select-importance-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
@@ -185,27 +176,9 @@ function EditPill({
         ))}
       </select>
       <button
-        onClick={onMoveUp}
-        disabled={index === 0}
-        title="Move up"
-        style={{ opacity: index === 0 ? 0.3 : 0.6, cursor: index === 0 ? "default" : "pointer", padding: "0 2px" }}
-        data-testid={`button-move-up-${item.name}`}
-      >
-        <ArrowUp className="w-3 h-3" />
-      </button>
-      <button
-        onClick={onMoveDown}
-        disabled={index === total - 1}
-        title="Move down"
-        style={{ opacity: index === total - 1 ? 0.3 : 0.6, cursor: index === total - 1 ? "default" : "pointer", padding: "0 2px" }}
-        data-testid={`button-move-down-${item.name}`}
-      >
-        <ArrowDown className="w-3 h-3" />
-      </button>
-      <button
         onClick={onRemove}
         title="Remove item"
-        style={{ opacity: 0.6, padding: "0 1px" }}
+        style={{ opacity: 0.6, padding: "0 1px", marginLeft: "2px" }}
         data-testid={`button-remove-item-${item.name}`}
       >
         <X className="w-3 h-3" />
@@ -252,16 +225,6 @@ function DimensionInlineEditor({
     setItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const moveItem = (index: number, direction: "up" | "down") => {
-    setItems((prev) => {
-      const next = [...prev];
-      const swap = direction === "up" ? index - 1 : index + 1;
-      if (swap < 0 || swap >= next.length) return prev;
-      [next[index], next[swap]] = [next[swap], next[index]];
-      return next;
-    });
-  };
-
   const addItem = () => {
     const trimmed = newItemName.trim();
     if (!trimmed) return;
@@ -292,7 +255,7 @@ function DimensionInlineEditor({
 
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-2">
-            Items <span className="text-gray-400 font-normal">(click pill to cycle status · select importance · arrows to reorder · × to remove)</span>
+            Items <span className="text-gray-400 font-normal">(click pill to cycle status · select importance · × to remove)</span>
           </label>
           {items.length === 0 ? (
             <p className="text-xs text-gray-400 italic mb-2">No items yet. Add one below.</p>
@@ -302,12 +265,8 @@ function DimensionInlineEditor({
                 <EditPill
                   key={i}
                   item={it}
-                  index={i}
-                  total={items.length}
                   onCycle={() => cycleItemStatus(i)}
                   onRemove={() => removeItem(i)}
-                  onMoveUp={() => moveItem(i, "up")}
-                  onMoveDown={() => moveItem(i, "down")}
                   onImportanceChange={(tier) => setItemImportance(i, tier)}
                 />
               ))}
