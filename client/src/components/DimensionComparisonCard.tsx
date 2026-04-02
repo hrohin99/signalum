@@ -254,10 +254,10 @@ export function DimensionComparisonCard({ entityName, workspaceId }: DimensionCo
   }
 
   function acceptAll() {
-    setDecisions((prev) => {
-      const next = { ...prev };
-      for (const k of Object.keys(next)) {
-        next[k] = "accepted";
+    setDecisions(() => {
+      const next: Record<string, Decision> = {};
+      for (const r of researchResults) {
+        next[`${r.dimensionId}__${r.itemName}`] = "accepted";
       }
       return next;
     });
