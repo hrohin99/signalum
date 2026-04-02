@@ -1,0 +1,41 @@
+I can see the problem clearly now. The code is correct in Pass 2 (single Claude call for all 7 sections), but **Pass 1 is the killer** — it's making up to **15 sequential Claude API calls** (one per entity summary) in a `for` loop before even getting to the synthesis call. With 42 entities and 2940 signals, this is hammering the TPM limit and timing out the Replit server process.
+
+The fix is to **eliminate Pass 1 entirely** — feed the raw captures directly into the single synthesis call instead of pre-summarising each entity.
+
+---
+
+> **Task: Fix Strategic Pulse generation timeout — eliminate Pass 1 entity summaries**
+>
+> In `server/routes.ts`, find the `/api/strategic-pulse/generate` POST route (around line 6449).
+>
+> **The problem:** Pass 1 makes up to 15 sequential `anthropic.messages.create` calls in a for loop (one per entity). This hits the TPM rate limit and causes `signal: terminated`.
+>
+> **The fix:** Remove Pass 1 entirely. Instead, build the entity context inline from raw captures and pass it directly into the existing single Pass 2 synthesis call.
+>
+> **Specific changes:**
+>
+> 1. Delete the entire `entitySummaries` array, the `for (const [entityKey, items] of sortedEntities)` loop, and the `buildCompetitorProfileContext` calls — everything from `const entitySummaries: string[] = [];` down to the end of that loop
+>
+> 2. Replace it with this inline context builder:
+> ```typescript
+> const inlineContext: string[] = [];
+> for (const [entityKey, items] of sortedEntities) {
+>   const signals = items.slice(0, 6).map((c, i) => `  ${i + 1}. ${c}`).join('\n');
+>   inlineContext.push(`## ${entityKey} (${items.length} signals)\n${signals}`);
+> }
+> const consolidatedContext = inlineContext.join('\n\n');
+> ```
+>
+> 3. Keep `baseContext`, `parseJson`, the single `singleCall` synthesis, and the `insertResult` exactly as-is — no changes needed there
+>
+> 4. Cap `sortedEntities` to top 12 (change `.slice(0, 15)` to `.slice(0, 12)`) and cap signals per entity to 6 (already done above) to keep the prompt within token limits
+>
+> 5. Cap each capture snippet to 300 chars (change `.substring(0, 400)` to `.substring(0, 300)`) in the `grouped` loop above
+>
+> **Result:** Generation goes from 15+ API calls to exactly 1, well within TPM limits and Replit's gateway timeout.
+>
+> **Critical rules:**
+> - Never run `drizzle-kit push`
+> - All DB writes use `db.execute(sql\`...\`)`
+> - No changes to `schema.ts`, `storage.ts`, or the insert statement
+> - Do not change the Pass 2 single call prompt or JSON structure
