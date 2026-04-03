@@ -7712,5 +7712,425 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
     }
   });
 
+  // ===== Market Signals API =====
+
+  // Get all market signals for the workspace
+  app.get("/api/market-signals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const signals = await pool.query(
+        `SELECT * FROM market_signals WHERE workspace_id = $1 ORDER BY created_at DESC`,
+        [workspaceId]
+      );
+      return res.json({ signals: signals.rows });
+    } catch (error: any) {
+      console.error("Get market signals error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Create a market signal
+  app.post("/api/market-signals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const schema = z.object({
+        name: z.string().min(1),
+        source_type: z.string().default("customer_call"),
+        org: z.string().optional().nullable(),
+        signal_date: z.string().optional().nullable(),
+        status: z.string().default("active"),
+        deadline: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
+
+      const { name, source_type, org, signal_date, status, deadline, notes } = parsed.data;
+      const result = await pool.query(
+        `INSERT INTO market_signals (workspace_id, name, source_type, org, signal_date, status, deadline, notes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING *`,
+        [workspaceId, name, source_type, org || null, signal_date || null, status, deadline || null, notes || null]
+      );
+      return res.status(201).json({ signal: result.rows[0] });
+    } catch (error: any) {
+      console.error("Create market signal error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Metrics endpoint: total requirement count across all signals
+  app.get("/api/market-signals/metrics", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const result = await pool.query(
+        `SELECT COUNT(*)::int AS total_requirements FROM market_signal_requirements WHERE workspace_id = $1`,
+        [workspaceId]
+      );
+      return res.json({ total_requirements: result.rows[0]?.total_requirements ?? 0 });
+    } catch (error: any) {
+      console.error("Get market signals metrics error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Heatmap endpoint: aggregate dimension demand across all requirements
+  // NOTE: must be registered before /:id routes to avoid "heatmap" being matched as :id
+  app.get("/api/market-signals/heatmap", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const statusFilter = req.query.status as string | undefined;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      let query: string;
+      let params: (string | undefined)[];
+
+      if (statusFilter && statusFilter !== "all") {
+        query = `
+          SELECT l.dimension_name, l.item_name, COUNT(DISTINCT r.signal_id)::int AS signal_count, COUNT(l.id)::int AS req_count
+          FROM requirement_dimension_links l
+          JOIN market_signal_requirements r ON r.id = l.requirement_id
+          JOIN market_signals s ON s.id = r.signal_id
+          WHERE l.workspace_id = $1 AND s.status = $2
+          GROUP BY l.dimension_name, l.item_name
+          ORDER BY signal_count DESC, req_count DESC
+        `;
+        params = [workspaceId, statusFilter];
+      } else {
+        query = `
+          SELECT l.dimension_name, l.item_name, COUNT(DISTINCT r.signal_id)::int AS signal_count, COUNT(l.id)::int AS req_count
+          FROM requirement_dimension_links l
+          JOIN market_signal_requirements r ON r.id = l.requirement_id
+          WHERE l.workspace_id = $1
+          GROUP BY l.dimension_name, l.item_name
+          ORDER BY signal_count DESC, req_count DESC
+        `;
+        params = [workspaceId];
+      }
+
+      const result = await pool.query(query, params);
+      return res.json({ heatmap: result.rows });
+    } catch (error: any) {
+      console.error("Get market signals heatmap error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Update a market signal
+  app.put("/api/market-signals/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const schema = z.object({
+        name: z.string().min(1),
+        source_type: z.string().default("customer_call"),
+        org: z.string().optional().nullable(),
+        signal_date: z.string().optional().nullable(),
+        status: z.string().default("active"),
+        deadline: z.string().optional().nullable(),
+        notes: z.string().optional().nullable(),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
+
+      const { name, source_type, org, signal_date, status, deadline, notes } = parsed.data;
+      const result = await pool.query(
+        `UPDATE market_signals
+         SET name=$1, source_type=$2, org=$3, signal_date=$4, status=$5, deadline=$6, notes=$7, updated_at=NOW()
+         WHERE id=$8 AND workspace_id=$9
+         RETURNING *`,
+        [name, source_type, org || null, signal_date || null, status, deadline || null, notes || null, id, workspaceId]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "Signal not found" });
+      return res.json({ signal: result.rows[0] });
+    } catch (error: any) {
+      console.error("Update market signal error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Delete a market signal
+  app.delete("/api/market-signals/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { id } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const del = await pool.query(
+        `DELETE FROM market_signals WHERE id=$1 AND workspace_id=$2 RETURNING id`,
+        [id, workspaceId]
+      );
+      if (!del.rows.length) return res.status(404).json({ message: "Signal not found" });
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete market signal error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Get requirements for a signal
+  app.get("/api/market-signals/:signalId/requirements", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { signalId } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const reqs = await pool.query(
+        `SELECT r.*, json_agg(
+           json_build_object('id', l.id, 'dimension_id', l.dimension_id, 'dimension_name', l.dimension_name, 'item_name', l.item_name)
+           ORDER BY l.created_at
+         ) FILTER (WHERE l.id IS NOT NULL) AS dimension_links
+         FROM market_signal_requirements r
+         LEFT JOIN requirement_dimension_links l ON l.requirement_id = r.id
+         WHERE r.signal_id = $1 AND r.workspace_id = $2
+         GROUP BY r.id
+         ORDER BY r.created_at ASC`,
+        [signalId, workspaceId]
+      );
+      return res.json({ requirements: reqs.rows });
+    } catch (error: any) {
+      console.error("Get signal requirements error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Get a single requirement by id
+  app.get("/api/market-signals/:signalId/requirements/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { signalId, id } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const result = await pool.query(
+        `SELECT r.*, json_agg(
+           json_build_object('id', l.id, 'dimension_id', l.dimension_id, 'dimension_name', l.dimension_name, 'item_name', l.item_name)
+           ORDER BY l.created_at
+         ) FILTER (WHERE l.id IS NOT NULL) AS dimension_links
+         FROM market_signal_requirements r
+         LEFT JOIN requirement_dimension_links l ON l.requirement_id = r.id
+         WHERE r.id = $1 AND r.signal_id = $2 AND r.workspace_id = $3
+         GROUP BY r.id`,
+        [id, signalId, workspaceId]
+      );
+      if (!result.rows.length) return res.status(404).json({ message: "Requirement not found" });
+      return res.json({ requirement: result.rows[0] });
+    } catch (error: any) {
+      console.error("Get signal requirement error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
+  // Create a requirement (with dimension links in a transaction)
+  app.post("/api/market-signals/:signalId/requirements", requireAuth, async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const userId = (req as any).userId;
+      const { signalId } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const signalCheck = await pool.query(
+        `SELECT id FROM market_signals WHERE id=$1 AND workspace_id=$2`,
+        [signalId, workspaceId]
+      );
+      if (!signalCheck.rows.length) return res.status(404).json({ message: "Signal not found" });
+
+      const schema = z.object({
+        requirement_text: z.string().min(1),
+        source_ref: z.string().optional().nullable(),
+        dimension_links: z.array(z.object({
+          dimension_id: z.string(),
+          dimension_name: z.string(),
+          item_name: z.string(),
+        })).default([]),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
+
+      const { requirement_text, source_ref, dimension_links } = parsed.data;
+
+      await client.query("BEGIN");
+      const reqResult = await client.query(
+        `INSERT INTO market_signal_requirements (signal_id, workspace_id, requirement_text, source_ref)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [signalId, workspaceId, requirement_text, source_ref || null]
+      );
+      const requirement = reqResult.rows[0];
+
+      const links: any[] = [];
+      for (const link of dimension_links) {
+        const linkResult = await client.query(
+          `INSERT INTO requirement_dimension_links (requirement_id, workspace_id, dimension_id, dimension_name, item_name)
+           VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+          [requirement.id, workspaceId, link.dimension_id, link.dimension_name, link.item_name]
+        );
+        links.push(linkResult.rows[0]);
+      }
+      await client.query("COMMIT");
+
+      return res.status(201).json({ requirement: { ...requirement, dimension_links: links } });
+    } catch (error: any) {
+      await client.query("ROLLBACK");
+      console.error("Create signal requirement error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    } finally {
+      client.release();
+    }
+  });
+
+  // Update a requirement (with dimension links)
+  app.put("/api/market-signals/:signalId/requirements/:id", requireAuth, async (req: Request, res: Response) => {
+    const client = await pool.connect();
+    try {
+      const userId = (req as any).userId;
+      const { signalId, id } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const signalCheck = await pool.query(
+        `SELECT id FROM market_signals WHERE id=$1 AND workspace_id=$2`,
+        [signalId, workspaceId]
+      );
+      if (!signalCheck.rows.length) return res.status(404).json({ message: "Signal not found" });
+
+      const schema = z.object({
+        requirement_text: z.string().min(1),
+        source_ref: z.string().optional().nullable(),
+        dimension_links: z.array(z.object({
+          dimension_id: z.string(),
+          dimension_name: z.string(),
+          item_name: z.string(),
+        })).default([]),
+      });
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
+
+      const { requirement_text, source_ref, dimension_links } = parsed.data;
+
+      await client.query("BEGIN");
+      const reqResult = await client.query(
+        `UPDATE market_signal_requirements
+         SET requirement_text=$1, source_ref=$2, updated_at=NOW()
+         WHERE id=$3 AND signal_id=$4 AND workspace_id=$5
+         RETURNING *`,
+        [requirement_text, source_ref || null, id, signalId, workspaceId]
+      );
+      if (!reqResult.rows.length) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ message: "Requirement not found" });
+      }
+
+      await client.query(
+        `DELETE FROM requirement_dimension_links WHERE requirement_id=$1`,
+        [id]
+      );
+
+      const links: any[] = [];
+      for (const link of dimension_links) {
+        const linkResult = await client.query(
+          `INSERT INTO requirement_dimension_links (requirement_id, workspace_id, dimension_id, dimension_name, item_name)
+           VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+          [id, workspaceId, link.dimension_id, link.dimension_name, link.item_name]
+        );
+        links.push(linkResult.rows[0]);
+      }
+      await client.query("COMMIT");
+
+      return res.json({ requirement: { ...reqResult.rows[0], dimension_links: links } });
+    } catch (error: any) {
+      await client.query("ROLLBACK");
+      console.error("Update signal requirement error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    } finally {
+      client.release();
+    }
+  });
+
+  // Delete a requirement
+  app.delete("/api/market-signals/:signalId/requirements/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { signalId, id } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const signalCheck = await pool.query(
+        `SELECT id FROM market_signals WHERE id=$1 AND workspace_id=$2`,
+        [signalId, workspaceId]
+      );
+      if (!signalCheck.rows.length) return res.status(404).json({ message: "Signal not found" });
+
+      const del = await pool.query(
+        `DELETE FROM market_signal_requirements WHERE id=$1 AND signal_id=$2 AND workspace_id=$3 RETURNING id`,
+        [id, signalId, workspaceId]
+      );
+      if (!del.rows.length) return res.status(404).json({ message: "Requirement not found" });
+      return res.json({ success: true });
+    } catch (error: any) {
+      console.error("Delete signal requirement error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   return httpServer;
 }

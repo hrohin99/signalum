@@ -676,5 +676,78 @@ export async function ensureDatabaseSchema(): Promise<void> {
     console.error("[DBSafety] Error ensuring topic_impact_analysis table:", error?.message || error);
   }
 
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS market_signals (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        workspace_id UUID NOT NULL,
+        name TEXT NOT NULL,
+        source_type TEXT NOT NULL DEFAULT 'customer_call',
+        org TEXT,
+        signal_date DATE,
+        status TEXT NOT NULL DEFAULT 'active',
+        deadline DATE,
+        notes TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_market_signals_workspace ON market_signals(workspace_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_market_signals_status ON market_signals(workspace_id, status)
+    `);
+    console.log("[DBSafety] market_signals table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring market_signals table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS market_signal_requirements (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        signal_id UUID NOT NULL REFERENCES market_signals(id) ON DELETE CASCADE,
+        workspace_id UUID NOT NULL,
+        requirement_text TEXT NOT NULL,
+        source_ref TEXT,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_market_signal_reqs_signal ON market_signal_requirements(signal_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_market_signal_reqs_workspace ON market_signal_requirements(workspace_id)
+    `);
+    console.log("[DBSafety] market_signal_requirements table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring market_signal_requirements table:", error?.message || error);
+  }
+
+  try {
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS requirement_dimension_links (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        requirement_id UUID NOT NULL REFERENCES market_signal_requirements(id) ON DELETE CASCADE,
+        workspace_id UUID NOT NULL,
+        dimension_id UUID NOT NULL,
+        dimension_name TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_req_dim_links_requirement ON requirement_dimension_links(requirement_id)
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS idx_req_dim_links_workspace ON requirement_dimension_links(workspace_id)
+    `);
+    console.log("[DBSafety] requirement_dimension_links table verified.");
+  } catch (error: any) {
+    console.error("[DBSafety] Error ensuring requirement_dimension_links table:", error?.message || error);
+  }
+
   console.log("[DBSafety] All database schema safety checks complete.");
 }

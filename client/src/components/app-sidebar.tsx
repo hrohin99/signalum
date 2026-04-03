@@ -25,6 +25,7 @@ import {
   Lock,
   Brain,
   Lightbulb,
+  TrendingUp,
 } from "lucide-react";
 
 const navItems = [
@@ -32,6 +33,7 @@ const navItems = [
   { title: "Capture", url: "/capture", icon: PenLine, requiresWrite: true },
   { title: "Live Feed", url: "/inbox", icon: Inbox },
   { title: "Intelligence", url: "/intelligence", icon: Brain },
+  { title: "Market Signals", url: "/market-signals", icon: TrendingUp },
   { title: "Briefings", url: "/briefings", icon: Newspaper },
 ];
 
