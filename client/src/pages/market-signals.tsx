@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +35,11 @@ import {
   Layers,
   X,
   Check,
+  Upload,
+  AlertTriangle,
+  ThumbsUp,
+  ThumbsDown,
+  Pencil,
 } from "lucide-react";
 
 interface MarketSignal {
@@ -284,32 +289,20 @@ function SignalModal({
   );
 }
 
-// ===== Requirement Modal =====
-function RequirementModal({
-  open,
-  onClose,
-  signalId,
-  initial,
+// ===== Dimension accordion shared component =====
+function DimensionAccordion({
   dimensions,
-  onSaved,
+  selectedLinks,
+  setSelectedLinks,
+  expandedDims,
+  setExpandedDims,
 }: {
-  open: boolean;
-  onClose: () => void;
-  signalId: string;
-  initial?: Requirement | null;
   dimensions: Dimension[];
-  onSaved: () => void;
+  selectedLinks: DimensionLink[];
+  setSelectedLinks: (links: DimensionLink[]) => void;
+  expandedDims: Set<string>;
+  setExpandedDims: (s: Set<string>) => void;
 }) {
-  const { toast } = useToast();
-  const isEdit = !!initial;
-
-  const [reqText, setReqText] = useState(initial?.requirement_text ?? "");
-  const [sourceRef, setSourceRef] = useState(initial?.source_ref ?? "");
-  const [selectedLinks, setSelectedLinks] = useState<DimensionLink[]>(
-    initial?.dimension_links ?? []
-  );
-  const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set());
-
   function isSelected(dimId: string, dimName: string, itemName: string): boolean {
     return selectedLinks.some(
       (l) => l.dimension_id === dimId && l.dimension_name === dimName && l.item_name === itemName
@@ -328,13 +321,256 @@ function RequirementModal({
   }
 
   function toggleDimExpanded(dimId: string) {
-    setExpandedDims((prev) => {
-      const next = new Set(prev);
-      if (next.has(dimId)) next.delete(dimId);
-      else next.add(dimId);
-      return next;
-    });
+    const next = new Set(expandedDims);
+    if (next.has(dimId)) next.delete(dimId);
+    else next.add(dimId);
+    setExpandedDims(next);
   }
+
+  if (dimensions.length === 0) return null;
+
+  return (
+    <div>
+      <Label>Link to Dimension Items</Label>
+      <div className="mt-2 border rounded-lg divide-y overflow-hidden">
+        {dimensions.map((dim) => {
+          const items: { name: string }[] = Array.isArray(dim.items) ? dim.items : [];
+          const isOpen = expandedDims.has(dim.id);
+          const selectedCount = selectedLinks.filter((l) => l.dimension_id === dim.id).length;
+          return (
+            <div key={dim.id}>
+              <button
+                type="button"
+                className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-sm font-medium text-left"
+                onClick={() => toggleDimExpanded(dim.id)}
+                data-testid={`accordion-dim-${dim.id}`}
+              >
+                <span className="flex items-center gap-2">
+                  {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+                  {dim.name}
+                </span>
+                {selectedCount > 0 && (
+                  <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                    {selectedCount} selected
+                  </span>
+                )}
+              </button>
+              {isOpen && (
+                <div className="px-3 pb-2 space-y-1 bg-slate-50/50 dark:bg-slate-900/30">
+                  {items.map((item) => {
+                    const sel = isSelected(dim.id, dim.name, item.name);
+                    return (
+                      <button
+                        key={item.name}
+                        type="button"
+                        className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left hover:bg-white dark:hover:bg-slate-800 transition-colors ${sel ? "bg-white dark:bg-slate-800" : ""}`}
+                        onClick={() => toggleLink(dim, item.name)}
+                        data-testid={`checkbox-dim-item-${dim.id}-${item.name}`}
+                      >
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${sel ? "bg-blue-600 border-blue-600" : "border-slate-300 dark:border-slate-600"}`}>
+                          {sel && <Check className="w-3 h-3 text-white" />}
+                        </div>
+                        <span className={sel ? "text-foreground font-medium" : "text-muted-foreground"}>
+                          {item.name}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {selectedLinks.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {selectedLinks.map((l, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full"
+              data-testid={`tag-selected-link-${i}`}
+            >
+              {l.dimension_name} → {l.item_name}
+              <button
+                type="button"
+                onClick={() => setSelectedLinks(selectedLinks.filter((_, j) => j !== i))}
+                className="ml-0.5 hover:text-blue-600"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===== Extracted requirement row in review screen =====
+type ReviewStatus = "pending" | "accepted" | "rejected";
+
+interface ExtractedReq {
+  requirement_text: string;
+  source_ref: string | null;
+  linked_items: DimensionLink[];
+  status: ReviewStatus;
+  editing: boolean;
+  editText: string;
+  editLinks: DimensionLink[];
+  editExpandedDims: Set<string>;
+}
+
+function ReviewRow({
+  req,
+  idx,
+  dimensions,
+  onChange,
+}: {
+  req: ExtractedReq;
+  idx: number;
+  dimensions: Dimension[];
+  onChange: (updated: Partial<ExtractedReq>) => void;
+}) {
+  const dimLinks: DimensionLink[] = req.editing ? req.editLinks : req.linked_items;
+  const isAccepted = req.status === "accepted";
+  const isRejected = req.status === "rejected";
+
+  const rowBg = isAccepted
+    ? "border-emerald-300 bg-emerald-50/40 dark:border-emerald-800 dark:bg-emerald-950/20"
+    : isRejected
+    ? "border-slate-200 bg-slate-50/50 dark:border-slate-700 dark:bg-slate-900/20 opacity-50"
+    : "border-blue-200 bg-blue-50/30 dark:border-blue-800/50 dark:bg-blue-950/10";
+
+  return (
+    <div
+      className={`border rounded-lg p-3 space-y-2 transition-colors ${rowBg}`}
+      data-testid={`review-req-row-${idx}`}
+    >
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          {req.editing ? (
+            <Textarea
+              value={req.editText}
+              onChange={(e) => onChange({ editText: e.target.value })}
+              className="text-sm h-20 resize-none"
+              data-testid={`review-edit-text-${idx}`}
+            />
+          ) : (
+            <p className="text-sm text-foreground leading-snug" data-testid={`review-req-text-${idx}`}>
+              {req.requirement_text}
+            </p>
+          )}
+          {req.source_ref && !req.editing && (
+            <p className="text-xs text-muted-foreground mt-1">{req.source_ref}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-1 shrink-0 ml-2">
+          <button
+            type="button"
+            title="Accept"
+            className={`p-1.5 rounded transition-colors ${isAccepted ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground"}`}
+            onClick={() => onChange({ status: "accepted" })}
+            data-testid={`button-accept-req-${idx}`}
+          >
+            <ThumbsUp className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            title="Reject"
+            className={`p-1.5 rounded transition-colors ${isRejected ? "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground"}`}
+            onClick={() => onChange({ status: "rejected" })}
+            data-testid={`button-reject-req-${idx}`}
+          >
+            <ThumbsDown className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            title={req.editing ? "Done editing" : "Edit"}
+            className={`p-1.5 rounded transition-colors ${req.editing ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-muted-foreground"}`}
+            onClick={() => {
+              if (req.editing) {
+                onChange({ editing: false, requirement_text: req.editText, linked_items: req.editLinks });
+              } else {
+                onChange({ editing: true, editText: req.requirement_text, editLinks: req.linked_items });
+              }
+            }}
+            data-testid={`button-edit-req-${idx}`}
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {req.editing && dimensions.length > 0 && (
+        <div className="pt-1">
+          <DimensionAccordion
+            dimensions={dimensions}
+            selectedLinks={req.editLinks}
+            setSelectedLinks={(links) => onChange({ editLinks: links })}
+            expandedDims={req.editExpandedDims}
+            setExpandedDims={(s) => onChange({ editExpandedDims: s })}
+          />
+        </div>
+      )}
+
+      {!req.editing && dimLinks.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {dimLinks.map((l, i) => (
+            <span key={i} className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full">
+              {l.dimension_name} → {l.item_name}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RequirementModal({
+  open,
+  onClose,
+  signalId,
+  initial,
+  dimensions,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  signalId: string;
+  initial?: Requirement | null;
+  dimensions: Dimension[];
+  onSaved: () => void;
+}) {
+  const { toast } = useToast();
+  const isEdit = !!initial;
+
+  type TabType = "manual" | "paste" | "import";
+  const [activeTab, setActiveTab] = useState<TabType>("manual");
+
+  // Manual tab state
+  const [reqText, setReqText] = useState(initial?.requirement_text ?? "");
+  const [sourceRef, setSourceRef] = useState(initial?.source_ref ?? "");
+  const [selectedLinks, setSelectedLinks] = useState<DimensionLink[]>(
+    initial?.dimension_links ?? []
+  );
+  const [expandedDims, setExpandedDims] = useState<Set<string>>(new Set());
+
+  // Paste tab state
+  const [pasteText, setPasteText] = useState("");
+  const MAX_PASTE = 3000;
+
+  // Import tab state
+  const [dragOver, setDragOver] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileTooLarge, setFileTooLarge] = useState(false);
+  const [pdfPageCountWarning, setPdfPageCountWarning] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Shared extraction state
+  const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
+  const [reviewItems, setReviewItems] = useState<ExtractedReq[] | null>(null);
+  const [savingBulk, setSavingBulk] = useState(false);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -373,126 +609,478 @@ function RequirementModal({
     await mutation.mutateAsync();
   };
 
+  const handleExtract = useCallback(async (body: object) => {
+    setExtracting(true);
+    setExtractError(null);
+    setReviewItems(null);
+    try {
+      const res = await apiRequest("POST", `/api/market-signals/${signalId}/extract-requirements`, body);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Extraction failed");
+      }
+      const data = await res.json();
+      const items: ExtractedReq[] = (data.requirements ?? []).map((r: any) => {
+        const linked: DimensionLink[] = (r.linked_items ?? []).map((li: any) => ({
+          dimension_id: li.dimension_id ?? null,
+          dimension_name: li.dimension_name,
+          item_name: li.item_name,
+        }));
+        return {
+          requirement_text: r.requirement_text,
+          source_ref: r.source_ref ?? null,
+          linked_items: linked,
+          status: "pending" as ReviewStatus,
+          editing: false,
+          editText: r.requirement_text,
+          editLinks: linked,
+          editExpandedDims: new Set<string>(),
+        };
+      });
+      setReviewItems(items);
+    } catch (e: any) {
+      setExtractError(e.message ?? "Extraction failed");
+    } finally {
+      setExtracting(false);
+    }
+  }, [signalId]);
+
+  const handleAnalyseText = () => {
+    if (!pasteText.trim()) return;
+    handleExtract({ text: pasteText });
+  };
+
+  const handleAnalyseDocument = async () => {
+    if (!selectedFile) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",")[1];
+      const mimeType = selectedFile.type as "application/pdf" | "image/jpeg" | "image/png";
+      handleExtract({ file: base64, mimeType });
+    };
+    reader.readAsDataURL(selectedFile);
+  };
+
+  const validateAndSetFile = (file: File) => {
+    setFileTooLarge(false);
+    setPdfPageCountWarning(false);
+
+    const maxSize = 4 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setFileTooLarge(true);
+      setSelectedFile(null);
+      return;
+    }
+
+    if (file.type === "application/pdf") {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const pdfLib = await import("pdfjs-dist/legacy/build/pdf.mjs" as string);
+          const { getDocument } = pdfLib as any;
+          const arrayBuffer = reader.result as ArrayBuffer;
+          const pdf = await getDocument({ data: arrayBuffer }).promise;
+          if (pdf.numPages > 3) {
+            setPdfPageCountWarning(true);
+            setSelectedFile(file);
+            return;
+          }
+        } catch {
+          // ignore parse errors — let backend handle
+        }
+        setSelectedFile(file);
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) validateAndSetFile(file);
+  };
+
+  const ACCEPTED_MIME_TYPES = ["application/pdf", "image/jpeg", "image/png"];
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    if (!ACCEPTED_MIME_TYPES.includes(file.type)) {
+      setFileTooLarge(false);
+      setExtractError("Unsupported file type. Please upload a PDF, JPG, or PNG.");
+      return;
+    }
+    validateAndSetFile(file);
+  };
+
+  const handleSaveBulk = async () => {
+    if (!reviewItems) return;
+    const accepted = reviewItems.filter((r) => r.status === "accepted");
+    if (!accepted.length) return;
+    setSavingBulk(true);
+    let savedCount = 0;
+    let failedCount = 0;
+    for (const r of accepted) {
+      try {
+        const rawLinks = r.editing ? r.editLinks : r.linked_items;
+        const validLinks = rawLinks.filter((l) => l.dimension_id && l.dimension_name && l.item_name);
+        const res = await apiRequest("POST", `/api/market-signals/${signalId}/requirements`, {
+          requirement_text: r.editing ? r.editText : r.requirement_text,
+          source_ref: r.source_ref || null,
+          dimension_links: validLinks.map((l) => ({
+            dimension_id: l.dimension_id,
+            dimension_name: l.dimension_name,
+            item_name: l.item_name,
+          })),
+        });
+        if (res.ok) {
+          savedCount++;
+        } else {
+          failedCount++;
+        }
+      } catch {
+        failedCount++;
+      }
+    }
+    setSavingBulk(false);
+    queryClient.invalidateQueries({ queryKey: ["/api/market-signals"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/market-signals/heatmap"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/market-signals/metrics"] });
+    if (failedCount > 0) {
+      toast({
+        title: `${savedCount} saved, ${failedCount} failed`,
+        description: "Some requirements could not be saved.",
+        variant: "destructive",
+      });
+    } else {
+      toast({ title: `${savedCount} requirement${savedCount !== 1 ? "s" : ""} saved` });
+    }
+    onSaved();
+    onClose();
+  };
+
+  const updateReviewItem = (idx: number, updates: Partial<ExtractedReq>) => {
+    setReviewItems((prev) => {
+      if (!prev) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], ...updates };
+      return next;
+    });
+  };
+
+  const tabs: { key: TabType; label: string }[] = isEdit
+    ? [{ key: "manual", label: "Write manually" }]
+    : [
+        { key: "manual", label: "Write manually" },
+        { key: "paste", label: "Paste text" },
+        { key: "import", label: "Import from document" },
+      ];
+
+  const charCount = pasteText.length;
+  const charColor =
+    charCount >= MAX_PASTE
+      ? "text-red-600 dark:text-red-400"
+      : charCount >= 2500
+      ? "text-amber-600 dark:text-amber-400"
+      : "text-muted-foreground";
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Edit Requirement" : "Add Requirement"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-2">
-          <div>
-            <Label htmlFor="req-text">Requirement *</Label>
-            <Textarea
-              id="req-text"
-              data-testid="textarea-req-text"
-              value={reqText}
-              onChange={(e) => setReqText(e.target.value)}
-              placeholder="Describe the capability or feature requirement..."
-              className="mt-1 h-24 resize-none"
-            />
-          </div>
-          <div>
-            <Label htmlFor="req-source">Source Reference</Label>
-            <Input
-              id="req-source"
-              data-testid="input-req-source"
-              value={sourceRef}
-              onChange={(e) => setSourceRef(e.target.value)}
-              placeholder="e.g. Call transcript p.3, Email 2024-03-15"
-              className="mt-1"
-            />
-          </div>
 
-          {dimensions.length > 0 && (
-            <div>
-              <Label>Link to Dimension Items</Label>
-              <div className="mt-2 border rounded-lg divide-y overflow-hidden">
-                {dimensions.map((dim) => {
-                  const items: { name: string }[] = Array.isArray(dim.items)
-                    ? dim.items
-                    : [];
-                  const isOpen = expandedDims.has(dim.id);
-                  const selectedCount = selectedLinks.filter((l) => l.dimension_id === dim.id).length;
+        {/* Tab switcher — only shown when adding */}
+        {!isEdit && !reviewItems && (
+          <div className="flex border-b -mx-6 px-6 gap-0">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => { setActiveTab(t.key); setExtractError(null); }}
+                className={`px-3 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === t.key ? "border-blue-600 text-blue-700 dark:text-blue-400" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                data-testid={`tab-${t.key}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
 
-                  return (
-                    <div key={dim.id}>
-                      <button
-                        type="button"
-                        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-sm font-medium text-left"
-                        onClick={() => toggleDimExpanded(dim.id)}
-                        data-testid={`accordion-dim-${dim.id}`}
-                      >
-                        <span className="flex items-center gap-2">
-                          {isOpen ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}
-                          {dim.name}
-                        </span>
-                        {selectedCount > 0 && (
-                          <span className="text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
-                            {selectedCount} selected
-                          </span>
-                        )}
-                      </button>
-                      {isOpen && (
-                        <div className="px-3 pb-2 space-y-1 bg-slate-50/50 dark:bg-slate-900/30">
-                          {items.map((item) => {
-                            const sel = isSelected(dim.id, dim.name, item.name);
-                            return (
-                              <button
-                                key={item.name}
-                                type="button"
-                                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-sm text-left hover:bg-white dark:hover:bg-slate-800 transition-colors ${sel ? "bg-white dark:bg-slate-800" : ""}`}
-                                onClick={() => toggleLink(dim, item.name)}
-                                data-testid={`checkbox-dim-item-${dim.id}-${item.name}`}
-                              >
-                                <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${sel ? "bg-blue-600 border-blue-600" : "border-slate-300 dark:border-slate-600"}`}>
-                                  {sel && <Check className="w-3 h-3 text-white" />}
-                                </div>
-                                <span className={sel ? "text-foreground font-medium" : "text-muted-foreground"}>
-                                  {item.name}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+        {/* Review screen */}
+        {reviewItems && (
+          <div className="space-y-3 py-2">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {reviewItems.length} requirement{reviewItems.length !== 1 ? "s" : ""} found
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Review and accept or reject each one before saving.</p>
               </div>
-
-              {selectedLinks.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {selectedLinks.map((l, i) => (
-                    <span
-                      key={i}
-                      className="inline-flex items-center gap-1 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded-full"
-                      data-testid={`tag-selected-link-${i}`}
-                    >
-                      {l.dimension_name} → {l.item_name}
-                      <button
-                        type="button"
-                        onClick={() => setSelectedLinks(selectedLinks.filter((_, j) => j !== i))}
-                        className="ml-0.5 hover:text-blue-600"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  className="text-xs text-blue-700 dark:text-blue-400 underline underline-offset-2 hover:text-blue-900"
+                  onClick={() => setReviewItems(reviewItems.map((r) => ({ ...r, status: "accepted" as ReviewStatus })))}
+                  data-testid="button-accept-all"
+                >
+                  Accept all
+                </button>
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => setReviewItems(null)}
+                  data-testid="button-back-to-input"
+                >
+                  Back
+                </button>
+              </div>
             </div>
-          )}
-        </div>
+            <div
+              className="flex items-center gap-4 text-xs px-2 py-1.5 bg-slate-50 dark:bg-slate-900/50 rounded-md"
+              data-testid="review-tally"
+            >
+              <span className="text-emerald-700 dark:text-emerald-400 font-medium">
+                {reviewItems.filter((r) => r.status === "accepted").length} accepted
+              </span>
+              <span className="text-blue-600 dark:text-blue-400">
+                {reviewItems.filter((r) => r.status === "pending").length} pending
+              </span>
+              <span className="text-slate-500 dark:text-slate-400">
+                {reviewItems.filter((r) => r.status === "rejected").length} rejected
+              </span>
+            </div>
+            <div className="space-y-2 max-h-[45vh] overflow-y-auto pr-1">
+              {reviewItems.map((r, idx) => (
+                <ReviewRow
+                  key={idx}
+                  req={r}
+                  idx={idx}
+                  dimensions={dimensions}
+                  onChange={(updates) => updateReviewItem(idx, updates)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Manual tab */}
+        {!reviewItems && (activeTab === "manual" || isEdit) && (
+          <div className="space-y-4 py-2">
+            <div>
+              <Label htmlFor="req-text">Requirement *</Label>
+              <Textarea
+                id="req-text"
+                data-testid="textarea-req-text"
+                value={reqText}
+                onChange={(e) => setReqText(e.target.value)}
+                placeholder="Describe the capability or feature requirement..."
+                className="mt-1 h-24 resize-none"
+              />
+            </div>
+            <div>
+              <Label htmlFor="req-source">Source Reference</Label>
+              <Input
+                id="req-source"
+                data-testid="input-req-source"
+                value={sourceRef}
+                onChange={(e) => setSourceRef(e.target.value)}
+                placeholder="e.g. Call transcript p.3, Email 2024-03-15"
+                className="mt-1"
+              />
+            </div>
+            <DimensionAccordion
+              dimensions={dimensions}
+              selectedLinks={selectedLinks}
+              setSelectedLinks={setSelectedLinks}
+              expandedDims={expandedDims}
+              setExpandedDims={setExpandedDims}
+            />
+          </div>
+        )}
+
+        {/* Paste text tab */}
+        {!reviewItems && activeTab === "paste" && !isEdit && (
+          <div className="space-y-3 py-2">
+            <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-800 dark:text-blue-300">
+                Paste an email, call notes, or transcript. Claude will extract individual requirements and suggest dimension mappings.
+              </p>
+            </div>
+            {extracting ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3" data-testid="extracting-state">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                <p className="text-sm text-muted-foreground">Analysing text…</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label htmlFor="paste-text">Text content</Label>
+                    <span className={`text-xs ${charColor}`} data-testid="paste-char-count">
+                      {charCount}/{MAX_PASTE}
+                    </span>
+                  </div>
+                  <Textarea
+                    id="paste-text"
+                    data-testid="textarea-paste-text"
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value.slice(0, MAX_PASTE))}
+                    placeholder="Paste text here..."
+                    className="h-48 resize-none"
+                  />
+                </div>
+                {extractError && (
+                  <p className="text-sm text-red-600 dark:text-red-400" data-testid="extract-error">{extractError}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Import from document tab */}
+        {!reviewItems && activeTab === "import" && !isEdit && (
+          <div className="space-y-3 py-2">
+            <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 flex items-start gap-2">
+              <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+              <p className="text-xs text-blue-800 dark:text-blue-300">
+                Upload a PDF (max 3 pages, 4 MB) or image (JPG/PNG, max 4 MB). Claude will extract requirements from the document.
+              </p>
+            </div>
+
+            {extracting ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3" data-testid="extracting-state-import">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-600" />
+                <p className="text-sm text-muted-foreground">Analysing document… This may take 15–30 seconds.</p>
+              </div>
+            ) : (
+              <>
+                {fileTooLarge && (
+                  <div className="flex items-start gap-2 rounded-md bg-red-50 dark:bg-red-950/20 border border-red-300 dark:border-red-800 px-3 py-2" data-testid="file-too-large-warning">
+                    <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                    <p className="text-xs text-red-800 dark:text-red-300">File exceeds 4 MB limit. Please choose a smaller file.</p>
+                  </div>
+                )}
+
+                {pdfPageCountWarning && selectedFile && (
+                  <div className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700 px-3 py-2" data-testid="pdf-page-warning">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-amber-900 dark:text-amber-300">This PDF has more than 3 pages. Only the first 3 pages will be analysed. Continue anyway?</p>
+                      <div className="flex gap-2 mt-1.5">
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-amber-800 dark:text-amber-300 underline"
+                          onClick={() => { setPdfPageCountWarning(false); }}
+                          data-testid="button-continue-pdf"
+                        >
+                          Continue
+                        </button>
+                        <button
+                          type="button"
+                          className="text-xs font-medium text-muted-foreground underline"
+                          onClick={() => { setPdfPageCountWarning(false); setSelectedFile(null); }}
+                          data-testid="button-cancel-pdf"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div
+                  className={`border-2 border-dashed rounded-lg px-4 py-8 text-center cursor-pointer transition-colors ${dragOver ? "border-blue-400 bg-blue-50 dark:bg-blue-950/20" : "border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500"}`}
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  data-testid="file-dropzone"
+                >
+                  <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                  {selectedFile ? (
+                    <p className="text-sm font-medium text-foreground" data-testid="selected-file-name">{selectedFile.name}</p>
+                  ) : (
+                    <>
+                      <p className="text-sm text-muted-foreground">Drop a file here or click to browse</p>
+                      <p className="text-xs text-muted-foreground mt-1">PDF, JPG, PNG — max 4 MB</p>
+                    </>
+                  )}
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                    className="hidden"
+                    onChange={handleFileInput}
+                    data-testid="input-file-upload"
+                  />
+                </div>
+
+                {extractError && (
+                  <p className="text-sm text-red-600 dark:text-red-400" data-testid="extract-error-import">{extractError}</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} data-testid="button-cancel-req">Cancel</Button>
-          <Button
-            onClick={handleSave}
-            disabled={!reqText.trim() || mutation.isPending}
-            data-testid="button-save-req"
-          >
-            {mutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-            {isEdit ? "Save changes" : "Add requirement"}
-          </Button>
+          {reviewItems ? (
+            <>
+              <Button variant="outline" onClick={() => setReviewItems(null)} data-testid="button-back-review">Back</Button>
+              <Button
+                onClick={handleSaveBulk}
+                disabled={savingBulk || reviewItems.filter((r) => r.status === "accepted").length === 0}
+                data-testid="button-save-accepted"
+              >
+                {savingBulk && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {(() => {
+                  const n = reviewItems.filter((r) => r.status === "accepted").length;
+                  return `Save ${n} accepted requirement${n !== 1 ? "s" : ""}`;
+                })()}
+              </Button>
+            </>
+          ) : activeTab === "paste" && !isEdit ? (
+            <>
+              <Button variant="outline" onClick={onClose} disabled={extracting} data-testid="button-cancel-req">Cancel</Button>
+              <Button
+                onClick={handleAnalyseText}
+                disabled={!pasteText.trim() || extracting || charCount > MAX_PASTE}
+                data-testid="button-analyse-text"
+              >
+                Analyse text
+              </Button>
+            </>
+          ) : activeTab === "import" && !isEdit ? (
+            <>
+              <Button variant="outline" onClick={onClose} disabled={extracting} data-testid="button-cancel-req">Cancel</Button>
+              <Button
+                onClick={handleAnalyseDocument}
+                disabled={!selectedFile || fileTooLarge || extracting || pdfPageCountWarning}
+                data-testid="button-analyse-document"
+              >
+                Analyse document
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose} data-testid="button-cancel-req">Cancel</Button>
+              <Button
+                onClick={handleSave}
+                disabled={!reqText.trim() || mutation.isPending}
+                data-testid="button-save-req"
+              >
+                {mutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                {isEdit ? "Save changes" : "Add requirement"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

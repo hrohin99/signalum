@@ -7906,6 +7906,189 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
     }
   });
 
+  // Extract requirements from text or document using Claude
+  app.post("/api/market-signals/:signalId/extract-requirements", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { signalId } = req.params;
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ message: "No workspace found" });
+
+      const signalCheck = await pool.query(
+        `SELECT id FROM market_signals WHERE id=$1 AND workspace_id=$2`,
+        [signalId, workspaceId]
+      );
+      if (!signalCheck.rows.length) return res.status(404).json({ message: "Signal not found" });
+
+      const schema = z.union([
+        z.object({ text: z.string().max(3000) }),
+        z.object({
+          file: z.string(),
+          mimeType: z.enum(["application/pdf", "image/jpeg", "image/png"]),
+        }),
+      ]);
+      const parsed = schema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ message: "Invalid request body" });
+
+      const prodContext = await storage.getProductContext(workspaceId);
+      const productName = prodContext?.productName || "our product";
+
+      const dimsResult = await db.execute(sql`
+        SELECT id, name, items FROM competitive_dimensions
+        WHERE workspace_id = ${workspaceId}::uuid
+        ORDER BY display_order ASC
+      `);
+      const dimensions = (dimsResult.rows as any[]).map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        items: Array.isArray(d.items) ? d.items : (typeof d.items === "string" ? JSON.parse(d.items) : []),
+      }));
+
+      const dimsSummary = dimensions.map((d: any) => {
+        const itemNames = d.items.map((i: any) => i.name ?? i).filter(Boolean).join(", ");
+        return `- ${d.name}${itemNames ? ` (items: ${itemNames})` : ""}`;
+      }).join("\n");
+
+      const systemPrompt = `You are a product analyst extracting structured requirements from customer content.
+Product being evaluated: ${productName}.
+
+Competitive dimensions available:
+${dimsSummary || "(none defined)"}
+
+Instructions:
+- Read the content and extract individual, discrete product or feature requirements.
+- Each requirement should be a clear, standalone statement of a capability or feature the customer needs.
+- For each requirement, suggest one or more dimension items it maps to (use exact names from the list above). If no match, leave linked_items as an empty array.
+- Return ONLY a JSON array with this structure:
+[
+  {
+    "requirement_text": "string",
+    "source_ref": "optional short reference to where in the text this came from",
+    "linked_items": [
+      { "dimension_name": "exact dimension name", "item_name": "exact item name" }
+    ]
+  }
+]
+- Extract all requirements you can find. Aim for precision and completeness. Return ONLY the JSON array, no other text.`;
+
+      const client = getAnthropicClient();
+      let contentBlocks: any[];
+
+      const MAX_PDF_PAGES = 3;
+
+      if ("text" in parsed.data) {
+        contentBlocks = [{ type: "text", text: parsed.data.text }];
+      } else if (parsed.data.mimeType === "application/pdf") {
+        const pdfBuffer = Buffer.from(parsed.data.file, "base64");
+        let pdfPageCount = 0;
+        try {
+          const pdfDoc = await (pdfjsLib as any).getDocument({ data: new Uint8Array(pdfBuffer) }).promise;
+          pdfPageCount = pdfDoc.numPages;
+        } catch {
+          pdfPageCount = 0;
+        }
+
+        if (pdfPageCount > MAX_PDF_PAGES) {
+          // Extract text from first 3 pages and send as text
+          try {
+            const pdfDoc = await (pdfjsLib as any).getDocument({ data: new Uint8Array(pdfBuffer) }).promise;
+            const textParts: string[] = [];
+            for (let i = 1; i <= MAX_PDF_PAGES; i++) {
+              const page = await pdfDoc.getPage(i);
+              const textContent = await page.getTextContent();
+              const pageText = textContent.items.map((item: any) => item.str).join(" ");
+              textParts.push(`[Page ${i}]\n${pageText}`);
+            }
+            contentBlocks = [{ type: "text", text: textParts.join("\n\n") }];
+          } catch {
+            // Fallback: pass raw PDF and rely on Claude to read what it can
+            contentBlocks = [{
+              type: "document",
+              source: {
+                type: "base64",
+                media_type: "application/pdf",
+                data: parsed.data.file,
+              },
+            }];
+          }
+        } else {
+          contentBlocks = [{
+            type: "document",
+            source: {
+              type: "base64",
+              media_type: "application/pdf",
+              data: parsed.data.file,
+            },
+          }];
+        }
+      } else {
+        contentBlocks = [{
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: parsed.data.mimeType,
+            data: parsed.data.file,
+          },
+        }];
+      }
+
+      const message = await withRetry(() => client.messages.create({
+        model: "claude-opus-4-5",
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: contentBlocks }],
+      }));
+
+      const textContent = message.content.find((b: any) => b.type === "text");
+      if (!textContent || textContent.type !== "text") {
+        return res.status(500).json({ message: "No response from AI" });
+      }
+
+      let extracted: any[];
+      try {
+        const jsonStr = textContent.text.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        extracted = JSON.parse(jsonStr);
+        if (!Array.isArray(extracted)) throw new Error("Not an array");
+      } catch {
+        return res.status(500).json({ message: "Failed to parse AI response" });
+      }
+
+      const dimByName: Record<string, { id: string; name: string }> = {};
+      for (const d of dimensions) {
+        dimByName[d.name.toLowerCase()] = { id: d.id, name: d.name };
+      }
+
+      const requirements = extracted.map((r: any) => {
+        const rawLinked: any[] = Array.isArray(r.linked_items) ? r.linked_items : [];
+        const linked_items = rawLinked
+          .map((li: any) => {
+            const dimName = String(li.dimension_name ?? "").trim();
+            const matched = dimByName[dimName.toLowerCase()];
+            return {
+              dimension_id: matched?.id ?? null,
+              dimension_name: matched?.name ?? (dimName || null),
+              item_name: li.item_name ? String(li.item_name).trim() : null,
+            };
+          })
+          .filter((li: any) => li.dimension_name && li.item_name);
+        return {
+          requirement_text: String(r.requirement_text ?? "").trim(),
+          source_ref: r.source_ref ? String(r.source_ref).trim() : null,
+          linked_items,
+        };
+      }).filter((r: any) => r.requirement_text);
+
+      return res.json({ requirements });
+    } catch (error: any) {
+      console.error("Extract requirements error:", error);
+      return res.status(500).json({ message: sanitizeErrorMessage(error) });
+    }
+  });
+
   // Get requirements for a signal
   app.get("/api/market-signals/:signalId/requirements", requireAuth, async (req: Request, res: Response) => {
     try {
