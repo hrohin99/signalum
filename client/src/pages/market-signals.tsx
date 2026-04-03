@@ -81,6 +81,18 @@ interface HeatmapRow {
   req_count: number;
 }
 
+interface ItemSignalResult {
+  signal_id: string;
+  signal_name: string;
+  source_type: string;
+  source_organisation: string | null;
+  signal_date: string | null;
+  status: string;
+  requirement_id: string;
+  requirement_text: string;
+  source_reference: string | null;
+}
+
 interface Dimension {
   id: string;
   name: string;
@@ -105,14 +117,24 @@ function getStatusColor(status: string): string {
   return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
 }
 
-function getHeatmapColor(count: number, max: number): string {
-  if (max === 0 || count === 0) return "bg-slate-50 text-slate-400 dark:bg-slate-900 dark:text-slate-600";
-  const ratio = count / max;
-  if (ratio >= 0.8) return "bg-red-500 text-white dark:bg-red-600";
-  if (ratio >= 0.6) return "bg-orange-400 text-white dark:bg-orange-500";
-  if (ratio >= 0.4) return "bg-amber-300 text-amber-900 dark:bg-amber-500 dark:text-white";
-  if (ratio >= 0.2) return "bg-yellow-200 text-yellow-900 dark:bg-yellow-600 dark:text-white";
-  return "bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200";
+function getCellColor(count: number): { bg: string; color: string } {
+  if (count === 0) return { bg: "#F1EFE8", color: "#888780" };
+  if (count <= 2) return { bg: "#D3D1C7", color: "#2C2C2A" };
+  if (count <= 4) return { bg: "#CECBF6", color: "#26215C" };
+  if (count <= 6) return { bg: "#AFA9EC", color: "#26215C" };
+  if (count <= 8) return { bg: "#7F77DD", color: "#EEEDFE" };
+  return { bg: "#534AB7", color: "#EEEDFE" };
+}
+
+function getSourceTypeBadgeStyle(sourceType: string): { bg: string; color: string } {
+  const map: Record<string, { bg: string; color: string }> = {
+    rfi: { bg: "#EEEDFE", color: "#3C3489" },
+    sales_conversation: { bg: "#E1F5EE", color: "#085041" },
+    customer_call: { bg: "#FAEEDA", color: "#633806" },
+    partner_ask: { bg: "#FBEAF0", color: "#72243E" },
+    other: { bg: "#F1EFE8", color: "#444441" },
+  };
+  return map[sourceType] ?? map.other;
 }
 
 function formatDate(dateStr: string | null): string {
@@ -1307,7 +1329,22 @@ function SignalRow({
 }
 
 // ===== Heatmap =====
-function HeatmapSection({ statusFilter }: { statusFilter: string }) {
+const LEGEND_STEPS = [
+  { label: "0", ...getCellColor(0) },
+  { label: "1–2", ...getCellColor(1) },
+  { label: "3–4", ...getCellColor(3) },
+  { label: "5–6", ...getCellColor(5) },
+  { label: "7–8", ...getCellColor(7) },
+  { label: "9+", ...getCellColor(9) },
+];
+
+function HeatmapSection({
+  statusFilter,
+  onCellClick,
+}: {
+  statusFilter: string;
+  onCellClick: (dimensionName: string, itemName: string) => void;
+}) {
   const url = statusFilter && statusFilter !== "all"
     ? `/api/market-signals/heatmap?status=${statusFilter}`
     : "/api/market-signals/heatmap";
@@ -1324,14 +1361,6 @@ function HeatmapSection({ statusFilter }: { statusFilter: string }) {
   });
 
   const rows = heatmapData?.heatmap ?? [];
-
-  const dimensionGroups = rows.reduce<Record<string, HeatmapRow[]>>((acc, row) => {
-    if (!acc[row.dimension_name]) acc[row.dimension_name] = [];
-    acc[row.dimension_name].push(row);
-    return acc;
-  }, {});
-
-  const maxCount = rows.reduce((m, r) => Math.max(m, r.signal_count), 0);
 
   if (isLoading) {
     return (
@@ -1350,34 +1379,220 @@ function HeatmapSection({ statusFilter }: { statusFilter: string }) {
     );
   }
 
+  const uniqueDimensions = Array.from(new Set(rows.map((r) => r.dimension_name)));
+
+  const cellMap = new Map<string, Map<string, number>>();
+  const itemTotals = new Map<string, number>();
+  for (const row of rows) {
+    if (!cellMap.has(row.item_name)) cellMap.set(row.item_name, new Map());
+    cellMap.get(row.item_name)!.set(row.dimension_name, row.signal_count);
+    itemTotals.set(row.item_name, (itemTotals.get(row.item_name) ?? 0) + row.signal_count);
+  }
+
+  const sortedItems = Array.from(new Set(rows.map((r) => r.item_name))).sort(
+    (a, b) => (itemTotals.get(b) ?? 0) - (itemTotals.get(a) ?? 0)
+  );
+
+  const scrollable = uniqueDimensions.length > 5;
+
   return (
-    <div className="space-y-4" data-testid="heatmap-content">
-      {Object.entries(dimensionGroups).map(([dimName, dimRows]) => (
-        <div key={dimName}>
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{dimName}</p>
-          <div className="flex flex-wrap gap-2">
-            {dimRows.map((row) => (
-              <div
-                key={`${row.dimension_name}-${row.item_name}`}
-                className={`px-3 py-2 rounded-lg text-xs font-medium transition-colors ${getHeatmapColor(row.signal_count, maxCount)}`}
-                title={`${row.signal_count} signal${row.signal_count !== 1 ? "s" : ""}, ${row.req_count} requirement${row.req_count !== 1 ? "s" : ""}`}
-                data-testid={`heatmap-cell-${dimName}-${row.item_name}`}
+    <div className="space-y-3" data-testid="heatmap-content">
+      <div className={scrollable ? "overflow-x-auto" : ""}>
+        <table style={{ borderCollapse: "collapse", width: scrollable ? undefined : "100%" }}>
+          <thead>
+            <tr>
+              <th
+                style={{ width: 180, minWidth: 180, textAlign: "left", padding: "6px 8px 6px 0", fontSize: 11, fontWeight: 500, color: "#888780", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap" }}
               >
-                <div className="font-semibold">{row.item_name}</div>
-                <div className="opacity-80 mt-0.5">{row.signal_count} signal{row.signal_count !== 1 ? "s" : ""}</div>
-              </div>
+                Item
+              </th>
+              {uniqueDimensions.map((dim) => (
+                <th
+                  key={dim}
+                  title={dim}
+                  style={{ minWidth: 60, padding: "6px 4px", fontSize: 11, fontWeight: 500, color: "#6B7280", textAlign: "center", borderBottom: "1px solid #e5e7eb", whiteSpace: "nowrap" }}
+                >
+                  {dim.length > 12 ? dim.slice(0, 12) + "…" : dim}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedItems.map((item) => (
+              <tr key={item}>
+                <td
+                  title={item}
+                  style={{ padding: "3px 8px 3px 0", fontSize: 12, color: "#374151", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                >
+                  {item}
+                </td>
+                {uniqueDimensions.map((dim) => {
+                  const count = cellMap.get(item)?.get(dim) ?? 0;
+                  const { bg, color } = getCellColor(count);
+                  return (
+                    <td key={dim} style={{ padding: "2px 4px", textAlign: "center" }}>
+                      <div
+                        onClick={() => count > 0 && onCellClick(dim, item)}
+                        title={count > 0 ? `${count} signal${count !== 1 ? "s" : ""}` : undefined}
+                        style={{
+                          background: bg,
+                          color,
+                          height: 28,
+                          minWidth: 60,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: 12,
+                          fontWeight: 500,
+                          borderRadius: 4,
+                          cursor: count > 0 ? "pointer" : "default",
+                        }}
+                        data-testid={`heatmap-cell-${dim}-${item}`}
+                      >
+                        {count}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
             ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-2 pt-1 flex-wrap">
+        <span className="text-xs text-muted-foreground">Lower demand</span>
+        {LEGEND_STEPS.map((step) => (
+          <div
+            key={step.label}
+            style={{ background: step.bg, color: step.color, fontSize: 10, padding: "2px 7px", borderRadius: 3, fontWeight: 500 }}
+          >
+            {step.label}
           </div>
+        ))}
+        <span className="text-xs text-muted-foreground">Higher demand</span>
+      </div>
+    </div>
+  );
+}
+
+// ===== Item Signals Drill-down Panel =====
+function ItemSignalsPanel({
+  dimensionName,
+  itemName,
+  onClose,
+}: {
+  dimensionName: string;
+  itemName: string;
+  onClose: () => void;
+}) {
+  const { data, isLoading } = useQuery<{ results: ItemSignalResult[] }>({
+    queryKey: ["/api/market-signals/item-signals", dimensionName, itemName],
+    queryFn: async () => {
+      const params = new URLSearchParams({ dimension_name: dimensionName, item_name: itemName });
+      const res = await apiRequest("GET", `/api/market-signals/item-signals?${params.toString()}`);
+      return res.json();
+    },
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnMount: "always",
+  });
+
+  const results = data?.results ?? [];
+
+  const signalMap = new Map<string, { signal: ItemSignalResult; requirements: ItemSignalResult[] }>();
+  for (const r of results) {
+    if (!signalMap.has(r.signal_id)) {
+      signalMap.set(r.signal_id, { signal: r, requirements: [] });
+    }
+    signalMap.get(r.signal_id)!.requirements.push(r);
+  }
+  const signalGroups = Array.from(signalMap.values());
+
+  return (
+    <div className="absolute inset-0 z-20">
+      <div
+        className="absolute inset-0 bg-black/20"
+        onClick={onClose}
+        data-testid="backdrop-item-signals"
+      />
+      <div
+        className="absolute top-0 right-0 h-full w-[380px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-xl flex flex-col"
+        data-testid="panel-item-signals"
+      >
+        {/* Panel header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-700 shrink-0">
+          <div className="flex-1 min-w-0 pr-3">
+            <p style={{ fontSize: 15, fontWeight: 500 }} className="text-foreground truncate">{itemName}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{dimensionName}</p>
+            <span
+              style={{ background: "#EDE9FE", color: "#4C1D95", fontSize: 11, padding: "2px 8px", borderRadius: 12, fontWeight: 600, display: "inline-block", marginTop: 6 }}
+            >
+              {isLoading ? "…" : `${signalGroups.length} signal${signalGroups.length !== 1 ? "s" : ""}`}
+            </span>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            data-testid="button-close-item-signals"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      ))}
-      <div className="flex items-center gap-2 pt-2">
-        <span className="text-xs text-muted-foreground">Demand intensity:</span>
-        {(["Low", "Medium", "High", "Very High"] as const).map((label, i) => {
-          const colors = ["bg-blue-100 text-blue-800", "bg-yellow-200 text-yellow-900", "bg-orange-400 text-white", "bg-red-500 text-white"];
-          return (
-            <span key={label} className={`text-xs px-2 py-0.5 rounded ${colors[i]}`}>{label}</span>
-          );
-        })}
+
+        {/* Panel body */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          {isLoading && (
+            <div className="flex items-center justify-center py-12 gap-2 text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span className="text-sm">Loading…</span>
+            </div>
+          )}
+
+          {!isLoading && signalGroups.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-12">
+              No signals reference this item yet.
+            </p>
+          )}
+
+          {!isLoading && signalGroups.map(({ signal, requirements }) => {
+            const badgeStyle = getSourceTypeBadgeStyle(signal.source_type);
+            return (
+              <div
+                key={signal.signal_id}
+                style={{ borderRadius: 8, border: "1px solid #e5e7eb", padding: 12 }}
+                className="bg-white dark:bg-slate-800 dark:border-slate-700"
+                data-testid={`card-signal-${signal.signal_id}`}
+              >
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span style={{ ...badgeStyle, fontSize: 11, padding: "2px 7px", borderRadius: 4, fontWeight: 500 }}>
+                    {getSourceLabel(signal.source_type)}
+                  </span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusColor(signal.status)}`}>
+                    {signal.status}
+                  </span>
+                </div>
+                <p className="font-medium text-sm text-foreground mb-1">{signal.signal_name}</p>
+                {(signal.source_organisation || signal.signal_date) && (
+                  <p className="text-xs text-muted-foreground mb-2">
+                    {[signal.source_organisation, signal.signal_date ? formatDate(signal.signal_date) : null].filter(Boolean).join(" · ")}
+                  </p>
+                )}
+                <div className="space-y-2">
+                  {requirements.map((req) => (
+                    <div key={req.requirement_id} className="border-t border-slate-100 dark:border-slate-700 pt-2">
+                      <p className="text-xs italic text-foreground">"{req.requirement_text}"</p>
+                      {req.source_reference && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{req.source_reference}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -1394,6 +1609,7 @@ export default function MarketSignalsPage() {
   const [heatmapFilter, setHeatmapFilter] = useState("all");
   const [signalTypeFilter, setSignalTypeFilter] = useState("all");
   const [signalStatusFilter, setSignalStatusFilter] = useState("all");
+  const [drillDown, setDrillDown] = useState<{ dimensionName: string; itemName: string } | null>(null);
 
   const { data: signalsData, isLoading: signalsLoading } = useQuery<{ signals: MarketSignal[] }>({
     queryKey: ["/api/market-signals"],
@@ -1469,7 +1685,7 @@ export default function MarketSignalsPage() {
   const totalRequirements = metricsData?.total_requirements ?? 0;
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
+    <div className="relative flex flex-col h-full overflow-auto">
       <div className="max-w-5xl mx-auto w-full px-6 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -1559,7 +1775,10 @@ export default function MarketSignalsPage() {
                   </button>
                 ))}
               </div>
-              <HeatmapSection statusFilter={heatmapFilter} />
+              <HeatmapSection
+                statusFilter={heatmapFilter}
+                onCellClick={(dimensionName, itemName) => setDrillDown({ dimensionName, itemName })}
+              />
             </div>
           )}
         </div>
@@ -1680,6 +1899,14 @@ export default function MarketSignalsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+      )}
+
+      {drillDown && (
+        <ItemSignalsPanel
+          dimensionName={drillDown.dimensionName}
+          itemName={drillDown.itemName}
+          onClose={() => setDrillDown(null)}
+        />
       )}
     </div>
   );

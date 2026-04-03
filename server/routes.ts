@@ -7842,6 +7842,48 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
     }
   });
 
+  // Item-signals drill-down: returns all signals referencing a given dimension item
+  // NOTE: registered before /:id routes to avoid path conflicts
+  app.get("/api/market-signals/item-signals", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req as any).userId;
+      const { dimension_name, item_name } = req.query as { dimension_name?: string; item_name?: string };
+      if (!dimension_name || !item_name) {
+        return res.status(400).json({ error: "dimension_name and item_name are required" });
+      }
+      const ws = await pool.query(
+        `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`,
+        [userId]
+      );
+      const workspaceId = ws.rows[0]?.id;
+      if (!workspaceId) return res.status(404).json({ error: "Workspace not found" });
+
+      const result = await db.execute(sql`
+        SELECT
+          ms.id AS signal_id,
+          ms.name AS signal_name,
+          ms.source_type,
+          ms.source_organisation,
+          ms.signal_date,
+          ms.status,
+          msr.id AS requirement_id,
+          msr.requirement_text,
+          msr.source_reference
+        FROM requirement_dimension_links rdl
+        JOIN market_signal_requirements msr ON msr.id = rdl.requirement_id
+        JOIN market_signals ms ON ms.id = msr.signal_id
+        WHERE rdl.workspace_id = ${workspaceId}
+        AND rdl.dimension_name = ${dimension_name}
+        AND rdl.item_name = ${item_name}
+        ORDER BY ms.created_at DESC
+      `);
+      return res.json({ results: result.rows });
+    } catch (error: any) {
+      console.error("Item signals drill-down error:", error);
+      return res.status(500).json({ error: "Failed to fetch item signals" });
+    }
+  });
+
   // Update a market signal
   app.put("/api/market-signals/:id", requireAuth, async (req: Request, res: Response) => {
     try {

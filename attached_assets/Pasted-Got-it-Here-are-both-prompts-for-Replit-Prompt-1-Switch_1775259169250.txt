@@ -1,0 +1,115 @@
+Got it. Here are both prompts for Replit:
+
+---
+
+**Prompt 1 — Switch heatmap to grid layout**
+
+> **Task: Replace tile-based heatmap with a grid layout in Market Signals**
+>
+> In `client/src/pages/market-signals.tsx`, find the heatmap section and replace the current tile layout with a proper grid:
+>
+> **Grid structure:**
+> - Rows = dimension items (all items across all dimensions, sorted by total signal_count DESC)
+> - Columns = dimensions (one column per dimension)
+> - Each cell = signal count for that item in that dimension
+> - Row label = item name (left column, 180px fixed width, truncate with title tooltip if too long)
+> - Column headers = dimension names abbreviated (truncate at 12 chars with full name in title tooltip)
+> - Cell colours by count:
+>   - 0 = `#F1EFE8` text `#888780`
+>   - 1-2 = `#D3D1C7` text `#2C2C2A`
+>   - 3-4 = `#CECBF6` text `#26215C`
+>   - 5-6 = `#AFA9EC` text `#26215C`
+>   - 7-8 = `#7F77DD` text `#EEEDFE`
+>   - 9+ = `#534AB7` text `#EEEDFE`
+> - Cell height: 28px, min-width per column: 60px
+> - Grid wraps in a horizontally scrollable container if more than 5 dimensions
+> - Legend below: "Lower demand" → colour stops → "Higher demand" using same 6 colours
+> - Each cell is clickable — clicking opens the drill-down side panel (see Prompt 2)
+> - Dimension name column headers in sentence case (not ALL CAPS)
+>
+> **Data:** cells are populated from the existing `/api/market-signals/heatmap` endpoint response. For a given row (item_name) and column (dimension_name), the count is the `signal_count` from the heatmap data where both match. Zero if no match found.
+>
+> **Critical rules:**
+> - No changes to `schema.ts`, `storage.ts`, or any route
+> - No new dependencies
+
+---
+
+**Prompt 2 — Heatmap cell drill-down side panel**
+
+> **Task: Add drill-down side panel when clicking a heatmap cell in Market Signals**
+>
+> In `client/src/pages/market-signals.tsx`, add a side panel that slides in from the right when a heatmap cell is clicked.
+>
+> **Trigger:**
+> When user clicks a heatmap cell with count > 0, open the side panel with the selected `dimension_name` and `item_name` as context. Clicking a cell with count 0 does nothing.
+>
+> **New endpoint in `server/routes.ts`:**
+>
+> ```
+> GET /api/market-signals/item-signals?dimension_name=X&item_name=Y
+> requireAuth
+> ```
+>
+> Returns all signals that have a requirement linked to this dimension item:
+> ```typescript
+> const result = await db.execute(sql`
+>   SELECT
+>     ms.id AS signal_id,
+>     ms.name AS signal_name,
+>     ms.source_type,
+>     ms.source_organisation,
+>     ms.signal_date,
+>     ms.status,
+>     msr.id AS requirement_id,
+>     msr.requirement_text,
+>     msr.source_reference
+>   FROM requirement_dimension_links rdl
+>   JOIN market_signal_requirements msr ON msr.id = rdl.requirement_id
+>   JOIN market_signals ms ON ms.id = msr.signal_id
+>   WHERE rdl.workspace_id = ${workspaceId}
+>   AND rdl.dimension_name = ${req.query.dimension_name}
+>   AND rdl.item_name = ${req.query.item_name}
+>   ORDER BY ms.created_at DESC
+> `);
+> return res.json({ results: result.rows });
+> ```
+>
+> **Side panel UI:**
+>
+> - Fixed width: 380px, slides in from right, page content does not shift (use absolute/overlay positioning)
+> - Backdrop: semi-transparent overlay behind panel, click backdrop to close
+> - Close button (X) top right of panel
+>
+> **Panel header:**
+> - Item name as title (font-size 15px, font-weight 500)
+> - Dimension name below in muted text
+> - Count badge: "N signals" in purple pill
+>
+> **Panel body — one card per signal:**
+> ```
+> [Source type badge] [Status badge]
+> Signal name (font-weight 500)
+> Source org · Date
+>
+> Requirement:
+> "[requirement_text in italics]"
+> Source reference in muted text below
+> ```
+>
+> Each signal card has a subtle border, `border-radius: var(--border-radius-lg)`, padding 12px. Source type badge uses same colour mapping as the signals list.
+>
+> If multiple requirements from the same signal reference this item (edge case), show them stacked within the same signal card.
+>
+> **Loading state:** show a spinner inside the panel while fetching.
+>
+> **Empty state:** "No signals reference this item yet." (shown for 0-count cells if somehow opened — though clicking 0 cells is blocked on the frontend).
+>
+> **Critical rules:**
+> - Never run `drizzle-kit push`
+> - All DB writes use `db.execute(sql\`...\`)`
+> - No changes to `schema.ts` or `storage.ts`
+> - Use `apiRequest()` for all frontend fetches
+> - `staleTime: 0, gcTime: 0, refetchOnMount: 'always'` on the item-signals query
+> - Panel must be closeable by clicking the backdrop OR the X button
+> - Do not use `position: fixed` — use a wrapper div with `position: absolute` scoped to the page container
