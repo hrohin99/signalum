@@ -910,7 +910,7 @@ function RequirementModal({
             <div className="rounded-md bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 px-3 py-2 flex items-start gap-2">
               <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
               <p className="text-xs text-blue-800 dark:text-blue-300">
-                Paste an email, call notes, or transcript. Claude will extract individual requirements and suggest dimension mappings.
+                Paste an email, call notes, or transcript. We will extract individual requirements and suggest dimension mappings.
               </p>
             </div>
             {extracting ? (
