@@ -1,0 +1,52 @@
+Prompt 1 — Fix side panel viewport anchoring
+
+Task: Fix Market Signals drill-down side panel to stay anchored to viewport
+In client/src/pages/market-signals.tsx, find the side panel component. It is currently using position: absolute which causes it to scroll with the page.
+Change it to use position: fixed with these styles:
+typescriptstyle={{
+  position: 'fixed',
+  top: 0,
+  right: 0,
+  width: '380px',
+  height: '100vh',
+  overflowY: 'auto',
+  background: 'var(--color-background-primary)',
+  borderLeft: '0.5px solid var(--color-border-tertiary)',
+  zIndex: 50,
+  padding: '20px'
+}}
+Also fix the backdrop to use position: fixed covering the full viewport:
+typescriptstyle={{
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.2)',
+  zIndex: 49
+}}
+No other changes.
+
+
+Prompt 2 — Fix heatmap count vs drill-down data mismatch
+
+Task: Fix mismatch between heatmap cell count and drill-down panel signal count in Market Signals
+There are two bugs to fix:
+Bug A — Heatmap query in GET /api/market-signals/heatmap in server/routes.ts:
+Check the current query. It likely counts rows from requirement_dimension_links joined to market_signal_requirements and market_signals. Add a console.log to verify what it returns:
+typescriptconsole.log('[HEATMAP] results:', JSON.stringify(result.rows).substring(0, 500));
+Bug B — Drill-down query in GET /api/market-signals/item-signals in server/routes.ts:
+The WHERE rdl.dimension_name = ${req.query.dimension_name} AND rdl.item_name = ${req.query.item_name} clause is likely failing due to case sensitivity or whitespace. Fix it using case-insensitive comparison:
+sqlWHERE rdl.workspace_id = ${workspaceId}
+AND LOWER(TRIM(rdl.dimension_name)) = LOWER(TRIM(${req.query.dimension_name as string}))
+AND LOWER(TRIM(rdl.item_name)) = LOWER(TRIM(${req.query.item_name as string}))
+Apply the same LOWER/TRIM treatment to the heatmap query grouping:
+sqlGROUP BY LOWER(TRIM(rdl.dimension_name)), LOWER(TRIM(rdl.item_name))
+And update the frontend heatmap cell click to pass the item_name and dimension_name through encodeURIComponent() to avoid URL encoding issues:
+typescriptconst params = new URLSearchParams({
+  dimension_name: dimensionName,
+  item_name: itemName
+});
+apiRequest('GET', `/api/market-signals/item-signals?${params.toString()}`)
+After fixing, remove the console.log.
+Critical rules:
+
+Never run drizzle-kit push
+No changes to schema.ts or storage.ts

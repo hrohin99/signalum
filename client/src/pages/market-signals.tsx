@@ -1511,14 +1511,14 @@ function ItemSignalsPanel({
   const signalGroups = Array.from(signalMap.values());
 
   return (
-    <div className="absolute inset-0 z-20">
+    <div>
       <div
-        className="absolute inset-0 bg-black/20"
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.2)", zIndex: 49 }}
         onClick={onClose}
         data-testid="backdrop-item-signals"
       />
       <div
-        className="absolute top-0 right-0 h-full w-[380px] bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-700 shadow-xl flex flex-col"
+        style={{ position: "fixed", top: 0, right: 0, width: "380px", height: "100vh", overflowY: "auto", background: "var(--color-background-primary)", borderLeft: "0.5px solid var(--color-border-tertiary)", zIndex: 50, padding: "20px" }}
         data-testid="panel-item-signals"
       >
         {/* Panel header */}

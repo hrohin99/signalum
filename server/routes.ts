@@ -7818,7 +7818,7 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
           JOIN market_signal_requirements r ON r.id = l.requirement_id
           JOIN market_signals s ON s.id = r.signal_id
           WHERE l.workspace_id = $1 AND s.status = $2
-          GROUP BY l.dimension_name, l.item_name
+          GROUP BY LOWER(TRIM(l.dimension_name)), LOWER(TRIM(l.item_name)), l.dimension_name, l.item_name
           ORDER BY signal_count DESC, req_count DESC
         `;
         params = [workspaceId, statusFilter];
@@ -7828,7 +7828,7 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
           FROM requirement_dimension_links l
           JOIN market_signal_requirements r ON r.id = l.requirement_id
           WHERE l.workspace_id = $1
-          GROUP BY l.dimension_name, l.item_name
+          GROUP BY LOWER(TRIM(l.dimension_name)), LOWER(TRIM(l.item_name)), l.dimension_name, l.item_name
           ORDER BY signal_count DESC, req_count DESC
         `;
         params = [workspaceId];
@@ -7873,8 +7873,8 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
         JOIN market_signal_requirements msr ON msr.id = rdl.requirement_id
         JOIN market_signals ms ON ms.id = msr.signal_id
         WHERE rdl.workspace_id = ${workspaceId}
-        AND rdl.dimension_name = ${dimension_name}
-        AND rdl.item_name = ${item_name}
+        AND LOWER(TRIM(rdl.dimension_name)) = LOWER(TRIM(${dimension_name as string}))
+        AND LOWER(TRIM(rdl.item_name)) = LOWER(TRIM(${item_name as string}))
         ORDER BY ms.created_at DESC
       `);
       return res.json({ results: result.rows });
