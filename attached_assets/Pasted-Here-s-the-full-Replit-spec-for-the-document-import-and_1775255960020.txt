@@ -1,0 +1,221 @@
+Here's the full Replit spec for the document import and paste text features:
+
+
+Task: Add "Paste text" and "Import from document" tabs to the Add Requirement modal in Market Signals
+Do not modify any existing files except server/routes.ts and the new client/src/pages/market-signals.tsx. All extraction logic lives in a new endpoint.
+
+Part 1 — New extraction endpoint in server/routes.ts
+POST /api/market-signals/:signalId/extract-requirements
+requireAuth only
+Accepts either:
+
+{ text: string } — pasted text (max 3,000 chars, enforce server-side)
+{ file: base64string, mimeType: 'application/pdf' | 'image/jpeg' | 'image/png' } — uploaded file
+
+Logic:
+typescriptconst userId = (req as any).userId;
+const wsResult = await pool.query(
+  `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`, [userId]
+);
+const workspaceId = wsResult.rows[0]?.id;
+if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+
+// 1. Fetch workspace/product context
+const prodContext = await storage.getProductContext(workspaceId);
+const productName = prodContext?.productName || 'our product';
+const industryContext = (prodContext as any)?.industry || 'software';
+
+// 2. Fetch all dimensions + items for this workspace
+const dimsResult = await db.execute(sql`
+  SELECT id, name, items FROM competitive_dimensions
+  WHERE workspace_id = ${workspaceId}
+  ORDER BY display_order ASC
+`);
+const dims = dimsResult.rows as any[];
+const dimContext = dims.map((d: any) => {
+  const items = (typeof d.items === 'string' ? JSON.parse(d.items) : d.items) || [];
+  const itemNames = items.map((i: any) => i.name || i).join(', ');
+  return `- ${d.name}: ${itemNames}`;
+}).join('\n');
+
+// 3. Build prompt
+const systemPrompt = `You are a product intelligence analyst helping extract and categorise requirements.
+
+Context:
+- Product: ${productName}
+- Industry: ${industryContext}
+
+Available capability dimensions and their items:
+${dimContext}
+
+Your job:
+1. Read the provided content
+2. Extract ONLY genuine capability or feature requirements (ignore legal boilerplate, vendor instructions, deadlines, pricing questions, and administrative text)
+3. For each requirement, identify which dimension items it relates to
+4. Return results as a JSON array
+
+Return ONLY a JSON array, no markdown, no preamble:
+[
+  {
+    "requirement_text": "The exact requirement as stated in the source",
+    "source_reference": "Where it appeared (section, page, question number) or null",
+    "linked_items": [
+      {
+        "dimension_name": "Exact dimension name from the list above",
+        "item_name": "Exact item name from that dimension"
+      }
+    ]
+  }
+]
+
+Rules:
+- requirement_text must be the verbatim or near-verbatim text from the source
+- Only link to items that exist exactly in the dimensions list above
+- linked_items can be empty array if no clear match
+- Extract 3-15 requirements maximum — prioritise specificity over quantity
+- Never invent dimension names or item names not in the list above`;
+
+// 4. Build message content
+let messageContent: any[];
+
+if (req.body.text) {
+  // Enforce 3000 char limit
+  const text = (req.body.text as string).substring(0, 3000);
+  messageContent = [{ type: 'text', text: `Extract requirements from this text:\n\n${text}` }];
+} else if (req.body.file) {
+  // File upload — PDF or image
+  const { file, mimeType } = req.body;
+  if (mimeType === 'application/pdf') {
+    messageContent = [
+      {
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: file }
+      },
+      { type: 'text', text: 'Extract requirements from this document. Focus on capability and feature requirements only, ignore administrative or legal sections.' }
+    ];
+  } else {
+    messageContent = [
+      {
+        type: 'image',
+        source: { type: 'base64', media_type: mimeType, data: file }
+      },
+      { type: 'text', text: 'Extract requirements from this image. Focus on capability and feature requirements only.' }
+    ];
+  }
+} else {
+  return res.status(400).json({ error: 'Either text or file must be provided' });
+}
+
+// 5. Call Claude
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+let requirements: any[] = [];
+try {
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2000,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: messageContent }]
+  });
+  const raw = (msg.content[0] as any).text || '[]';
+  const clean = raw.replace(/```json|```/g, '').trim();
+  const match = clean.match(/\[[\s\S]*/);
+  requirements = JSON.parse(match ? match[0] : clean);
+} catch (err: any) {
+  console.error('[EXTRACT] Claude extraction failed:', err.message);
+  return res.status(500).json({ error: 'Extraction failed. Please try again.' });
+}
+
+// 6. Enrich with dimension_id by matching dimension_name
+const dimMap: Record<string, string> = {};
+for (const d of dims) {
+  dimMap[d.name] = d.id;
+}
+
+const enriched = requirements.map((req: any) => ({
+  ...req,
+  linked_items: (req.linked_items || []).map((li: any) => ({
+    ...li,
+    dimension_id: dimMap[li.dimension_name] || null
+  })).filter((li: any) => li.dimension_id !== null)
+}));
+
+return res.json({ requirements: enriched });
+
+Part 2 — Frontend changes in market-signals.tsx
+Update the Add Requirement modal to have three tabs:
+Tab order: "Write manually" | "Paste text" | "Import from document"
+
+"Write manually" tab — unchanged from current implementation.
+
+"Paste text" tab:
+
+Textarea with placeholder: "Paste a block of text containing requirements — from an email, document, call notes, or any other source."
+Character counter below textarea: N / 3000 characters — turns amber at 2500, red at 3000
+Hard limit: disable further input at 3,000 characters
+Info note below counter: "AI will extract individual requirements and suggest dimension item mappings. You'll review and accept each one before anything is saved."
+"Analyse text" button — disabled if textarea empty, enabled when text present
+On click: calls POST /api/market-signals/:signalId/extract-requirements with { text }
+Shows loading state (spinner + "Analysing text...") while waiting
+On response: transitions to review screen (State 5)
+
+
+"Import from document" tab:
+Exactly as per mockup States 2, 3, 4:
+
+Info box: "Upload a PDF (max 3 pages) or image (JPG/PNG). For best results, upload only the section containing requirements. Max file size 4MB."
+Drop zone with file browser button
+On file select:
+
+Check file size > 4MB → show error "File too large. Please upload a file under 4MB." block upload
+If PDF: read page count using pdfjsLib or check via metadata. If > 3 pages → show amber warning banner: "This PDF has N pages — only the first 3 pages will be analysed. For better results upload just the requirements section." with "Continue with 3 pages" and "Choose different file" buttons
+If image: proceed directly
+
+
+"Analyse document" button enabled once file selected and warning acknowledged
+Convert file to base64 in browser:
+
+typescriptconst base64 = await new Promise<string>((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = () => resolve((reader.result as string).split(',')[1]);
+  reader.onerror = reject;
+  reader.readAsDataURL(file);
+});
+
+Call POST /api/market-signals/:signalId/extract-requirements with { file: base64, mimeType: file.type }
+Shows loading state: "Analysing document... This may take 15-30 seconds."
+On response: transitions to review screen
+
+
+Review screen (State 5) — shared by both Paste and Import flows:
+
+Header: "Review extracted requirements" + signal name + "N requirements found"
+"Accept all" button top right
+If text was truncated or PDF had more than 3 pages: amber warning bar: "Only part of your document was analysed. If requirements are missing, try uploading a shorter extract."
+Tally bar: "N accepted · N rejected · N pending"
+Each requirement row:
+
+Requirement text in italics
+Source reference below in muted text (if present)
+Linked dimension item pills
+"✓ Accept" (green) and "✕ Reject" (red) buttons
+"Edit links" button — opens the dimension item accordion inline or in a sub-modal, same accordion as manual write tab, pre-populated with current linked items. On save closes accordion and updates the row's pills
+Accepted rows: green background, checkmark icon, "Accepted" label, no buttons
+Rejected rows: red background, 60% opacity, X icon, "Rejected" label, no buttons
+
+
+Footer: "N will be saved" count + "Save accepted requirements" button (disabled if 0 accepted) + Cancel
+On save: for each accepted requirement, call POST /api/market-signals/:signalId/requirements with { requirement_text, source_reference, linked_items } — call sequentially, not in parallel
+On all saves complete: close modal, invalidate ['/api/market-signals'] and ['/api/market-signals/heatmap'] queries, show toast: "N requirements saved"
+
+
+Critical rules:
+
+Never run drizzle-kit push
+All DB writes use db.execute(sql\...`)`
+No changes to schema.ts or storage.ts
+Use apiRequest() for all frontend API calls except the extraction endpoint which sends base64 — use apiRequest('POST', ...) with the base64 payload
+staleTime: 0, gcTime: 0, refetchOnMount: 'always' on all useQuery calls
+Save accepted requirements sequentially with for...of loop, not Promise.all
+The "Save accepted requirements" button must await all saves before closing — do not close modal on click, only on completion
+
+ Sonnet 4.6Claude is AI an
