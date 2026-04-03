@@ -1,0 +1,234 @@
+Here's the full spec:
+
+
+Task: Build Market Signals feature — full stack, three screens
+This is a brand new feature. Do not modify any existing files except server/routes.ts, server/dbSafety.ts, and client/src/components/app-sidebar.tsx. All other files are new.
+
+Part 1 — DB schema in server/dbSafety.ts
+Add these three table creation blocks in the startup safety function, after the existing competitor_dimension_status block:
+typescriptawait db.execute(sql`
+  CREATE TABLE IF NOT EXISTS market_signals (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id uuid NOT NULL,
+    name text NOT NULL,
+    source_type text NOT NULL,
+    source_organisation text,
+    signal_date text,
+    status text NOT NULL DEFAULT 'active',
+    deadline text,
+    notes text,
+    created_at timestamp DEFAULT NOW(),
+    updated_at timestamp DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
+  CREATE INDEX IF NOT EXISTS idx_market_signals_workspace
+  ON market_signals(workspace_id)
+`);
+
+await db.execute(sql`
+  CREATE TABLE IF NOT EXISTS market_signal_requirements (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    signal_id uuid NOT NULL REFERENCES market_signals(id) ON DELETE CASCADE,
+    workspace_id uuid NOT NULL,
+    requirement_text text NOT NULL,
+    source_reference text,
+    created_at timestamp DEFAULT NOW(),
+    updated_at timestamp DEFAULT NOW()
+  )
+`);
+await db.execute(sql`
+  CREATE INDEX IF NOT EXISTS idx_signal_requirements_signal
+  ON market_signal_requirements(signal_id)
+`);
+
+await db.execute(sql`
+  CREATE TABLE IF NOT EXISTS requirement_dimension_links (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    requirement_id uuid NOT NULL REFERENCES market_signal_requirements(id) ON DELETE CASCADE,
+    workspace_id uuid NOT NULL,
+    dimension_id uuid NOT NULL,
+    dimension_name text NOT NULL,
+    item_name text NOT NULL
+  )
+`);
+await db.execute(sql`
+  CREATE INDEX IF NOT EXISTS idx_req_dim_links_requirement
+  ON requirement_dimension_links(requirement_id)
+`);
+await db.execute(sql`
+  CREATE INDEX IF NOT EXISTS idx_req_dim_links_workspace
+  ON requirement_dimension_links(workspace_id)
+`);
+
+Part 2 — API routes in server/routes.ts
+Add all routes using requireAuth. Get workspaceId pattern:
+typescriptconst wsResult = await pool.query(
+  `SELECT id FROM workspaces WHERE user_id = $1 LIMIT 1`, [userId]
+);
+const workspaceId = wsResult.rows[0]?.id;
+if (!workspaceId) return res.status(404).json({ error: 'Workspace not found' });
+Signals CRUD:
+GET /api/market-signals — fetch all signals for workspace, ordered by created_at DESC. For each signal, also return requirement count:
+sqlSELECT ms.*, COUNT(msr.id)::int AS requirement_count
+FROM market_signals ms
+LEFT JOIN market_signal_requirements msr ON msr.signal_id = ms.id
+WHERE ms.workspace_id = ${workspaceId}
+GROUP BY ms.id
+ORDER BY ms.created_at DESC
+POST /api/market-signals — create signal. Body: { name, source_type, source_organisation, signal_date, status, deadline, notes }. Insert into market_signals with workspaceId. Return created row.
+PUT /api/market-signals/:id — update signal fields. Verify workspace_id = workspaceId before updating. Return updated row.
+DELETE /api/market-signals/:id — delete signal (cascade deletes requirements and links). Verify workspace_id first.
+Requirements CRUD:
+GET /api/market-signals/:signalId/requirements — fetch all requirements for a signal, with their linked dimension items:
+sqlSELECT msr.*,
+  COALESCE(
+    json_agg(
+      json_build_object(
+        'id', rdl.id,
+        'dimension_id', rdl.dimension_id,
+        'dimension_name', rdl.dimension_name,
+        'item_name', rdl.item_name
+      )
+    ) FILTER (WHERE rdl.id IS NOT NULL),
+    '[]'
+  ) AS linked_items
+FROM market_signal_requirements msr
+LEFT JOIN requirement_dimension_links rdl ON rdl.requirement_id = msr.id
+WHERE msr.signal_id = ${signalId}
+AND msr.workspace_id = ${workspaceId}
+GROUP BY msr.id
+ORDER BY msr.created_at ASC
+POST /api/market-signals/:signalId/requirements — create requirement + links in a single transaction. Body: { requirement_text, source_reference, linked_items: [{dimension_id, dimension_name, item_name}] }.
+typescript// 1. Insert requirement
+const reqResult = await db.execute(sql`
+  INSERT INTO market_signal_requirements
+    (signal_id, workspace_id, requirement_text, source_reference)
+  VALUES
+    (${signalId}::uuid, ${workspaceId}, ${requirement_text}, ${source_reference || null})
+  RETURNING *
+`);
+const requirementId = (reqResult.rows[0] as any).id;
+
+// 2. Insert links
+for (const item of (linked_items || [])) {
+  await db.execute(sql`
+    INSERT INTO requirement_dimension_links
+      (requirement_id, workspace_id, dimension_id, dimension_name, item_name)
+    VALUES
+      (${requirementId}::uuid, ${workspaceId}, ${item.dimension_id}::uuid,
+       ${item.dimension_name}, ${item.item_name})
+  `);
+}
+
+// 3. Return requirement with links
+const full = await db.execute(sql`
+  SELECT msr.*,
+    COALESCE(
+      json_agg(
+        json_build_object(
+          'id', rdl.id,
+          'dimension_id', rdl.dimension_id,
+          'dimension_name', rdl.dimension_name,
+          'item_name', rdl.item_name
+        )
+      ) FILTER (WHERE rdl.id IS NOT NULL),
+      '[]'
+    ) AS linked_items
+  FROM market_signal_requirements msr
+  LEFT JOIN requirement_dimension_links rdl ON rdl.requirement_id = msr.id
+  WHERE msr.id = ${requirementId}::uuid
+  GROUP BY msr.id
+`);
+return res.json(full.rows[0]);
+PUT /api/market-signals/:signalId/requirements/:id — update requirement text + source_reference + replace all links. Delete existing links for this requirement, re-insert new ones. Return updated requirement with links using same query as above.
+DELETE /api/market-signals/:signalId/requirements/:id — delete requirement (cascade deletes links). Verify workspace_id first.
+Heatmap endpoint:
+GET /api/market-signals/heatmap — returns item-level demand counts:
+sqlSELECT
+  rdl.dimension_id,
+  rdl.dimension_name,
+  rdl.item_name,
+  COUNT(DISTINCT msr.signal_id)::int AS signal_count
+FROM requirement_dimension_links rdl
+JOIN market_signal_requirements msr ON msr.id = rdl.requirement_id
+JOIN market_signals ms ON ms.id = msr.signal_id
+WHERE rdl.workspace_id = ${workspaceId}
+AND (${statusFilter} = 'all' OR ms.status = ${statusFilter})
+GROUP BY rdl.dimension_id, rdl.dimension_name, rdl.item_name
+ORDER BY signal_count DESC
+Accept optional ?status=active|closed|all query param (default: all).
+
+Part 3 — Frontend
+Create client/src/pages/market-signals.tsx as a new page.
+Imports and data fetching:
+
+Use apiRequest for all fetches
+staleTime: 0, gcTime: 0, refetchOnMount: 'always' on all useQuery calls
+Fetch signals: GET /api/market-signals
+Fetch heatmap: GET /api/market-signals/heatmap
+Fetch dimensions (for item picker): GET /api/dimensions (existing endpoint)
+
+Page layout — exactly as per mockup:
+
+Page header: title "Market Signals", subtitle, "+ Add signal" button top right
+Permanent info banner (blue, always visible, not dismissable):
+"Log any external signal — a customer call, a partner ask, an RFI, a sales conversation — and record the specific requirements raised. Link each requirement to your capability dimension items. Over time, the heatmap shows which capabilities appear most across signals, helping you prioritise what to build."
+Four metric cards: Total signals, Requirements logged, Active signals, Dimensions covered
+Collapsible heatmap section with All / Active / Closed toggle. Rows = dimension items sorted by total signal_count DESC. Columns = dimensions. Cell = count, coloured by purple ramp intensity (0 = #F1EFE8, 1-2 = #D3D1C7, 3-4 = #CECBF6, 5-6 = #AFA9EC, 7-8 = #7F77DD, 9+ = #534AB7). Legend below.
+Collapsible signals list with type and status filter dropdowns. Each signal row shows name, source_type badge, status badge, org + date + requirement count, dimension pills summary, expand chevron. Click row to expand inline showing requirements. Each requirement shows italicised text, source reference, linked item pills, Edit and Remove buttons. "+ Add requirement" button at bottom of expanded requirements.
+
+Source type badge colours:
+
+Government RFI / RFP: purple (#EEEDFE / #3C3489)
+Sales request: teal (#E1F5EE / #085041)
+Customer call / meeting: amber (#FAEEDA / #633806)
+Partner requirement: pink (#FBEAF0 / #72243E)
+Industry analyst / report: blue (#E6F1FB / #0C447C)
+Conference / event: coral (#FAECE7 / #712B13)
+Other: grey (#F1EFE8 / #444441)
+
+Add Signal modal fields (exactly as per mockup):
+
+Signal name (required, text input)
+Source type (required, select dropdown — options as above, default empty "Select a source type")
+Source organisation (optional, text)
+Date (optional, text — free format)
+Status (required, select: Active / Closed, default Active)
+Deadline (optional, text, labelled "Deadline (optional)")
+Notes (optional, textarea)
+Info note at bottom: "After saving you can add specific requirements and link them to your competitive dimension items."
+Two buttons: "Save signal" and "Save and add requirements" (saves signal then immediately opens Add Requirement modal)
+
+Add/Edit Requirement modal fields:
+
+Requirement text (required, textarea, help text: "Paste or write the requirement as stated by the source.")
+Source reference (optional, text, help text: "Where in the source this appeared — section, page, slide, call notes...")
+Link to dimension items (optional):
+
+Accordion of all dimensions fetched from GET /api/dimensions
+Each dimension expands to show its items as checkboxes with importance badge (C/H/M/L)
+Selected items highlighted purple, count badge on dimension header
+Selected items summary at bottom showing count and pills
+
+
+Save button calls POST /api/market-signals/:signalId/requirements with { requirement_text, source_reference, linked_items }
+On success: close modal, invalidate requirements query, invalidate heatmap query
+Edit: pre-fills all fields, calls PUT endpoint, same invalidation on success
+Remove: calls DELETE endpoint with confirmation, same invalidation
+
+Register the route in app-sidebar.tsx:
+Add "Market Signals" under the Intelligence section, between Strategic Pulse and Briefings. Use a suitable lucide-react icon (e.g. TrendingUp or BarChart2).
+Also register the route in the main router file (wherever other page routes are defined).
+
+Critical rules:
+
+Never run drizzle-kit push
+All DB writes use db.execute(sql\...`)`
+No changes to schema.ts or storage.ts
+Use apiRequest() for all frontend fetches — never raw fetch()
+staleTime: 0, gcTime: 0, refetchOnMount: 'always' on all useQuery calls
+The save requirement button MUST call the API and await the response before closing the modal — do not close on click, only on successful API response
+Invalidate both ['/api/market-signals'] and ['/api/market-signals/heatmap'] after any mutation
+
+ Sonnet 4.6Claude is AI and can make mist
