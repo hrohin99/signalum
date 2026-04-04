@@ -7863,12 +7863,12 @@ Generate ALL 7 sections as a single JSON object. Keep each section concise: 3 it
           ms.id AS signal_id,
           ms.name AS signal_name,
           ms.source_type,
-          ms.source_organisation,
+          ms.org AS source_organisation,
           ms.signal_date,
           ms.status,
           msr.id AS requirement_id,
           msr.requirement_text,
-          msr.source_reference
+          msr.source_ref AS source_reference
         FROM requirement_dimension_links rdl
         JOIN market_signal_requirements msr ON msr.id = rdl.requirement_id
         JOIN market_signals ms ON ms.id = msr.signal_id
