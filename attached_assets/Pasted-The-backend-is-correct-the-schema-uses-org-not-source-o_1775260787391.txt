@@ -1,0 +1,61 @@
+The backend is correct — the schema uses `org` not `source_organisation`, and the requirements endpoint uses `dimension_links` not `linked_items`. The backend looks solid.
+
+The problem is the **frontend is sending wrong field names**. It's sending `source_organisation` and `linked_items` but the backend expects `org` and `dimension_links`. Also `signal_date` and `deadline` are `date` type columns but the frontend is likely sending free text strings.
+
+Give Replit this fix prompt:
+
+---
+
+> **Task: Fix Market Signals frontend field name mismatches causing saves to fail silently**
+>
+> In `client/src/pages/market-signals.tsx`, find all API calls that POST or PUT to market signals endpoints and fix these field name mismatches:
+>
+> **Fix 1 — Add Signal modal POST to `/api/market-signals`:**
+>
+> The frontend is sending `source_organisation` but the backend expects `org`. Find the signal save handler and rename the field:
+> ```typescript
+> // Wrong
+> { name, source_type, source_organisation, signal_date, status, deadline, notes }
+> // Correct
+> { name, source_type, org: source_organisation, signal_date, status, deadline, notes }
+> ```
+>
+> Also `signal_date` and `deadline` are date columns — send them as `null` if empty string, not as empty string:
+> ```typescript
+> signal_date: signal_date || null,
+> deadline: deadline || null,
+> ```
+>
+> **Fix 2 — Add/Edit Requirement modal POST to `/api/market-signals/:signalId/requirements`:**
+>
+> The frontend is sending `linked_items` and `source_reference` but the backend expects `dimension_links` and `source_ref`. Find the requirement save handler and fix:
+> ```typescript
+> // Wrong
+> { requirement_text, source_reference, linked_items }
+> // Correct
+> {
+>   requirement_text,
+>   source_ref: source_reference,
+>   dimension_links: linked_items.map(item => ({
+>     dimension_id: item.dimension_id,
+>     dimension_name: item.dimension_name,
+>     item_name: item.item_name
+>   }))
+> }
+> ```
+>
+> **Fix 3 — Bulk save from extract/review screen:**
+>
+> When saving accepted requirements from the paste/import review screen, the same field name fixes apply. Find where accepted requirements are saved in a loop and apply the same `source_ref` / `dimension_links` rename.
+>
+> **Fix 4 — Update signal PUT to `/api/market-signals/:id`:**
+>
+> Apply the same `org` rename if the edit signal form exists.
+>
+> **Verification after fix:**
+> After saving a signal, immediately fetch `/api/market-signals` and log the response to console to confirm the signal appears. After saving a requirement, log the response to confirm `dimension_links` are present.
+>
+> **Critical rules:**
+> - No changes to `server/routes.ts`, `schema.ts`, or `storage.ts`
+> - Frontend changes only in `market-signals.tsx`
+> - Remove any console.logs added for verification before marking complete
