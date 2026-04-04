@@ -10,9 +10,13 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarHeader,
   SidebarFooter,
 } from "@/components/ui/sidebar";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import {
   Shield,
@@ -26,15 +30,20 @@ import {
   Brain,
   Lightbulb,
   TrendingUp,
+  ChevronRight,
+  Zap,
 } from "lucide-react";
 
 const navItems = [
   { title: "My Workspace", url: "/", icon: Network },
   { title: "Capture", url: "/capture", icon: PenLine, requiresWrite: true },
   { title: "Live Feed", url: "/inbox", icon: Inbox },
-  { title: "Intelligence", url: "/intelligence", icon: Brain },
-  { title: "Market Signals", url: "/market-signals", icon: TrendingUp },
   { title: "Briefings", url: "/briefings", icon: Newspaper },
+];
+
+const intelligenceSubItems = [
+  { title: "Strategic Pulse", url: "/intelligence", icon: Zap },
+  { title: "Market Signals", url: "/market-signals", icon: TrendingUp },
 ];
 
 const settingsItems = [
@@ -52,6 +61,8 @@ export function AppSidebar() {
   const isAdmin = !role || role === "admin";
 
   const showAdminNav = isAdmin && user?.email === "hrohin99@gmail.com";
+
+  const intelligenceActive = intelligenceSubItems.some((i) => location === i.url);
 
   return (
     <Sidebar>
@@ -82,6 +93,40 @@ export function AppSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
+
+              <SidebarMenuItem>
+                <Collapsible defaultOpen={intelligenceActive} className="group/intelligence w-full">
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton
+                      isActive={intelligenceActive}
+                      data-testid="nav-intelligence"
+                    >
+                      <Brain className="w-4 h-4" />
+                      <span>Intelligence</span>
+                      <ChevronRight className="ml-auto w-4 h-4 transition-transform group-data-[state=open]/intelligence:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      {intelligenceSubItems.map((item) => (
+                        <SidebarMenuSubItem key={item.title}>
+                          <SidebarMenuSubButton
+                            asChild
+                            isActive={location === item.url}
+                            data-testid={`nav-${item.title.toLowerCase().replace(/\s+/g, "-")}`}
+                          >
+                            <Link href={item.url}>
+                              <item.icon className="w-4 h-4" />
+                              <span>{item.title}</span>
+                            </Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </Collapsible>
+              </SidebarMenuItem>
+
               {showAdminNav && (
                 <SidebarMenuItem>
                   <SidebarMenuButton
