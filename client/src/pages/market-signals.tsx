@@ -1518,7 +1518,7 @@ function ItemSignalsPanel({
         data-testid="backdrop-item-signals"
       />
       <div
-        style={{ position: "fixed", top: 0, right: 0, width: "380px", height: "100vh", overflowY: "auto", background: "var(--color-background-primary)", borderLeft: "0.5px solid var(--color-border-tertiary)", zIndex: 50, padding: "20px" }}
+        style={{ position: "fixed", top: 0, right: 0, width: "380px", height: "100vh", overflowY: "auto", backgroundColor: "white", borderLeft: "0.5px solid var(--color-border-tertiary)", zIndex: 50, padding: "20px", boxSizing: "border-box" }}
         data-testid="panel-item-signals"
       >
         {/* Panel header */}
