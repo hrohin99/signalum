@@ -1,1180 +1,1454 @@
-import { Link, useLocation } from "wouter";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "@/lib/auth-context";
-import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Shield, Lock, Eye } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Link } from "wouter";
 
-const SCROLLING_TAGS = [
-  "Competitor", "Regulation", "Trend", "Key Account", "Project",
-  "Event", "Technology", "Person", "Hiring Signal", "Industry News",
+const TABS = [
+  "Competitive scoring",
+  "Strategic Pulse",
+  "Market Signals",
+  "Live workspace",
 ];
 
-const FEATURE_CARDS = [
-  {
-    title: "Your Competitors",
-    text: "A rival updates their pricing and launches a feature. You find out that morning, before your next customer call. Battlecards auto-update. Capability comparisons stay current. You walk in prepared.",
-    highlighted: true,
-  },
-  {
-    title: "Regulations and Deadlines",
-    text: "Compliance dates buried in documents get extracted automatically. You see them in your daily brief before they become a crisis. Hard deadlines shown in red. Never blindsided again.",
-  },
-  {
-    title: "Hiring Signals",
-    text: "Strategic hires reveal where a competitor is investing before any announcement. A sudden cluster of AI engineering roles tells you more than a press release.",
-  },
-  {
-    title: "Pricing Intelligence",
-    text: "Track competitor pricing over time in a structured table. Every change captured, dated, and sourced. Know before your sales team has to ask.",
-  },
-  {
-    title: "Industry Trends",
-    text: "Three major stories broke in your space this week. Signalum pulled them together so you did not have to.",
-  },
-  {
-    title: "Key Accounts",
-    text: "Track what is happening at accounts that matter to you. News, leadership changes, signals that affect your relationship.",
-  },
-  {
-    title: "Meeting Notes and Conversations",
-    text: "Drop in notes from a customer call or colleague conversation. Signalum files the intelligence automatically and connects it to what you already track.",
-  },
-  {
-    title: "Anything You Define",
-    text: "You tell Signalum what matters in plain English. It builds your workspace, tracks it, and briefs you on it every morning. No setup, no configuration, no IT required.",
-    goldBorder: true,
-  },
-];
-
-const FEATURES_COL1 = [
-  { name: "Battlecards", desc: "Ready for your next sales conversation" },
-  { name: "Capability Matrix", desc: "Compare features across every competitor" },
-  { name: "Pricing Intelligence", desc: "Track pricing changes over time" },
-  { name: "Hiring Signals", desc: "Know where they are investing" },
-  { name: "Strategic Direction", desc: "Understand where they are heading" },
-];
-
-const FEATURES_COL2 = [
-  { name: "Regulations and Deadlines", desc: "Never miss a compliance date" },
-  { name: "Industry Trends", desc: "Stay ahead of market shifts" },
-  { name: "Key Accounts", desc: "Track what matters to your customers" },
-  { name: "Daily Brief", desc: "One morning email with the so what" },
-];
-
-const COMING_SOON_FEATURES = ["AI Visibility", "Email Capture", "Search"];
-
-function useInView(threshold = 0.15) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+export default function LandingPage() {
+  const [activeTab, setActiveTab] = useState(0);
+  const [ctaEmail, setCtaEmail] = useState("");
+  const [ctaSubmitted, setCtaSubmitted] = useState(false);
+  const revealRefs = useRef<(HTMLElement | null)[]>([]);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const obs = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setVisible(true); obs.disconnect(); } },
-      { threshold }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            e.target.classList.add("visible");
+            observer.unobserve(e.target);
+          }
+        });
+      },
+      { threshold: 0.08 }
     );
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [threshold]);
+    revealRefs.current.forEach((el) => { if (el) observer.observe(el); });
+    return () => observer.disconnect();
+  }, []);
 
-  return { ref, visible };
-}
+  const addReveal = (el: HTMLElement | null, i: number) => {
+    revealRefs.current[i] = el;
+  };
 
-function CountUp({ end, suffix = "", duration = 1500 }: { end: number; suffix?: string; duration?: number }) {
-  const { ref, visible } = useInView(0.3);
-  const [value, setValue] = useState(0);
-
-  useEffect(() => {
-    if (!visible) return;
-    const startTime = performance.now();
-    const animate = (now: number) => {
-      const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setValue(Math.round(eased * end));
-      if (progress < 1) requestAnimationFrame(animate);
-    };
-    requestAnimationFrame(animate);
-  }, [visible, end, duration]);
-
-  return <span ref={ref}>{value}{suffix}</span>;
-}
-
-function HeroTrackingInput() {
-  const [trackingInput, setTrackingInput] = useState("");
-  const { user } = useAuth();
-  const [, navigate] = useLocation();
-  const { toast } = useToast();
-
-  const handleBuildWorkspace = () => {
-    if (!trackingInput.trim()) return;
-    localStorage.setItem("watchloom_tracking_intent", trackingInput.trim());
-
-    if (user) {
-      toast({
-        title: "We have added your new tracking topic to your workspace.",
-      });
-      navigate("/");
-    } else {
-      navigate("/signup?from=hero");
+  const handleCtaSubmit = () => {
+    if (ctaEmail && ctaEmail.includes("@")) {
+      setCtaSubmitted(true);
+      setCtaEmail("");
     }
   };
 
   return (
-    <div className="mx-auto" style={{ maxWidth: 700, marginTop: 32 }}>
-      <div
-        style={{
-          border: "2px solid rgba(255,255,255,0.3)",
-          borderRadius: 12,
-          padding: 16,
-          backgroundColor: "rgba(255,255,255,0.1)",
-          backdropFilter: "blur(8px)",
-        }}
-        data-testid="hero-tracking-input"
-      >
-        <input
-          type="text"
-          value={trackingInput}
-          onChange={(e) => setTrackingInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") handleBuildWorkspace(); }}
-          placeholder="What do you want to track? e.g. competitors, industry news, regulations..."
-          className="w-full outline-none"
-          style={{
-            border: "none",
-            padding: "4px 0",
-            color: "#ffffff",
-            backgroundColor: "transparent",
-            fontSize: 15,
-          }}
-          data-testid="input-hero-tracking"
-        />
-        <button
-          onClick={handleBuildWorkspace}
-          disabled={!trackingInput.trim()}
-          className="w-full flex items-center justify-center gap-2 mt-3 rounded-lg font-semibold transition-opacity hover:opacity-90 disabled:opacity-50"
-          style={{
-            backgroundColor: "#ffffff",
-            color: "#1e3a5f",
-            padding: "12px 0",
-            fontSize: 16,
-          }}
-          data-testid="button-build-workspace"
-        >
-          <Sparkles className="w-4 h-4" />
-          Build my workspace
-        </button>
-      </div>
-      <p className="text-sm mt-3 text-center" style={{ color: "rgba(255,255,255,0.6)" }} data-testid="text-hero-trust">
-        Free for 14 days. No credit card required.
-      </p>
-    </div>
-  );
-}
-
-function FeaturesDropdown({ show }: { show: boolean }) {
-  return (
-    <div
-      style={{
-        position: "absolute",
-        top: "100%",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: 860,
-        backgroundColor: "#ffffff",
-        borderRadius: 12,
-        boxShadow: "0 20px 60px rgba(0,0,0,0.15), 0 4px 12px rgba(0,0,0,0.08)",
-        border: "1px solid #e2e8f0",
-        opacity: show ? 1 : 0,
-        pointerEvents: show ? "auto" : "none",
-        transition: "opacity 0.2s ease",
-        zIndex: 1001,
-        overflow: "hidden",
-      }}
-      data-testid="dropdown-features"
-    >
-      <div className="flex">
-        <div
-          style={{
-            width: 300,
-            backgroundColor: "#1e3a5f",
-            padding: 24,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-          }}
-        >
-          <div style={{ borderRadius: 8, padding: 20, backgroundColor: "rgba(255,255,255,0.08)" }}>
-            <div className="flex items-center gap-2 mb-3">
-              <svg width="16" height="16" viewBox="0 0 32 32" fill="none">
-                <rect width="32" height="32" rx="6" fill="rgba(255,255,255,0.15)" />
-                <path d="M8 10l4 12 4-8 4 8 4-12" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              </svg>
-              <span style={{ color: "#ffffff", fontSize: 12, fontWeight: 600 }}>Signalum Workspace</span>
-            </div>
-            <div className="flex gap-2 mb-2">
-              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.15)" }} />
-              <div style={{ flex: 2, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.1)" }} />
-            </div>
-            <div className="flex gap-2 mb-2">
-              <div style={{ flex: 2, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.12)" }} />
-              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.08)" }} />
-            </div>
-            <div className="flex gap-2 mb-3">
-              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.1)" }} />
-              <div style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.15)" }} />
-            </div>
-            <div className="flex gap-1.5">
-              {["Competitors", "Trends", "Dates"].map((l) => (
-                <span key={l} style={{ fontSize: 8, color: "rgba(255,255,255,0.7)", backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 4, padding: "2px 6px" }}>{l}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 p-6">
-          <div className="grid grid-cols-2 gap-8">
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>For Competitors</p>
-              {FEATURES_COL1.map((f) => (
-                <div key={f.name} className="mb-3" data-testid={`dropdown-feature-${f.name.toLowerCase().replace(/\s+/g, "-")}`}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: "#1e3a5f" }}>{f.name}</p>
-                  <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{f.desc}</p>
-                </div>
-              ))}
-            </div>
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>For Everything Else</p>
-              {FEATURES_COL2.map((f) => (
-                <div key={f.name} className="mb-3" data-testid={`dropdown-feature-${f.name.toLowerCase().replace(/\s+/g, "-")}`}>
-                  <p style={{ fontSize: 14, fontWeight: 600, color: "#1e3a5f" }}>{f.name}</p>
-                  <p style={{ fontSize: 12, color: "#64748b", lineHeight: 1.4 }}>{f.desc}</p>
-                </div>
-              ))}
-              <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12, marginTop: 8 }}>
-                <p style={{ fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>COMING SOON</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {COMING_SOON_FEATURES.map((f) => (
-                    <span key={f} style={{ fontSize: 11, color: "#64748b", backgroundColor: "#f1f5f9", borderRadius: 4, padding: "2px 8px" }}>
-                      {f}
-                      <span style={{ fontSize: 9, color: "#f59e0b", marginLeft: 4, fontWeight: 600 }}>Soon</span>
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function LandingPage() {
-  const [waitlistEmail, setWaitlistEmail] = useState("");
-  const [waitlistSubmitted, setWaitlistSubmitted] = useState(false);
-  const [navScrolled, setNavScrolled] = useState(false);
-  const [featuresOpen, setFeaturesOpen] = useState(false);
-  const featuresTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    const onScroll = () => setNavScrolled(window.scrollY > 60);
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  const openFeatures = useCallback(() => {
-    if (featuresTimeoutRef.current) clearTimeout(featuresTimeoutRef.current);
-    setFeaturesOpen(true);
-  }, []);
-
-  const closeFeatures = useCallback(() => {
-    featuresTimeoutRef.current = setTimeout(() => setFeaturesOpen(false), 150);
-  }, []);
-
-  const s1 = useInView();
-  const s2 = useInView();
-  const s3 = useInView();
-  const s4 = useInView();
-  const s5 = useInView();
-  const s6 = useInView();
-  const s7 = useInView();
-  const s8 = useInView();
-  const s9 = useInView();
-  const s10 = useInView();
-
-  return (
-    <div className="min-h-screen" style={{ fontFamily: "'DM Sans', sans-serif", scrollBehavior: "smooth" }}>
+    <div>
       <style>{`
-        @keyframes scrollTags {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(-50%); }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+          --navy: #0f1f3d;
+          --navy-mid: #1a3260;
+          --navy-light: #243d70;
+          --accent: #4f7fff;
+          --accent-glow: rgba(79,127,255,0.2);
+          --gold: #f0b429;
+          --white: #ffffff;
+          --off-white: #f5f6f8;
+          --text-muted: #8a9bbf;
+          --text-body: #c8d4e8;
+          --card-bg: rgba(255,255,255,0.04);
+          --card-border: rgba(255,255,255,0.08);
+          --serif: 'Plus Jakarta Sans', sans-serif;
+          --sans: 'Plus Jakarta Sans', sans-serif;
         }
+
         html { scroll-behavior: smooth; }
 
-        .fade-section {
-          opacity: 0;
-          transform: translateY(30px);
-          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-        }
-        .fade-section.visible {
-          opacity: 1;
-          transform: translateY(0);
-        }
-        .fade-child {
-          opacity: 0;
-          transform: translateY(30px);
-          transition: opacity 0.6s ease-out, transform 0.6s ease-out;
-        }
-        .fade-section.visible .fade-child { opacity: 1; transform: translateY(0); }
-        .fade-section.visible .fade-child:nth-child(1) { transition-delay: 0s; }
-        .fade-section.visible .fade-child:nth-child(2) { transition-delay: 0.1s; }
-        .fade-section.visible .fade-child:nth-child(3) { transition-delay: 0.2s; }
-        .fade-section.visible .fade-child:nth-child(4) { transition-delay: 0.3s; }
-        .fade-section.visible .fade-child:nth-child(5) { transition-delay: 0.4s; }
-        .fade-section.visible .fade-child:nth-child(6) { transition-delay: 0.5s; }
-        .fade-section.visible .fade-child:nth-child(7) { transition-delay: 0.6s; }
-        .fade-section.visible .fade-child:nth-child(8) { transition-delay: 0.7s; }
-        .fade-section.visible .fade-child:nth-child(9) { transition-delay: 0.8s; }
-
-        .feature-card {
-          transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }
-        .feature-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
+        body {
+          font-family: var(--sans);
+          background: var(--navy);
+          color: var(--white);
+          overflow-x: hidden;
+          -webkit-font-smoothing: antialiased;
         }
 
-        .hero-word {
+        .lp-nav {
+          position: fixed;
+          top: 0; left: 0; right: 0;
+          z-index: 100;
+          padding: 20px 48px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: rgba(15,31,61,0.85);
+          backdrop-filter: blur(16px);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .lp-nav-logo {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-family: var(--sans);
+          font-weight: 500;
+          font-size: 18px;
+          letter-spacing: -0.3px;
+          color: var(--white);
+          text-decoration: none;
+        }
+        .lp-nav-logo-icon {
+          width: 34px; height: 34px;
+          background: var(--accent);
+          border-radius: 8px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .lp-nav-logo-icon svg { width: 18px; height: 18px; }
+        .lp-nav-links {
+          display: flex;
+          align-items: center;
+          gap: 36px;
+          list-style: none;
+        }
+        .lp-nav-links a {
+          color: var(--text-muted);
+          text-decoration: none;
+          font-size: 14px;
+          font-weight: 400;
+          transition: color 0.2s;
+        }
+        .lp-nav-links a:hover { color: var(--white); }
+        .lp-nav-cta {
+          background: var(--white);
+          color: var(--navy) !important;
+          padding: 9px 20px;
+          border-radius: 8px;
+          font-weight: 500 !important;
+          font-size: 14px !important;
+          transition: opacity 0.2s !important;
+        }
+        .lp-nav-cta:hover { opacity: 0.9 !important; }
+
+        .lp-hero {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 120px 48px 80px;
+          position: relative;
+          overflow: hidden;
+          text-align: center;
+        }
+        .lp-hero-bg {
+          position: absolute;
+          inset: 0;
+          pointer-events: none;
+        }
+        .lp-hero-bg::before {
+          content: '';
+          position: absolute;
+          top: -20%;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 900px;
+          height: 700px;
+          background: radial-gradient(ellipse at center, rgba(79,127,255,0.15) 0%, transparent 70%);
+        }
+        .lp-hero-bg::after {
+          content: '';
+          position: absolute;
+          bottom: 0; left: 0; right: 0;
+          height: 300px;
+          background: linear-gradient(to bottom, transparent, var(--navy));
+        }
+        .lp-hero-grid {
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(79,127,255,0.06) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(79,127,255,0.06) 1px, transparent 1px);
+          background-size: 60px 60px;
+          mask-image: radial-gradient(ellipse at center, black 30%, transparent 75%);
+        }
+        .lp-hero-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(79,127,255,0.12);
+          border: 1px solid rgba(79,127,255,0.3);
+          border-radius: 100px;
+          padding: 6px 16px;
+          font-size: 13px;
+          color: #7fa8ff;
+          margin-bottom: 32px;
+          animation: lp-fadeUp 0.6s ease forwards;
           opacity: 0;
+          transform: translateY(16px);
+          position: relative;
+          z-index: 1;
+        }
+        .lp-hero-badge-dot {
+          width: 6px; height: 6px;
+          background: #4f7fff;
+          border-radius: 50%;
+          animation: lp-pulse 2s ease infinite;
+        }
+        @keyframes lp-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.8); }
+        }
+        .lp-hero h1 {
+          font-family: var(--sans);
+          font-size: clamp(44px, 6.5vw, 80px);
+          font-weight: 700;
+          line-height: 1.06;
+          letter-spacing: -2px;
+          max-width: 820px;
+          margin: 0 auto 24px;
+          animation: lp-fadeUp 0.7s 0.1s ease forwards;
+          opacity: 0;
+          transform: translateY(20px);
+          position: relative;
+          z-index: 1;
+        }
+        .lp-hero h1 em {
+          font-style: normal;
+          color: #7fa8ff;
+          font-weight: 600;
+        }
+        .lp-hero-sub {
+          font-size: 18px;
+          line-height: 1.65;
+          color: var(--text-body);
+          max-width: 520px;
+          margin: 0 auto 48px;
+          font-weight: 300;
+          animation: lp-fadeUp 0.7s 0.2s ease forwards;
+          opacity: 0;
+          transform: translateY(20px);
+          position: relative;
+          z-index: 1;
+        }
+        .lp-hero-actions {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          justify-content: center;
+          margin-bottom: 64px;
+          animation: lp-fadeUp 0.7s 0.3s ease forwards;
+          opacity: 0;
+          transform: translateY(20px);
+          position: relative;
+          z-index: 1;
+        }
+        .lp-btn-primary {
+          background: var(--white);
+          color: var(--navy);
+          padding: 14px 28px;
+          border-radius: 10px;
+          font-size: 15px;
+          font-weight: 500;
+          text-decoration: none;
+          transition: transform 0.15s, box-shadow 0.15s;
+          box-shadow: 0 0 0 0 rgba(255,255,255,0);
           display: inline-block;
-          animation: heroWordIn 0.4s ease-out forwards;
         }
-        @keyframes heroWordIn {
-          from { opacity: 0; transform: translateY(12px); }
+        .lp-btn-primary:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 30px rgba(255,255,255,0.15);
+        }
+        .lp-btn-secondary {
+          color: var(--text-body);
+          font-size: 15px;
+          text-decoration: none;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          transition: color 0.2s;
+        }
+        .lp-btn-secondary:hover { color: var(--white); }
+        .lp-btn-secondary svg { transition: transform 0.2s; }
+        .lp-btn-secondary:hover svg { transform: translateX(3px); }
+
+        .lp-ticker-wrap {
+          width: 100%;
+          overflow: hidden;
+          animation: lp-fadeUp 0.7s 0.4s ease forwards;
+          opacity: 0;
+          position: relative;
+          z-index: 1;
+        }
+        .lp-ticker-label {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          color: var(--text-muted);
+          margin-bottom: 14px;
+          text-align: center;
+        }
+        .lp-ticker-track {
+          display: flex;
+          gap: 12px;
+          animation: lp-ticker 25s linear infinite;
+          width: max-content;
+        }
+        .lp-ticker-track:hover { animation-play-state: paused; }
+        .lp-ticker-item {
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-radius: 8px;
+          padding: 8px 16px;
+          font-size: 13px;
+          color: var(--text-body);
+          white-space: nowrap;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .lp-ticker-dot {
+          width: 5px; height: 5px;
+          border-radius: 50%;
+        }
+        .lp-ticker-dot-green { background: #34d399; }
+        .lp-ticker-dot-amber { background: #f59e0b; }
+        .lp-ticker-dot-red { background: #f87171; }
+        @keyframes lp-ticker {
+          from { transform: translateX(0); }
+          to { transform: translateX(-50%); }
+        }
+        @keyframes lp-fadeUp {
           to { opacity: 1; transform: translateY(0); }
         }
 
-        .tag-strip:hover .tag-scroll {
-          animation-play-state: paused;
+        .lp-stats-bar {
+          background: rgba(255,255,255,0.03);
+          border-top: 1px solid rgba(255,255,255,0.06);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          padding: 28px 48px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0;
+        }
+        .lp-stat-item {
+          flex: 1;
+          text-align: center;
+          padding: 0 32px;
+          border-right: 1px solid rgba(255,255,255,0.06);
+          max-width: 220px;
+        }
+        .lp-stat-item:last-child { border-right: none; }
+        .lp-stat-value {
+          font-family: var(--sans);
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: -1px;
+          color: var(--white);
+          line-height: 1;
+          margin-bottom: 6px;
+        }
+        .lp-stat-label {
+          font-size: 13px;
+          color: var(--text-muted);
+          font-weight: 300;
+        }
+
+        .lp-section { padding: 120px 48px; max-width: 1200px; margin: 0 auto; }
+        .lp-section-label {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.14em;
+          color: var(--accent);
+          margin-bottom: 20px;
+          font-weight: 500;
+        }
+        .lp-problem-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 80px;
+          align-items: center;
+        }
+        .lp-problem-headline {
+          font-family: var(--sans);
+          font-size: clamp(32px, 3.5vw, 48px);
+          line-height: 1.1;
+          font-weight: 700;
+          letter-spacing: -1px;
+          margin-bottom: 24px;
+        }
+        .lp-problem-body {
+          font-size: 17px;
+          line-height: 1.75;
+          color: var(--text-body);
+          font-weight: 300;
+          margin-bottom: 20px;
+        }
+        .lp-vs-card {
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 16px;
+          overflow: hidden;
+        }
+        .lp-vs-header {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+        .lp-vs-col {
+          padding: 20px 24px;
+        }
+        .lp-vs-col:first-child {
+          border-right: 1px solid var(--card-border);
+          border-bottom: 1px solid var(--card-border);
+        }
+        .lp-vs-col:last-child { border-bottom: 1px solid var(--card-border); }
+        .lp-vs-col-label {
+          font-size: 12px;
+          font-weight: 500;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+        }
+        .lp-vs-col-label-bad { color: #f87171; }
+        .lp-vs-col-label-good { color: #34d399; }
+        .lp-vs-row {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+        }
+        .lp-vs-cell {
+          padding: 14px 24px;
+          font-size: 14px;
+          border-right: 1px solid var(--card-border);
+          border-bottom: 1px solid var(--card-border);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          color: var(--text-body);
+          line-height: 1.4;
+        }
+        .lp-vs-cell:last-child { border-right: none; }
+        .lp-vs-row:last-child .lp-vs-cell { border-bottom: none; }
+        .lp-vs-cell-good { color: var(--white); }
+
+        .lp-showcase-section {
+          padding: 80px 0;
+          overflow: hidden;
+        }
+        .lp-showcase-inner {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 0 48px;
+        }
+        .lp-showcase-header {
+          text-align: center;
+          margin-bottom: 64px;
+        }
+        .lp-showcase-headline {
+          font-family: var(--sans);
+          font-size: clamp(32px, 3.5vw, 48px);
+          line-height: 1.1;
+          font-weight: 700;
+          letter-spacing: -1px;
+          margin-bottom: 16px;
+        }
+        .lp-showcase-sub {
+          font-size: 17px;
+          color: var(--text-body);
+          font-weight: 300;
+          max-width: 480px;
+          margin: 0 auto;
+          line-height: 1.65;
+        }
+        .lp-feature-tabs {
+          display: flex;
+          gap: 0;
+          border-bottom: 1px solid rgba(255,255,255,0.08);
+          margin-bottom: 48px;
+          overflow-x: auto;
+        }
+        .lp-feature-tab {
+          padding: 14px 24px;
+          font-size: 14px;
+          color: var(--text-muted);
+          cursor: pointer;
+          border-bottom: 2px solid transparent;
+          white-space: nowrap;
+          transition: color 0.2s;
+          font-weight: 400;
+          background: none;
+          border-top: none;
+          border-left: none;
+          border-right: none;
+          font-family: var(--sans);
+        }
+        .lp-feature-tab.lp-tab-active {
+          color: var(--white);
+          border-bottom-color: var(--accent);
+        }
+        .lp-feature-tab:hover { color: var(--text-body); }
+        .lp-feature-grid {
+          display: grid;
+          grid-template-columns: 380px 1fr;
+          gap: 56px;
+          align-items: center;
+        }
+        .lp-feature-tag {
+          display: inline-block;
+          background: rgba(79,127,255,0.12);
+          border: 1px solid rgba(79,127,255,0.25);
+          border-radius: 100px;
+          padding: 4px 12px;
+          font-size: 12px;
+          color: #7fa8ff;
+          margin-bottom: 20px;
+          font-weight: 500;
+        }
+        .lp-feature-title {
+          font-family: var(--sans);
+          font-size: 32px;
+          font-weight: 700;
+          letter-spacing: -0.8px;
+          line-height: 1.15;
+          margin-bottom: 16px;
+        }
+        .lp-feature-desc {
+          font-size: 16px;
+          line-height: 1.75;
+          color: var(--text-body);
+          font-weight: 300;
+          margin-bottom: 28px;
+        }
+        .lp-feature-points {
+          list-style: none;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .lp-feature-points li {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          font-size: 14px;
+          color: var(--text-body);
+          line-height: 1.5;
+        }
+        .lp-feature-points li::before {
+          content: '';
+          width: 6px;
+          height: 6px;
+          background: var(--accent);
+          border-radius: 50%;
+          margin-top: 6px;
+          flex-shrink: 0;
+        }
+        .lp-screen-mockup {
+          position: relative;
+          border-radius: 16px;
+          overflow: hidden;
+          border: 1px solid rgba(255,255,255,0.1);
+          box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+        }
+        .lp-screen-mockup-bar {
+          background: #1a2744;
+          padding: 10px 16px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .lp-screen-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .lp-screen-dot-red { background: #ff5f57; }
+        .lp-screen-dot-amber { background: #febc2e; }
+        .lp-screen-dot-green { background: #28c840; }
+        .lp-screen-url {
+          flex: 1;
+          background: rgba(255,255,255,0.06);
+          border-radius: 5px;
+          padding: 4px 10px;
+          font-size: 11px;
+          color: var(--text-muted);
+          margin: 0 8px;
+          text-align: center;
+        }
+
+        .lp-icp-section {
+          padding: 120px 48px;
+          background: rgba(255,255,255,0.02);
+          border-top: 1px solid rgba(255,255,255,0.05);
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .lp-icp-inner { max-width: 1200px; margin: 0 auto; }
+        .lp-icp-header { text-align: center; margin-bottom: 64px; }
+        .lp-icp-headline {
+          font-family: var(--sans);
+          font-size: clamp(32px, 3.5vw, 48px);
+          font-weight: 700;
+          letter-spacing: -1px;
+          margin-bottom: 16px;
+          line-height: 1.1;
+        }
+        .lp-icp-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 24px;
+        }
+        .lp-icp-card {
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 20px;
+          padding: 40px;
+          transition: border-color 0.2s, transform 0.2s;
+          cursor: default;
+        }
+        .lp-icp-card:hover {
+          border-color: rgba(79,127,255,0.3);
+          transform: translateY(-2px);
+        }
+        .lp-icp-role {
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          color: var(--accent);
+          font-weight: 500;
+          margin-bottom: 16px;
+        }
+        .lp-icp-title {
+          font-family: var(--sans);
+          font-size: 24px;
+          font-weight: 600;
+          letter-spacing: -0.5px;
+          margin-bottom: 16px;
+          line-height: 1.25;
+        }
+        .lp-icp-pain {
+          font-size: 15px;
+          color: var(--text-body);
+          line-height: 1.7;
+          font-weight: 300;
+          margin-bottom: 28px;
+          padding-bottom: 28px;
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .lp-icp-gains { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+        .lp-icp-gains li {
+          font-size: 14px;
+          color: var(--text-body);
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          line-height: 1.5;
+        }
+        .lp-icp-check { color: #34d399; font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+
+        .lp-how-section { padding: 120px 48px; max-width: 1200px; margin: 0 auto; }
+        .lp-how-header { text-align: center; margin-bottom: 80px; }
+        .lp-how-headline {
+          font-family: var(--sans);
+          font-size: clamp(32px, 3.5vw, 48px);
+          font-weight: 700;
+          letter-spacing: -1px;
+          margin-bottom: 16px;
+        }
+        .lp-how-steps {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 2px;
+        }
+        .lp-how-step {
+          padding: 40px;
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 16px;
+        }
+        .lp-how-step-num {
+          font-family: var(--sans);
+          font-size: 56px;
+          color: rgba(255,255,255,0.05);
+          font-weight: 800;
+          line-height: 1;
+          margin-bottom: 20px;
+          letter-spacing: -2px;
+        }
+        .lp-how-step-icon {
+          width: 44px; height: 44px;
+          background: rgba(79,127,255,0.1);
+          border: 1px solid rgba(79,127,255,0.2);
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 20px;
+        }
+        .lp-how-step-icon svg { width: 20px; height: 20px; color: var(--accent); }
+        .lp-how-step h3 { font-size: 18px; font-weight: 500; margin-bottom: 10px; line-height: 1.3; }
+        .lp-how-step p { font-size: 14px; color: var(--text-body); line-height: 1.7; font-weight: 300; }
+
+        .lp-trust-section {
+          padding: 80px 48px;
+          background: rgba(255,255,255,0.02);
+          border-top: 1px solid rgba(255,255,255,0.05);
+        }
+        .lp-trust-inner {
+          max-width: 900px;
+          margin: 0 auto;
+          display: grid;
+          grid-template-columns: repeat(3,1fr);
+          gap: 48px;
+          text-align: center;
+        }
+        .lp-trust-item-icon {
+          width: 48px; height: 48px;
+          background: rgba(79,127,255,0.08);
+          border: 1px solid rgba(79,127,255,0.15);
+          border-radius: 12px;
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 16px;
+        }
+        .lp-trust-item h4 { font-size: 15px; font-weight: 500; margin-bottom: 8px; }
+        .lp-trust-item p { font-size: 13px; color: var(--text-muted); line-height: 1.65; font-weight: 300; }
+
+        .lp-quotes-section { padding: 100px 48px; max-width: 1200px; margin: 0 auto; }
+        .lp-quotes-header {
+          text-align: center;
+          font-size: 12px;
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          color: var(--text-muted);
+          margin-bottom: 48px;
+        }
+        .lp-quotes-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 20px; }
+        .lp-quote-card {
+          background: var(--card-bg);
+          border: 1px solid var(--card-border);
+          border-radius: 16px;
+          padding: 32px;
+          transition: border-color 0.2s;
+        }
+        .lp-quote-card:hover { border-color: rgba(255,255,255,0.15); }
+        .lp-quote-stars { color: var(--gold); font-size: 14px; margin-bottom: 16px; letter-spacing: 2px; }
+        .lp-quote-text {
+          font-family: var(--sans);
+          font-size: 16px;
+          line-height: 1.65;
+          color: var(--white);
+          margin-bottom: 24px;
+          font-style: italic;
+          font-weight: 400;
+        }
+        .lp-quote-divider { width: 32px; height: 2px; background: rgba(255,255,255,0.15); margin-bottom: 16px; }
+        .lp-quote-role { font-size: 13px; color: var(--text-muted); font-weight: 300; }
+
+        .lp-cta-section {
+          padding: 120px 48px;
+          text-align: center;
+          position: relative;
+          overflow: hidden;
+        }
+        .lp-cta-section::before {
+          content: '';
+          position: absolute;
+          top: 50%; left: 50%;
+          transform: translate(-50%, -50%);
+          width: 800px; height: 500px;
+          background: radial-gradient(ellipse, rgba(79,127,255,0.12) 0%, transparent 70%);
+          pointer-events: none;
+        }
+        .lp-cta-headline {
+          font-family: var(--sans);
+          font-size: clamp(36px, 5vw, 68px);
+          font-weight: 700;
+          letter-spacing: -2px;
+          line-height: 1.08;
+          margin-bottom: 20px;
+          position: relative;
+        }
+        .lp-cta-sub {
+          font-size: 18px;
+          color: var(--text-body);
+          font-weight: 300;
+          margin-bottom: 44px;
+          position: relative;
+        }
+        .lp-cta-form {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          justify-content: center;
+          position: relative;
+          flex-wrap: wrap;
+        }
+        .lp-cta-input {
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 10px;
+          padding: 14px 20px;
+          font-size: 15px;
+          color: var(--white);
+          width: 280px;
+          outline: none;
+          font-family: var(--sans);
+          transition: border-color 0.2s;
+        }
+        .lp-cta-input::placeholder { color: var(--text-muted); }
+        .lp-cta-input:focus { border-color: rgba(79,127,255,0.5); }
+        .lp-cta-btn {
+          background: var(--white);
+          color: var(--navy);
+          border: none;
+          padding: 14px 28px;
+          border-radius: 10px;
+          font-size: 15px;
+          font-weight: 500;
+          cursor: pointer;
+          font-family: var(--sans);
+          transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .lp-cta-btn:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 30px rgba(255,255,255,0.15);
+        }
+        .lp-cta-note {
+          font-size: 13px;
+          color: var(--text-muted);
+          margin-top: 16px;
+          position: relative;
+        }
+        .lp-cta-note-success { color: #34d399 !important; }
+
+        .lp-footer {
+          border-top: 1px solid rgba(255,255,255,0.06);
+          padding: 32px 48px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+        .lp-footer-left { display: flex; align-items: center; gap: 24px; }
+        .lp-footer-brand {
+          font-size: 15px;
+          font-weight: 500;
+          color: var(--white);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          text-decoration: none;
+        }
+        .lp-footer-brand-icon {
+          width: 26px; height: 26px;
+          background: var(--accent);
+          border-radius: 6px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .lp-footer-brand-icon svg { width: 13px; height: 13px; }
+        .lp-footer-copy { font-size: 13px; color: var(--text-muted); }
+        .lp-footer-links { display: flex; gap: 24px; list-style: none; }
+        .lp-footer-links a { font-size: 13px; color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+        .lp-footer-links a:hover { color: var(--white); }
+
+        .lp-reveal {
+          opacity: 0;
+          transform: translateY(24px);
+          transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .lp-reveal.visible {
+          opacity: 1;
+          transform: none;
         }
       `}</style>
 
-      {/* NAVBAR */}
-      <nav
-        className="fixed top-0 left-0 w-full flex items-center justify-between"
-        style={{
-          backgroundColor: navScrolled ? "rgba(255,255,255,0.95)" : "#ffffff",
-          backdropFilter: navScrolled ? "blur(12px)" : "none",
-          borderBottom: navScrolled ? "1px solid rgba(0,0,0,0.08)" : "1px solid #e2e8f0",
-          boxShadow: navScrolled ? "0 1px 8px rgba(0,0,0,0.06)" : "none",
-          padding: "16px 24px",
-          zIndex: 1000,
-          transition: "all 0.3s ease",
-        }}
-        data-testid="navbar-landing"
-      >
-        <div className="flex items-center gap-2">
-          <svg width="28" height="28" viewBox="0 0 32 32" fill="none" data-testid="icon-navbar-logo">
-            <rect width="32" height="32" rx="8" fill="#1e3a5f" />
-            <path d="M8 10l4 12 4-8 4 8 4-12" stroke="#ffffff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          </svg>
-          <span className="text-lg font-bold" style={{ color: "#1e3a5f" }} data-testid="text-navbar-brand">
-            Signalum
-          </span>
-        </div>
-
-        <div className="hidden md:flex items-center gap-8" style={{ position: "relative" }}>
-          <a
-            href="#how-it-works"
-            className="font-medium transition-opacity hover:opacity-70"
-            style={{ color: "#64748b", fontSize: 15 }}
-            data-testid="link-nav-how"
-          >
-            How it works
-          </a>
-          <div
-            style={{ position: "relative" }}
-            onMouseEnter={openFeatures}
-            onMouseLeave={closeFeatures}
-          >
-            <span
-              className="font-medium cursor-pointer transition-opacity hover:opacity-70"
-              style={{ color: "#64748b", fontSize: 15 }}
-              data-testid="link-nav-features"
-            >
-              Features
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{ display: "inline-block", marginLeft: 4, verticalAlign: "middle" }}>
-                <path d="M2 4l3 3 3-3" stroke="#64748b" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <FeaturesDropdown show={featuresOpen} />
+      {/* NAV */}
+      <nav className="lp-nav">
+        <a href="#" className="lp-nav-logo">
+          <div className="lp-nav-logo-icon">
+            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M10 2L12.5 7.5H18L13.5 11L15.5 17L10 13.5L4.5 17L6.5 11L2 7.5H7.5L10 2Z" fill="white"/>
+            </svg>
           </div>
-          <a
-            href="#pricing"
-            className="font-medium transition-opacity hover:opacity-70"
-            style={{ color: "#64748b", fontSize: 15 }}
-            data-testid="link-nav-pricing"
-          >
-            Pricing
-          </a>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link href="/signin">
-            <button
-              className="px-4 py-2 rounded-lg font-medium border transition-opacity hover:opacity-80"
-              style={{ color: "#1e3a5f", borderColor: "#1e3a5f", backgroundColor: "#ffffff", fontSize: 16 }}
-              data-testid="button-nav-signin"
-            >
-              Sign In
-            </button>
-          </Link>
-        </div>
+          Signalum
+        </a>
+        <ul className="lp-nav-links">
+          <li><a href="#how">How it works</a></li>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#who">Who it&apos;s for</a></li>
+          <li><a href="#cta" className="lp-nav-cta">Request access</a></li>
+        </ul>
       </nav>
 
-      {/* SECTION 2 - HERO */}
-      <section
-        className="w-full"
-        style={{
-          backgroundColor: "#1e3a5f",
-          padding: "140px 40px 80px 40px",
-          marginTop: 68,
-          background: "linear-gradient(180deg, #1e3a5f 0%, #162d4a 100%)",
-        }}
-      >
-        <div className="max-w-[900px] mx-auto text-center">
-          <h1
-            style={{ fontSize: 64, fontWeight: 700, lineHeight: 1.15, marginBottom: 24, fontFamily: "'Playfair Display', serif" }}
-            data-testid="text-hero-headline"
-          >
-            {"Intelligence without the overwhelm.".split(" ").map((word, i) => (
-              <span
-                key={i}
-                className="hero-word"
-                style={{ animationDelay: `${i * 0.08}s`, color: "#ffffff", marginRight: "0.3em" }}
-              >
-                {word}
-              </span>
-            ))}
-          </h1>
-
-          <p
-            className="max-w-[680px] mx-auto mb-10 hero-word"
-            style={{
-              color: "rgba(255,255,255,0.65)",
-              fontSize: 19,
-              lineHeight: 1.75,
-              animationDelay: "0.5s",
-            }}
-            data-testid="text-hero-subheadline"
-          >
-            Every day you get hit with competitor moves, regulation changes, customer conversations, and industry noise. Signalum turns all of it into one clear brief that tells you what changed and what to do about it.
-          </p>
-
-          <div className="flex items-center justify-center gap-4 mb-0">
-            <Link href="/signup">
-              <button
-                className="px-8 py-3 rounded-lg font-semibold transition-opacity hover:opacity-90"
-                style={{ backgroundColor: "#ffffff", color: "#1e3a5f", fontSize: 16 }}
-                data-testid="button-get-started"
-              >
-                Get Started Free
-              </button>
-            </Link>
-            <Link href="/signin">
-              <button
-                className="px-8 py-3 rounded-lg font-semibold border-2 transition-opacity hover:opacity-80"
-                style={{ color: "#ffffff", borderColor: "rgba(255,255,255,0.4)", backgroundColor: "transparent", fontSize: 16 }}
-                data-testid="button-sign-in-hero"
-              >
-                Sign In
-              </button>
-            </Link>
-          </div>
-
-          <HeroTrackingInput />
+      {/* HERO */}
+      <section className="lp-hero">
+        <div className="lp-hero-bg">
+          <div className="lp-hero-grid"></div>
         </div>
-      </section>
 
-      {/* SECTION 3 - STATS BAR */}
-      <section className="w-full" style={{ backgroundColor: "#ffffff", padding: "0" }}>
-        <div
-          ref={s1.ref}
-          className={`fade-section ${s1.visible ? "visible" : ""}`}
-          style={{ maxWidth: 860, margin: "0 auto", padding: "40px 0" }}
-        >
-          <div
-            className="max-w-[860px] mx-auto rounded-lg"
-            style={{ backgroundColor: "#f8fafc", padding: "32px 0" }}
-            data-testid="stats-bar"
-          >
-            <div className="hidden md:flex items-stretch justify-center" style={{ gap: 0 }}>
-              <div className="flex-1 flex items-center justify-center text-center px-4 fade-child">
-                <div>
-                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-setup">
-                    <CountUp end={3} suffix=" min" />
-                  </div>
-                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Average setup time</div>
+        <div className="lp-hero-badge">
+          <span className="lp-hero-badge-dot"></span>
+          Built for product managers and marketers
+        </div>
+
+        <h1>Know before your<br /><em>next meeting.</em></h1>
+
+        <p className="lp-hero-sub">
+          Signalum tracks your competitors, market signals, and industry movements — then tells you exactly what changed and what it means for your roadmap.
+        </p>
+
+        <div className="lp-hero-actions">
+          <a href="#cta" className="lp-btn-primary">Request access</a>
+          <a href="#features" className="lp-btn-secondary">
+            See how it works
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </a>
+        </div>
+
+        <div className="lp-ticker-wrap">
+          <p className="lp-ticker-label">Live signals tracked right now</p>
+          <div style={{ overflow: "hidden", width: "100%" }}>
+            <div className="lp-ticker-track">
+              {[
+                { color: "green", text: "Veridian raised $40M Series C — shifts focus to government" },
+                { color: "amber", text: "EU AI Act compliance deadline: 3 months remaining" },
+                { color: "red", text: "NexaID acquired DocuShield — expands doc verification" },
+                { color: "green", text: "UK DIATF Gamma certification now mandatory for tenders" },
+                { color: "amber", text: "BioPulse launches passive liveness for mobile web" },
+                { color: "green", text: "NIST 800-63-4 final rule published — 6-month window to comply" },
+                { color: "red", text: "Certus loses Home Office contract — pricing cited" },
+                { color: "green", text: "Veridian raised $40M Series C — shifts focus to government" },
+                { color: "amber", text: "EU AI Act compliance deadline: 3 months remaining" },
+                { color: "red", text: "NexaID acquired DocuShield — expands doc verification" },
+                { color: "green", text: "UK DIATF Gamma certification now mandatory for tenders" },
+                { color: "amber", text: "BioPulse launches passive liveness for mobile web" },
+                { color: "green", text: "NIST 800-63-4 final rule published — 6-month window to comply" },
+                { color: "red", text: "Certus loses Home Office contract — pricing cited" },
+              ].map((item, i) => (
+                <div key={i} className="lp-ticker-item">
+                  <span className={`lp-ticker-dot lp-ticker-dot-${item.color}`}></span>
+                  {item.text}
                 </div>
-              </div>
-              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
-              <div className="flex-1 flex items-center justify-center text-center px-4 fade-child">
-                <div>
-                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-topics">
-                    <CountUp end={11} />
-                  </div>
-                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Topic types supported</div>
-                </div>
-              </div>
-              <div style={{ width: 1, alignSelf: "stretch", backgroundColor: "#e2e8f0" }} />
-              <div className="flex-1 flex items-center justify-center text-center px-4 fade-child">
-                <div>
-                  <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }} data-testid="stat-brief">
-                    <CountUp end={7} suffix="am" />
-                  </div>
-                  <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Daily brief delivered</div>
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col items-center gap-6 md:hidden">
-              <div className="text-center">
-                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>
-                  <CountUp end={3} suffix=" min" />
-                </div>
-                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Average setup time</div>
-              </div>
-              <div className="text-center">
-                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>
-                  <CountUp end={11} />
-                </div>
-                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Topic types supported</div>
-              </div>
-              <div className="text-center">
-                <div style={{ color: "#1e3a5f", fontSize: 28, fontWeight: 700 }}>
-                  <CountUp end={7} suffix="am" />
-                </div>
-                <div className="mt-1" style={{ color: "#64748b", fontSize: 14 }}>Daily brief delivered</div>
-              </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 4 - PROBLEM SECTION */}
-      <section
-        ref={s2.ref}
-        className={`w-full fade-section ${s2.visible ? "visible" : ""}`}
-        style={{ backgroundColor: "#f8fafc", padding: "80px 40px" }}
-      >
-        <div className="mx-auto flex flex-col md:flex-row items-start gap-10" style={{ maxWidth: 1040 }}>
-          <div className="w-full md:w-[55%] fade-child">
-            <p
-              className="font-semibold uppercase mb-4"
-              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
-              data-testid="text-problem-label"
-            >
-              The real problem
-            </p>
-            <h2
-              className="leading-tight mb-6"
-              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
-              data-testid="text-problem-headline"
-            >
-              You are not short on information. You are short on clarity.
+      {/* STATS BAR */}
+      <div className="lp-stats-bar">
+        <div className="lp-stat-item">
+          <div className="lp-stat-value">4,173</div>
+          <div className="lp-stat-label">Intelligence signals this month</div>
+        </div>
+        <div className="lp-stat-item">
+          <div className="lp-stat-value">46</div>
+          <div className="lp-stat-label">Topics tracked per workspace</div>
+        </div>
+        <div className="lp-stat-item">
+          <div className="lp-stat-value">7</div>
+          <div className="lp-stat-label">Strategic Pulse sections generated</div>
+        </div>
+        <div className="lp-stat-item">
+          <div className="lp-stat-value">3 min</div>
+          <div className="lp-stat-label">Average to set up your workspace</div>
+        </div>
+      </div>
+
+      {/* PROBLEM */}
+      <div className="lp-section lp-reveal" ref={(el) => addReveal(el, 0)} id="problem">
+        <div className="lp-problem-grid">
+          <div>
+            <p className="lp-section-label">The real problem</p>
+            <h2 className="lp-problem-headline">
+              You are not short on information.<br />You are short on <span style={{ color: "#7fa8ff" }}>clarity.</span>
             </h2>
-            <p style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }} className="mb-4" data-testid="text-problem-p1">
-              Every day you get hit with newsletters, alerts, articles, Slack messages, and LinkedIn posts. The information is everywhere. The problem is none of it connects.
-            </p>
-            <p style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }} className="mb-4" data-testid="text-problem-p2">
-              You bookmark things you never revisit. You save articles you forget about. You take notes that sit in a folder nobody opens. Storing information is not the same as understanding it.
-            </p>
-            <p style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }} data-testid="text-problem-p3">
-              Signalum does not just store what you capture. It reads it, connects it to everything else you track, and turns it into a clear picture of what is actually happening in your world.
-            </p>
+            <p className="lp-problem-body">Every day brings newsletters, alerts, LinkedIn posts, Slack messages. The information is everywhere. The problem is none of it connects.</p>
+            <p className="lp-problem-body">You bookmark things you never revisit. You capture notes that sit unread. You walk into meetings not knowing what changed last week with the competitor they are about to ask you about.</p>
+          </div>
+          <div className="lp-vs-card">
+            <div className="lp-vs-header">
+              <div className="lp-vs-col">
+                <div className={`lp-vs-col-label lp-vs-col-label-bad`}>✕ Without Signalum</div>
+              </div>
+              <div className="lp-vs-col">
+                <div className={`lp-vs-col-label lp-vs-col-label-good`}>✓ With Signalum</div>
+              </div>
+            </div>
+            <div>
+              {[
+                { bad: "📎 Bookmarks you never revisit", good: "✦ Everything captured in one place" },
+                { bad: "🔀 Notes scattered across tools", good: "✦ AI connects the dots automatically" },
+                { bad: "🔔 Alerts with no context", good: "✦ Context built up over time" },
+                { bad: "⏰ Hours spent piecing it together", good: "✦ Briefed on your schedule" },
+                { bad: "😳 Blindsided in meetings", good: "✦ Always the most informed person" },
+              ].map((row, i) => (
+                <div key={i} className="lp-vs-row">
+                  <div className="lp-vs-cell">{row.bad}</div>
+                  <div className={`lp-vs-cell lp-vs-cell-good`}>{row.good}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* FEATURE SHOWCASE */}
+      <div className="lp-showcase-section lp-reveal" ref={(el) => addReveal(el, 1)} id="features">
+        <div className="lp-showcase-inner">
+          <div className="lp-showcase-header">
+            <p className="lp-section-label">What Signalum does</p>
+            <h2 className="lp-showcase-headline">Intelligence built for<br />how PMs and marketers think.</h2>
+            <p className="lp-showcase-sub">Not just a feed of news. A living picture of your competitive landscape, updated continuously and turned into clear action.</p>
           </div>
 
-          <div className="w-full md:w-[45%] fade-child">
-            <div
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: 8,
-                padding: 24,
-              }}
-              data-testid="card-comparison"
-            >
-              <div className="flex flex-wrap">
-                <div className="flex-1 pr-4" style={{ borderRight: "1px solid #e2e8f0", minWidth: 140 }}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                    <span className="text-xs font-semibold" style={{ color: "#f87171" }}>Without Signalum</span>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Bookmarks you never revisit</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Notes scattered across tools</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Alerts with no context</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Hours spent piecing it together</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#64748b" }}>Blindsided by things you should have known</p>
-                  </div>
-                </div>
+          <div className="lp-feature-tabs">
+            {TABS.map((tab, i) => (
+              <button
+                key={i}
+                className={`lp-feature-tab${activeTab === i ? " lp-tab-active" : ""}`}
+                onClick={() => setActiveTab(i)}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
 
-                <div className="flex-1 pl-4" style={{ minWidth: 140 }}>
-                  <div className="flex items-center gap-2 mb-4">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
+          {/* Tab 0: Competitive scoring */}
+          {activeTab === 0 && (
+            <div className="lp-feature-grid">
+              <div>
+                <span className="lp-feature-tag">Competitive dimensions</span>
+                <h3 className="lp-feature-title">Score every competitor on what actually matters.</h3>
+                <p className="lp-feature-desc">Define the capability dimensions that matter to your buyers. Signalum tracks where you stand versus every competitor — with weighted scoring that reflects how much each item matters.</p>
+                <ul className="lp-feature-points">
+                  <li>Define dimensions like Liveness Check, Deployment Flexibility, or Integration Options</li>
+                  <li>Importance tiers (Critical / High / Medium / Low) weight the scoring automatically</li>
+                  <li>Radar chart shows gaps and advantages at a glance</li>
+                  <li>One-click AI research fills in competitor status from live web sources</li>
+                </ul>
+              </div>
+              <div className="lp-screen-mockup">
+                <div className="lp-screen-mockup-bar">
+                  <span className="lp-screen-dot lp-screen-dot-red"></span>
+                  <span className="lp-screen-dot lp-screen-dot-amber"></span>
+                  <span className="lp-screen-dot lp-screen-dot-green"></span>
+                  <span className="lp-screen-url">signalum.app / competitor / Veridian</span>
+                </div>
+                <div style={{ background: "#f0f2f5", padding: 20 }}>
+                  <div style={{ background: "white", borderRadius: 10, padding: 16, border: "1px solid #e5e7eb", fontFamily: "system-ui, sans-serif" }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111", marginBottom: 12 }}>Competitive scoring</div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+                      <span style={{ background: "#0f1f3d", color: "white", padding: "4px 10px", borderRadius: 20, fontSize: 11 }}>Document Verif.</span>
+                      <span style={{ background: "#f3f4f6", color: "#6b7280", padding: "4px 10px", borderRadius: 20, fontSize: 11, border: "1px solid #e5e7eb" }}>Liveness Check</span>
+                      <span style={{ background: "#f3f4f6", color: "#6b7280", padding: "4px 10px", borderRadius: 20, fontSize: 11, border: "1px solid #e5e7eb" }}>Integration</span>
+                      <span style={{ background: "#f3f4f6", color: "#6b7280", padding: "4px 10px", borderRadius: 20, fontSize: 11, border: "1px solid #e5e7eb" }}>Deployment</span>
+                    </div>
+                    <svg viewBox="0 0 280 220" style={{ width: "100%", display: "block" }}>
+                      <circle cx="140" cy="110" r="80" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
+                      <circle cx="140" cy="110" r="60" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
+                      <circle cx="140" cy="110" r="40" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
+                      <circle cx="140" cy="110" r="20" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
+                      <line x1="140" y1="30" x2="140" y2="190" stroke="#e5e7eb" strokeWidth="1"/>
+                      <line x1="60" y1="110" x2="220" y2="110" stroke="#e5e7eb" strokeWidth="1"/>
+                      <line x1="83" y1="53" x2="197" y2="167" stroke="#e5e7eb" strokeWidth="1"/>
+                      <line x1="197" y1="53" x2="83" y2="167" stroke="#e5e7eb" strokeWidth="1"/>
+                      <polygon points="140,50 200,90 185,165 100,168 80,88" fill="rgba(79,127,255,0.15)" stroke="#4f7fff" strokeWidth="2"/>
+                      <circle cx="140" cy="50" r="4" fill="#4f7fff"/>
+                      <circle cx="200" cy="90" r="4" fill="#4f7fff"/>
+                      <circle cx="185" cy="165" r="4" fill="#4f7fff"/>
+                      <circle cx="100" cy="168" r="4" fill="#4f7fff"/>
+                      <circle cx="80" cy="88" r="4" fill="#4f7fff"/>
+                      <polygon points="140,62 190,98 172,158 108,160 90,100" fill="rgba(249,115,22,0.12)" stroke="#f97316" strokeWidth="2" strokeDasharray="4,3"/>
+                      <circle cx="140" cy="62" r="3" fill="#f97316"/>
+                      <circle cx="190" cy="98" r="3" fill="#f97316"/>
+                      <circle cx="172" cy="158" r="3" fill="#f97316"/>
+                      <circle cx="108" cy="160" r="3" fill="#f97316"/>
+                      <circle cx="90" cy="100" r="3" fill="#f97316"/>
+                      <text x="140" y="24" textAnchor="middle" fontSize="9" fill="#6b7280">Doc Verif.</text>
+                      <text x="226" y="113" fontSize="9" fill="#6b7280">Liveness</text>
+                      <text x="140" y="198" textAnchor="middle" fontSize="9" fill="#6b7280">Integration</text>
+                      <text x="52" y="113" textAnchor="end" fontSize="9" fill="#6b7280">Deployment</text>
+                      <rect x="60" y="4" width="8" height="8" rx="1" fill="#4f7fff"/>
+                      <text x="72" y="12" fontSize="9" fill="#374151">Us</text>
+                      <rect x="92" y="4" width="8" height="8" rx="1" fill="#f97316"/>
+                      <text x="104" y="12" fontSize="9" fill="#374151">Veridian</text>
                     </svg>
-                    <span className="text-xs font-semibold" style={{ color: "#1e3a5f" }}>With Signalum</span>
-                  </div>
-                  <div className="flex flex-col gap-3">
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Everything captured in one place</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>AI connects the dots automatically</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Context built up over time</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Briefed on your schedule</p>
-                    <p className="text-xs leading-relaxed" style={{ color: "#1e3a5f" }}>Always the most informed person in the room</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                      <div style={{ background: "#f9fafb", borderRadius: 8, padding: 10, border: "1px solid #e5e7eb" }}>
+                        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Document Verif.</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ height: 4, background: "#4f7fff", borderRadius: 2, width: "72%" }}></div>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>72</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                          <div style={{ height: 4, background: "#f97316", borderRadius: 2, width: "44%" }}></div>
+                          <span style={{ fontSize: 12, color: "#6b7280" }}>44</span>
+                        </div>
+                        <span style={{ background: "#dcfce7", color: "#166534", fontSize: 10, padding: "2px 6px", borderRadius: 10, marginTop: 6, display: "inline-block" }}>Ahead</span>
+                      </div>
+                      <div style={{ background: "#f9fafb", borderRadius: 8, padding: 10, border: "1px solid #e5e7eb" }}>
+                        <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 4 }}>Liveness Check</div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ height: 4, background: "#4f7fff", borderRadius: 2, width: "68%" }}></div>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>68</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+                          <div style={{ height: 4, background: "#f97316", borderRadius: 2, width: "83%" }}></div>
+                          <span style={{ fontSize: 12, color: "#6b7280" }}>83</span>
+                        </div>
+                        <span style={{ background: "#fee2e2", color: "#991b1b", fontSize: 10, padding: "2px 6px", borderRadius: 10, marginTop: 6, display: "inline-block" }}>Behind</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Tab 1: Strategic Pulse */}
+          {activeTab === 1 && (
+            <div className="lp-feature-grid">
+              <div>
+                <span className="lp-feature-tag">Strategic Pulse</span>
+                <h3 className="lp-feature-title">Your weekly AI intelligence briefing, written for you.</h3>
+                <p className="lp-feature-desc">Every week, Signalum synthesises thousands of signals across all your tracked topics into a seven-section strategic brief — market direction, competitor moves, threats, opportunities, and roadmap implications.</p>
+                <ul className="lp-feature-points">
+                  <li>Market Direction: 6-18 month outlook based on live signals</li>
+                  <li>Competitor Moves Decoded: what they are doing and why it matters</li>
+                  <li>Threat Radar: urgent actions and items to monitor</li>
+                  <li>Roadmap Implications: specific recommendations tied to your dimensions</li>
+                </ul>
+              </div>
+              <div className="lp-screen-mockup">
+                <div className="lp-screen-mockup-bar">
+                  <span className="lp-screen-dot lp-screen-dot-red"></span>
+                  <span className="lp-screen-dot lp-screen-dot-amber"></span>
+                  <span className="lp-screen-dot lp-screen-dot-green"></span>
+                  <span className="lp-screen-url">signalum.app / intelligence</span>
+                </div>
+                <div style={{ background: "#f0f2f5", padding: 16, fontFamily: "system-ui, sans-serif" }}>
+                  <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                    <div style={{ padding: "14px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>Strategic Pulse</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af" }}>AI-powered intelligence briefing</div>
+                      </div>
+                      <button style={{ background: "#0f1f3d", color: "white", border: "none", padding: "7px 14px", borderRadius: 6, fontSize: 12, fontWeight: 500, cursor: "pointer" }}>Generate New Pulse</button>
+                    </div>
+                    <div style={{ padding: "14px 16px" }}>
+                      <div style={{ background: "#eff6ff", borderRadius: 8, padding: "14px 16px", borderLeft: "3px solid #3b82f6", marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1e40af", marginBottom: 6 }}>📊 Market Direction</div>
+                        <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>The identity verification market is converging on mandatory certification models. Regulators are no longer treating IDV as optional infrastructure...</div>
+                      </div>
+                      <div style={{ background: "#f0fdf4", borderRadius: 8, padding: "14px 16px", borderLeft: "3px solid #22c55e", marginBottom: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#166534", marginBottom: 6 }}>🎯 Emerging Opportunities</div>
+                        <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>Sovereign digital wallet integration requirements in EU and APAC markets create first-mover advantage for vendors who can demonstrate EUDIW compatibility...</div>
+                      </div>
+                      <div style={{ background: "#fff7ed", borderRadius: 8, padding: "14px 16px", borderLeft: "3px solid #f97316" }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#c2410c", marginBottom: 6 }}>⚠️ Threat Radar</div>
+                        <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6 }}>Veridian's RSA 2026 demonstration of cryptographic human-intent binding establishes a new benchmark...</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 2: Market Signals */}
+          {activeTab === 2 && (
+            <div className="lp-feature-grid">
+              <div>
+                <span className="lp-feature-tag">Market Signals</span>
+                <h3 className="lp-feature-title">Turn customer asks into roadmap evidence.</h3>
+                <p className="lp-feature-desc">Log requirements from RFIs, customer calls, sales conversations, and partner asks. Link each one to your capability dimensions. Watch the heatmap reveal which capabilities are showing up most across your market.</p>
+                <ul className="lp-feature-points">
+                  <li>Paste text, upload a document, or log manually</li>
+                  <li>AI extracts requirements and suggests dimension mappings</li>
+                  <li>Demand heatmap shows which capabilities the market is asking for</li>
+                  <li>Drill down from any cell to see the exact source requirement</li>
+                </ul>
+              </div>
+              <div className="lp-screen-mockup">
+                <div className="lp-screen-mockup-bar">
+                  <span className="lp-screen-dot lp-screen-dot-red"></span>
+                  <span className="lp-screen-dot lp-screen-dot-amber"></span>
+                  <span className="lp-screen-dot lp-screen-dot-green"></span>
+                  <span className="lp-screen-url">signalum.app / market-signals</span>
+                </div>
+                <div style={{ background: "#f0f2f5", padding: 16, fontFamily: "system-ui, sans-serif" }}>
+                  <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>Demand Heatmap</div>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        <button style={{ background: "#0f1f3d", color: "white", border: "none", padding: "4px 10px", borderRadius: 20, fontSize: 11 }}>All</button>
+                        <button style={{ background: "#f3f4f6", color: "#6b7280", border: "none", padding: "4px 10px", borderRadius: 20, fontSize: 11 }}>Active</button>
+                        <button style={{ background: "#f3f4f6", color: "#6b7280", border: "none", padding: "4px 10px", borderRadius: 20, fontSize: 11 }}>Closed</button>
+                      </div>
+                    </div>
+                    <div style={{ padding: "12px 16px", overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                        <thead>
+                          <tr>
+                            <th style={{ textAlign: "left", padding: "6px 8px", color: "#9ca3af", fontWeight: 500, width: 140 }}>Item</th>
+                            <th style={{ padding: "6px 4px", color: "#9ca3af", fontWeight: 500, textAlign: "center" }}>Doc Verif.</th>
+                            <th style={{ padding: "6px 4px", color: "#9ca3af", fontWeight: 500, textAlign: "center" }}>Liveness</th>
+                            <th style={{ padding: "6px 4px", color: "#9ca3af", fontWeight: 500, textAlign: "center" }}>Deployment</th>
+                            <th style={{ padding: "6px 4px", color: "#9ca3af", fontWeight: 500, textAlign: "center" }}>Integration</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            { label: "NFC chip reading", vals: [{ bg: "#534AB7", c: "white", v: "9" }, { bg: "#f3f4f6", c: "#9ca3af", v: "0" }, { bg: "#D3D1C7", c: "#2C2C2A", v: "2" }, { bg: "#f3f4f6", c: "#9ca3af", v: "0" }] },
+                            { label: "FedRAMP Moderate", vals: [{ bg: "#f3f4f6", c: "#9ca3af", v: "0" }, { bg: "#f3f4f6", c: "#9ca3af", v: "0" }, { bg: "#534AB7", c: "white", v: "8" }, { bg: "#D3D1C7", c: "#2C2C2A", v: "3" }] },
+                            { label: "ISO 30107-3 PAD L2", vals: [{ bg: "#f3f4f6", c: "#9ca3af", v: "0" }, { bg: "#7F77DD", c: "white", v: "7" }, { bg: "#f3f4f6", c: "#9ca3af", v: "0" }, { bg: "#f3f4f6", c: "#9ca3af", v: "0" }] },
+                            { label: "REST API availability", vals: [{ bg: "#f3f4f6", c: "#9ca3af", v: "0" }, { bg: "#f3f4f6", c: "#9ca3af", v: "0" }, { bg: "#D3D1C7", c: "#2C2C2A", v: "2" }, { bg: "#CECBF6", c: "#26215C", v: "4" }] },
+                          ].map((row, i) => (
+                            <tr key={i}>
+                              <td style={{ padding: "5px 8px", fontSize: 10, color: "#374151", whiteSpace: "nowrap", overflow: "hidden", maxWidth: 140, textOverflow: "ellipsis" }}>{row.label}</td>
+                              {row.vals.map((v, j) => (
+                                <td key={j} style={{ padding: 3 }}>
+                                  <div style={{ background: v.bg, color: v.c, borderRadius: 4, textAlign: "center", padding: 5, fontWeight: v.v !== "0" ? 600 : undefined }}>{v.v}</div>
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 10 }}>
+                        <span style={{ fontSize: 10, color: "#9ca3af" }}>Lower</span>
+                        {["#f3f4f6", "#D3D1C7", "#CECBF6", "#AFA9EC", "#7F77DD", "#534AB7"].map((c, i) => (
+                          <div key={i} style={{ width: 12, height: 12, borderRadius: 2, background: c }}></div>
+                        ))}
+                        <span style={{ fontSize: 10, color: "#9ca3af" }}>Higher demand</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Tab 3: Live workspace */}
+          {activeTab === 3 && (
+            <div className="lp-feature-grid">
+              <div>
+                <span className="lp-feature-tag">Live workspace</span>
+                <h3 className="lp-feature-title">Your entire competitive landscape in one place.</h3>
+                <p className="lp-feature-desc">Track competitors, regulations, industry trends, and key accounts — all organised automatically. Every update is captured, classified, and filed to the right topic without any manual effort.</p>
+                <ul className="lp-feature-points">
+                  <li>46 topics tracked across 5 categories per workspace</li>
+                  <li>4,000+ intelligence signals captured each month</li>
+                  <li>AI classifies and files every update automatically</li>
+                  <li>Live feed shows what changed in the last hour</li>
+                </ul>
+              </div>
+              <div className="lp-screen-mockup">
+                <div className="lp-screen-mockup-bar">
+                  <span className="lp-screen-dot lp-screen-dot-red"></span>
+                  <span className="lp-screen-dot lp-screen-dot-amber"></span>
+                  <span className="lp-screen-dot lp-screen-dot-green"></span>
+                  <span className="lp-screen-url">signalum.app / workspace</span>
+                </div>
+                <div style={{ background: "#f0f2f5", padding: 16, fontFamily: "system-ui, sans-serif" }}>
+                  <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden" }}>
+                    <div style={{ padding: "14px 16px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#111" }}>My Workspace</div>
+                        <div style={{ fontSize: 11, color: "#9ca3af" }}>5 categories · 46 topics · 4,173 updates</div>
+                      </div>
+                      <button style={{ background: "#f3f4f6", border: "1px solid #e5e7eb", padding: "5px 12px", borderRadius: 6, fontSize: 11, color: "#374151", cursor: "pointer" }}>Compare →</button>
+                    </div>
+                    <div style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ background: "#0f1f3d", borderRadius: 8, padding: "12px 14px", color: "white" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 2 }}>Competitor Landscape</div>
+                          <div style={{ fontSize: 10, opacity: 0.7 }}>19 topics · 877 updates this month</div>
+                          <div style={{ fontSize: 10, opacity: 0.5, marginTop: 4, lineHeight: 1.4 }}>Veridian raises $40M... NexaID acquires DocuShield...</div>
+                        </div>
+                        <div style={{ background: "#f9fafb", borderRadius: 8, padding: "12px 14px", border: "1px solid #e5e7eb" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 2 }}>Regulatory & Standards</div>
+                          <div style={{ fontSize: 10, color: "#9ca3af" }}>12 topics · 1,083 updates this month</div>
+                          <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>UK National ID · EU AI Act · NIST 800-63-4...</div>
+                        </div>
+                        <div style={{ background: "#f9fafb", borderRadius: 8, padding: "12px 14px", border: "1px solid #e5e7eb" }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#111", marginBottom: 2 }}>Industry Topics</div>
+                          <div style={{ fontSize: 10, color: "#9ca3af" }}>12 topics · 1,718 updates this month</div>
+                          <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>Deepfake threats · Agentic AI · eIDAS 2.0...</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* HOW IT WORKS */}
+      <div className="lp-how-section lp-reveal" ref={(el) => addReveal(el, 2)} id="how">
+        <div className="lp-how-header">
+          <p className="lp-section-label">How it works</p>
+          <h2 className="lp-how-headline">From scattered noise to one clear answer.</h2>
+        </div>
+        <div className="lp-how-steps">
+          <div className="lp-how-step">
+            <div className="lp-how-step-num">01</div>
+            <div className="lp-how-step-icon">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 3v10M6 7l4-4 4 4M3 14v1a2 2 0 002 2h10a2 2 0 002-2v-1"/>
+              </svg>
+            </div>
+            <h3>Set up your workspace in minutes</h3>
+            <p>Tell Signalum who you track — competitors, regulations, accounts, industry topics. It builds your workspace automatically. No spreadsheets, no configuration.</p>
+          </div>
+          <div className="lp-how-step">
+            <div className="lp-how-step-num">02</div>
+            <div className="lp-how-step-icon">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="10" cy="10" r="7"/>
+                <path d="M10 6v4l3 3"/>
+              </svg>
+            </div>
+            <h3>Intelligence flows in automatically</h3>
+            <p>Signalum researches every topic continuously — competitor moves, regulatory changes, market signals. Everything is classified and filed without you lifting a finger.</p>
+          </div>
+          <div className="lp-how-step">
+            <div className="lp-how-step-num">03</div>
+            <div className="lp-how-step-icon">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 12l2 2 4-4M7 4H4a1 1 0 00-1 1v11a1 1 0 001 1h12a1 1 0 001-1V9l-5-5H7z"/>
+              </svg>
+            </div>
+            <h3>Get a briefing. Walk in prepared.</h3>
+            <p>Your Strategic Pulse synthesises everything into seven sections — market direction, competitor moves, threats, and specific roadmap recommendations. Written for you, on demand.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* WHO IT'S FOR */}
+      <section className="lp-icp-section lp-reveal" ref={(el) => addReveal(el, 3)} id="who">
+        <div className="lp-icp-inner">
+          <div className="lp-icp-header">
+            <p className="lp-section-label">Who it&apos;s for</p>
+            <h2 className="lp-icp-headline">Built for the people who need to<br />know what&apos;s happening.</h2>
+          </div>
+          <div className="lp-icp-grid">
+            <div className="lp-icp-card">
+              <div className="lp-icp-role">Product Manager</div>
+              <h3 className="lp-icp-title">Stay ahead of your competitors without the research hours.</h3>
+              <p className="lp-icp-pain">You need to know what competitors are doing, what capabilities the market is asking for, and how you stack up — but gathering that information takes time you don&apos;t have before every roadmap review or exec meeting.</p>
+              <ul className="lp-icp-gains">
+                <li><span className="lp-icp-check">✓</span> Know your competitive position across every dimension that matters to buyers</li>
+                <li><span className="lp-icp-check">✓</span> See which capabilities are showing up most in RFIs and customer calls</li>
+                <li><span className="lp-icp-check">✓</span> Get roadmap implications written for you, tied to real signals</li>
+                <li><span className="lp-icp-check">✓</span> Walk into sprint planning with evidence, not gut feel</li>
+              </ul>
+            </div>
+            <div className="lp-icp-card">
+              <div className="lp-icp-role">Marketer</div>
+              <h3 className="lp-icp-title">Know what the market is saying before you brief the agency.</h3>
+              <p className="lp-icp-pain">Your messaging needs to respond to what competitors are claiming and what buyers are asking for — but by the time intelligence reaches you it&apos;s stale, incomplete, or buried in a Google Doc nobody opens.</p>
+              <ul className="lp-icp-gains">
+                <li><span className="lp-icp-check">✓</span> Track competitor messaging and positioning changes in real time</li>
+                <li><span className="lp-icp-check">✓</span> See which themes are gaining traction across your market</li>
+                <li><span className="lp-icp-check">✓</span> Build battlecards grounded in actual verified capability data</li>
+                <li><span className="lp-icp-check">✓</span> Brief campaigns from a position of genuine market knowledge</li>
+              </ul>
             </div>
           </div>
         </div>
       </section>
 
-      {/* SECTION 5 - TOPIC PILL STRIP */}
-      <section
-        className="w-full overflow-hidden tag-strip"
-        style={{ backgroundColor: "#f8fafc", padding: "40px 0" }}
-      >
-        <div
-          className="flex whitespace-nowrap tag-scroll"
-          style={{
-            animation: "scrollTags 30s linear infinite",
-            width: "fit-content",
-          }}
-        >
-          {[...SCROLLING_TAGS, ...SCROLLING_TAGS, ...SCROLLING_TAGS].map((tag, i) => (
-            <span
-              key={`${tag}-${i}`}
-              className="inline-block text-sm font-medium rounded-full px-4 py-2 mx-1.5 flex-shrink-0"
-              style={{
-                backgroundColor: "#ffffff",
-                color: "#1e3a5f",
-              }}
-              data-testid={`pill-tag-${i}`}
-            >
-              {tag}
-            </span>
+      {/* QUOTES */}
+      <div className="lp-quotes-section lp-reveal" ref={(el) => addReveal(el, 4)}>
+        <p className="lp-quotes-header">Trusted by professionals who need to stay ahead</p>
+        <div className="lp-quotes-grid">
+          {[
+            { quote: `"I used to spend half a Sunday catching up on what happened in my industry that week. Now it is waiting for me Monday morning."`, role: "Senior Product Manager, SaaS company" },
+            { quote: `"The competitive scoring feature changed how we run roadmap reviews. We now have objective data to back every prioritisation decision."`, role: "Head of Product, enterprise software" },
+            { quote: `"I track six different topics across two industries. Signalum files everything and I never miss a thing. It is like having a researcher on the team."`, role: "Market Analyst, financial services" },
+          ].map((q, i) => (
+            <div key={i} className="lp-quote-card">
+              <div className="lp-quote-stars">★★★★★</div>
+              <p className="lp-quote-text">{q.quote}</p>
+              <div className="lp-quote-divider"></div>
+              <p className="lp-quote-role">{q.role}</p>
+            </div>
           ))}
         </div>
-      </section>
+      </div>
 
-      {/* SECTION 6 - HOW IT WORKS */}
-      <section
-        id="how-it-works"
-        ref={s3.ref}
-        className={`w-full fade-section ${s3.visible ? "visible" : ""}`}
-        style={{ backgroundColor: "#ffffff", padding: "80px 40px", scrollMarginTop: 80 }}
-      >
-        <div className="max-w-[1040px] mx-auto">
-          <div className="text-center mb-16 fade-child">
-            <p
-              className="font-semibold uppercase mb-3"
-              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
-              data-testid="text-how-label"
-            >
-              How it works
-            </p>
-            <h2
-              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
-              data-testid="text-how-headline"
-            >
-              From scattered noise to one clear answer.
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-6 md:gap-0 items-start">
-            <div className="text-center px-4 fade-child">
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5"
-                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-              </div>
-              <h3
-                className="mb-2"
-                style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}
-                data-testid="text-step-capture"
-              >
-                Capture anything
-              </h3>
-              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                Heard something interesting in a meeting? Spotted an article? Had a thought in the shower? Drop it in, voice, text, link, or file.
-              </p>
-            </div>
-
-            <div className="hidden md:flex items-center justify-center pt-8" style={{ color: "#cbd5e1" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-                <polyline points="12 5 19 12 12 19" />
+      {/* TRUST */}
+      <div className="lp-trust-section lp-reveal" ref={(el) => addReveal(el, 5)}>
+        <div className="lp-trust-inner">
+          <div className="lp-trust-item">
+            <div className="lp-trust-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f7fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
               </svg>
             </div>
-
-            <div className="text-center px-4 fade-child">
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5"
-                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="5" r="2" />
-                  <circle cx="5" cy="19" r="2" />
-                  <circle cx="19" cy="19" r="2" />
-                  <line x1="12" y1="7" x2="5" y2="17" />
-                  <line x1="12" y1="7" x2="19" y2="17" />
-                </svg>
-              </div>
-              <h3
-                className="mb-2"
-                style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}
-                data-testid="text-step-route"
-              >
-                AI finds where it belongs
-              </h3>
-              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                Signalum reads what you captured, figures out where it belongs, and files it automatically. You never have to think about organisation again.
-              </p>
-            </div>
-
-            <div className="hidden md:flex items-center justify-center pt-8" style={{ color: "#cbd5e1" }}>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-                <polyline points="12 5 19 12 12 19" />
+            <h4>Your data never trains our models</h4>
+            <p>Everything you capture stays in your workspace. It is never used to train AI models or shared with any third party.</p>
+          </div>
+          <div className="lp-trust-item">
+            <div className="lp-trust-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f7fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0110 0v4"/>
               </svg>
             </div>
-
-            <div className="text-center px-4 fade-child">
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-5"
-                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1e3a5f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="4" />
-                  <line x1="12" y1="2" x2="12" y2="4" />
-                  <line x1="12" y1="20" x2="12" y2="22" />
-                  <line x1="4.93" y1="4.93" x2="6.34" y2="6.34" />
-                  <line x1="17.66" y1="17.66" x2="19.07" y2="19.07" />
-                  <line x1="2" y1="12" x2="4" y2="12" />
-                  <line x1="20" y1="12" x2="22" y2="12" />
-                  <line x1="4.93" y1="19.07" x2="6.34" y2="17.66" />
-                  <line x1="17.66" y1="6.34" x2="19.07" y2="4.93" />
-                </svg>
-              </div>
-              <h3
-                className="mb-2"
-                style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600 }}
-                data-testid="text-step-brief"
-              >
-                Briefed every morning
-              </h3>
-              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                Every morning, a crisp summary of everything that changed across your topics lands in your workspace. Like having a researcher on your team.
-              </p>
+            <h4>Isolated by design</h4>
+            <p>Your workspace is completely isolated from every other user. Row-level security enforced at the database level.</p>
+          </div>
+          <div className="lp-trust-item">
+            <div className="lp-trust-item-icon">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#4f7fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 8v4l3 3"/>
+              </svg>
             </div>
+            <h4>Built for sensitive work</h4>
+            <p>Designed for teams handling competitive, regulatory, and strategic intelligence where confidentiality matters.</p>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* SECTION 7 - FEATURE CARDS */}
-      <section
-        id="what-you-can-track"
-        ref={s4.ref}
-        className={`w-full fade-section ${s4.visible ? "visible" : ""}`}
-        style={{ backgroundColor: "#f8fafc", padding: "80px 40px", scrollMarginTop: 80 }}
-      >
-        <div className="max-w-[1100px] mx-auto">
-          <div className="text-center mb-16 fade-child">
-            <p
-              className="font-semibold uppercase mb-3"
-              style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
-              data-testid="text-track-label"
-            >
-              What can you track?
-            </p>
-            <h2
-              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
-              data-testid="text-track-headline"
-            >
-              Whatever you need to stay on top of, Signalum has got it
-            </h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {FEATURE_CARDS.map((card, idx) => (
-              <div
-                key={card.title}
-                className="rounded-lg feature-card fade-child"
-                style={{
-                  backgroundColor: card.highlighted ? "#1e3a5f" : "#ffffff",
-                  border: card.goldBorder ? "2px solid #d4a843" : card.highlighted ? "none" : "1px solid #e2e8f0",
-                  borderRadius: 8,
-                  padding: 24,
-                }}
-                data-testid={`card-feature-${idx}`}
-              >
-                <h3
-                  className="mb-2"
-                  style={{
-                    color: card.highlighted ? "#ffffff" : "#1e3a5f",
-                    fontSize: 18,
-                    fontWeight: 600,
-                  }}
-                >
-                  {card.title}
-                </h3>
-                <p
-                  style={{
-                    color: card.highlighted ? "rgba(255,255,255,0.8)" : "#64748b",
-                    fontSize: 15,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  {card.text}
-                </p>
-              </div>
-            ))}
-          </div>
+      {/* CTA */}
+      <section className="lp-cta-section lp-reveal" ref={(el) => addReveal(el, 6)} id="cta">
+        <h2 className="lp-cta-headline">
+          Start your day already<br /><span style={{ color: "#7fa8ff" }}>knowing what matters.</span>
+        </h2>
+        <p className="lp-cta-sub">Set up in three minutes. No credit card. No configuration.</p>
+        <div className="lp-cta-form">
+          <input
+            className="lp-cta-input"
+            type="email"
+            placeholder="Your work email"
+            value={ctaEmail}
+            onChange={(e) => setCtaEmail(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleCtaSubmit(); }}
+          />
+          <button className="lp-cta-btn" onClick={handleCtaSubmit}>Request access</button>
         </div>
-      </section>
-
-      {/* SECTION 8 - TESTIMONIALS */}
-      <section
-        ref={s5.ref}
-        className={`w-full fade-section ${s5.visible ? "visible" : ""}`}
-        style={{ backgroundColor: "#ffffff", padding: "60px 40px" }}
-      >
-        <div className="mx-auto" style={{ maxWidth: 1040 }}>
-          <p
-            className="text-center font-semibold uppercase mb-8 fade-child"
-            style={{ color: "#64748b", fontSize: 12, letterSpacing: "0.15em" }}
-            data-testid="text-social-proof-label"
-          >
-            Trusted by professionals who need to stay ahead
-          </p>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5" data-testid="social-proof-grid">
-            <div
-              className="flex flex-col fade-child"
-              style={{
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: 8,
-                padding: 24,
-              }}
-              data-testid="card-testimonial-1"
-            >
-              <p className="italic flex-1" style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                "I used to spend half a Sunday catching up on what happened in my industry that week. Now it is waiting for me Monday morning."
-              </p>
-              <div>
-                <div style={{ width: 32, height: 2, backgroundColor: "#1e3a5f", marginTop: 16, marginBottom: 12 }} />
-                <p className="text-xs" style={{ color: "#64748b" }}>Senior Product Manager, SaaS company</p>
-              </div>
-            </div>
-
-            <div
-              className="flex flex-col fade-child"
-              style={{
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: 8,
-                padding: 24,
-              }}
-              data-testid="card-testimonial-2"
-            >
-              <p className="italic flex-1" style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                "The daily brief is the first thing I open. It has genuinely changed how prepared I feel going into client meetings."
-              </p>
-              <div>
-                <div style={{ width: 32, height: 2, backgroundColor: "#1e3a5f", marginTop: 16, marginBottom: 12 }} />
-                <p className="text-xs" style={{ color: "#64748b" }}>Strategy Consultant, professional services</p>
-              </div>
-            </div>
-
-            <div
-              className="flex flex-col fade-child"
-              style={{
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: 8,
-                padding: 24,
-              }}
-              data-testid="card-testimonial-3"
-            >
-              <p className="italic flex-1" style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                "I track six different topics across two industries. Signalum files everything and I never miss a thing."
-              </p>
-              <div>
-                <div style={{ width: 32, height: 2, backgroundColor: "#1e3a5f", marginTop: 16, marginBottom: 12 }} />
-                <p className="text-xs" style={{ color: "#64748b" }}>Market Analyst, financial services</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 9 - TRUST SECTION */}
-      <section
-        ref={s6.ref}
-        className={`w-full fade-section ${s6.visible ? "visible" : ""}`}
-        style={{ backgroundColor: "#ffffff", padding: "80px 40px" }}
-      >
-        <div className="max-w-[1040px] mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center fade-child" data-testid="trust-data">
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4"
-                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
-              >
-                <Shield size={24} color="#1e3a5f" />
-              </div>
-              <h3 style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
-                Your data never trains our models
-              </h3>
-              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                Everything you capture stays in your workspace.
-              </p>
-            </div>
-
-            <div className="text-center fade-child" data-testid="trust-isolation">
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4"
-                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
-              >
-                <Lock size={24} color="#1e3a5f" />
-              </div>
-              <h3 style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
-                Isolated by design
-              </h3>
-              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                Your workspace is completely isolated from every other user. Row-level security at the database level.
-              </p>
-            </div>
-
-            <div className="text-center fade-child" data-testid="trust-sensitive">
-              <div
-                className="w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4"
-                style={{ backgroundColor: "rgba(30,58,95,0.08)" }}
-              >
-                <Eye size={24} color="#1e3a5f" />
-              </div>
-              <h3 style={{ color: "#1e3a5f", fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
-                Built for sensitive work
-              </h3>
-              <p style={{ color: "#64748b", fontSize: 15, lineHeight: 1.6 }}>
-                Designed for teams handling competitive, regulatory, and strategic intelligence.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 10 - COMING SOON (Ask Signalum) */}
-      <section
-        id="coming-soon"
-        ref={s7.ref}
-        className={`w-full fade-section ${s7.visible ? "visible" : ""}`}
-        style={{ backgroundColor: "#ffffff", padding: "60px 40px", scrollMarginTop: 80 }}
-      >
-        <div className="mx-auto" style={{ maxWidth: 860 }}>
-          <div
-            style={{
-              border: "1px solid #1e3a5f",
-              borderRadius: 12,
-              backgroundColor: "#f0f4f9",
-              padding: 40,
-            }}
-            data-testid="card-coming-soon"
-          >
-            <span
-              className="inline-block text-xs font-semibold text-white rounded-full px-3 py-1 mb-5"
-              style={{ backgroundColor: "#1e3a5f" }}
-              data-testid="badge-coming-soon"
-            >
-              Coming Soon
-            </span>
-
-            <h3
-              className="mb-4"
-              style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
-              data-testid="text-coming-soon-headline"
-            >
-              Ask Signalum anything about your tracked topics
-            </h3>
-
-            <p
-              className="mb-6"
-              style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
-              data-testid="text-coming-soon-description"
-            >
-              Soon you will be able to ask Signalum questions in plain English and get instant answers from everything it has captured for you. What has changed with a competitor this month? What are the biggest themes across your industry right now? What did I capture about pricing changes last week? Signalum will search its own knowledge of your workspace and answer in seconds.
-            </p>
-
-            <div className="flex flex-wrap gap-3 mb-6" data-testid="pills-coming-soon">
-              <span
-                className="text-xs rounded-full px-4 py-2"
-                style={{ backgroundColor: "#ffffff", border: "1px solid #1e3a5f", color: "#1e3a5f" }}
-                data-testid="pill-query-1"
-              >
-                What is going on with Acme Corp this week?
-              </span>
-              <span
-                className="text-xs rounded-full px-4 py-2"
-                style={{ backgroundColor: "#ffffff", border: "1px solid #1e3a5f", color: "#1e3a5f" }}
-                data-testid="pill-query-2"
-              >
-                Summarise all my regulatory updates this month
-              </span>
-              <span
-                className="text-xs rounded-full px-4 py-2"
-                style={{ backgroundColor: "#ffffff", border: "1px solid #1e3a5f", color: "#1e3a5f" }}
-                data-testid="pill-query-3"
-              >
-                What are my competitors doing with pricing?
-              </span>
-            </div>
-
-            <p
-              className="text-xs italic mb-4"
-              style={{ color: "#64748b" }}
-              data-testid="text-coming-soon-cta"
-            >
-              Join the waitlist to be first to access this feature when it launches.
-            </p>
-
-            <div className="flex items-center justify-center">
-              <div className="flex flex-col items-center" style={{ maxWidth: 420, width: "100%" }}>
-                <div className="flex flex-wrap w-full gap-2">
-                  <input
-                    type="email"
-                    placeholder="Your work email"
-                    aria-label="Work email for waitlist"
-                    value={waitlistEmail}
-                    onChange={(e) => setWaitlistEmail(e.target.value)}
-                    className="flex-1 text-sm rounded-lg px-4 py-2.5 outline-none"
-                    style={{
-                      minWidth: 200,
-                      border: "1px solid #e2e8f0",
-                      backgroundColor: "#ffffff",
-                      color: "#1e3a5f",
-                    }}
-                    data-testid="input-waitlist-email"
-                  />
-                  <button
-                    onClick={() => {
-                      if (waitlistEmail.trim()) {
-                        setWaitlistSubmitted(true);
-                      }
-                    }}
-                    className="font-semibold text-white rounded-lg px-5 py-2.5 transition-opacity hover:opacity-90"
-                    style={{ backgroundColor: "#1e3a5f", fontSize: 16 }}
-                    data-testid="button-join-waitlist"
-                  >
-                    Join Waitlist
-                  </button>
-                </div>
-                {waitlistSubmitted && (
-                  <p
-                    className="text-xs mt-3"
-                    style={{ color: "#16a34a" }}
-                    data-testid="text-waitlist-success"
-                  >
-                    You are on the list. We will be in touch.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* SECTION 11 - FINAL CTA */}
-      <section
-        ref={s8.ref}
-        className={`w-full fade-section ${s8.visible ? "visible" : ""}`}
-        style={{ backgroundColor: "#ffffff", padding: "96px 40px" }}
-      >
-        <div className="max-w-[860px] mx-auto text-center">
-          <h2
-            className="mb-4 fade-child"
-            style={{ color: "#1e3a5f", fontSize: 42, fontWeight: 700 }}
-            data-testid="text-cta-headline"
-          >
-            Start your day already knowing what matters.
-          </h2>
-          <p
-            className="mb-10 fade-child"
-            style={{ color: "#64748b", fontSize: 17, lineHeight: 1.75 }}
-            data-testid="text-cta-subtext"
-          >
-            Three minutes to set up. One brief every morning. No more being caught off guard.
-          </p>
-          <div className="fade-child">
-            <Link href="/signup">
-              <button
-                className="px-10 py-4 rounded-lg font-semibold transition-opacity hover:opacity-90"
-                style={{ backgroundColor: "#1e3a5f", color: "#ffffff", fontSize: 16 }}
-                data-testid="button-cta-get-started"
-              >
-                Get Started Free
-              </button>
-            </Link>
-          </div>
-          <p className="text-sm mt-4 fade-child" style={{ color: "#64748b" }}>
-            Free for 14 days. No credit card required. Set up in under 3 minutes.
-          </p>
-        </div>
+        <p className={`lp-cta-note${ctaSubmitted ? " lp-cta-note-success" : ""}`}>
+          {ctaSubmitted ? "✓ Thanks! We will be in touch within 24 hours." : "We will be in touch within 24 hours."}
+        </p>
       </section>
 
       {/* FOOTER */}
-      <footer
-        className="w-full py-8"
-        style={{ backgroundColor: "#f8fafc", padding: "32px 40px" }}
-      >
-        <div className="max-w-[1000px] mx-auto">
-          <div className="flex items-center justify-between mb-6">
-            <span className="text-base font-bold" style={{ color: "#1e3a5f" }} data-testid="text-footer-brand">
-              Signalum
-            </span>
-            <div className="flex items-center gap-6">
-              <Link href="/signin">
-                <span
-                  className="text-sm font-medium hover:underline underline-offset-4 cursor-pointer"
-                  style={{ color: "#1e3a5f" }}
-                  data-testid="link-footer-signin"
-                >
-                  Sign In
-                </span>
-              </Link>
-              <Link href="/signup">
-                <span
-                  className="text-sm font-medium hover:underline underline-offset-4 cursor-pointer"
-                  style={{ color: "#1e3a5f" }}
-                  data-testid="link-footer-get-started"
-                >
-                  Get Started
-                </span>
-              </Link>
+      <footer className="lp-footer">
+        <div className="lp-footer-left">
+          <a href="#" className="lp-footer-brand">
+            <div className="lp-footer-brand-icon">
+              <svg viewBox="0 0 20 20" fill="none">
+                <path d="M10 2L12.5 7.5H18L13.5 11L15.5 17L10 13.5L4.5 17L6.5 11L2 7.5H7.5L10 2Z" fill="white"/>
+              </svg>
             </div>
-          </div>
-          <p className="text-xs" style={{ color: "#94a3b8" }}>
-            &copy; 2026 Signalum
-          </p>
+            Signalum
+          </a>
+          <span className="lp-footer-copy">© 2026 Signalum</span>
         </div>
+        <ul className="lp-footer-links">
+          <li><a href="#">Privacy</a></li>
+          <li><a href="#">Terms</a></li>
+          <li><Link href="/signin"><a>Sign in</a></Link></li>
+        </ul>
       </footer>
     </div>
   );
