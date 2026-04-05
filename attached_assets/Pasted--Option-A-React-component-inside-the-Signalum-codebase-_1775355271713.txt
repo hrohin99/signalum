@@ -1,0 +1,50 @@
+**Option A — React component inside the Signalum codebase** is better long-term, for these reasons:
+
+**Easier to modify:** When you want to update copy, add a section, or change the CTA, you just edit the file in Replit and it deploys with the rest of the app. No separate file to track down.
+
+**Shared design system:** The landing page can import shadcn/ui components, Tailwind classes, and any shared utilities already in the codebase. If you ever want to pull in a real live stat from the API (e.g. "X signals tracked today"), it's trivial.
+
+**One deployment:** Single `npm run build` → Republish covers everything. With a standalone HTML file you'd need to manage it separately.
+
+**Route control:** The React router already handles unauthenticated vs authenticated routing. The landing page becomes just another route — `/` shows the landing page if not logged in, redirects to `/` (app) if logged in.
+
+**The only downside:** Converting the HTML to a React component takes a bit more work now. But it's a one-time cost and pays off every time you edit it after.
+
+---
+
+Here's the Replit prompt to do the conversion:
+
+---
+
+> **Task: Replace the current landing page with the new design — convert HTML to React**
+>
+> Create a new file `client/src/pages/landing.tsx` as a React functional component. Convert the HTML file content below into React JSX.
+>
+> **Conversion rules:**
+> - `class=` → `className=`
+> - All `<style>` block CSS → move into a `<style>` tag injected via a `useEffect` that appends it to `document.head`, OR keep it as a plain `<style>` tag inside the component return (Vite supports this)
+> - The Google Fonts `<link>` tag → add to `client/index.html` `<head>` section
+> - `onclick="showTab(0)"` → convert to React `onClick` handlers using `useState` for active tab
+> - The scroll reveal `IntersectionObserver` → put in a `useEffect`
+> - The CTA form submit handler → `onClick` on the button with `useState` for email value
+> - Import `{ useState, useEffect }` from react
+> - Default export the component
+>
+> **Register the route:**
+> In the main router file (likely `client/src/App.tsx`), find where routes are defined. Add:
+> - If user is NOT authenticated → show `<Landing />` at route `/`
+> - If user IS authenticated → show existing app dashboard at route `/`
+> - The existing unauthenticated redirect logic may already handle this — check before adding duplicate logic
+>
+> **The HTML to convert** is the full content of the landing page file. Here is the complete HTML:
+>
+> [Paste the full contents of `signalum-landing.html` here]
+>
+> **Critical rules:**
+> - No changes to `schema.ts`, `storage.ts`, or any server files
+> - No drizzle-kit push
+> - Keep all existing authenticated routes working exactly as before
+
+---
+
+Before you run this in Replit, paste the full HTML from the downloaded file into that prompt where it says `[Paste the full contents...]`. The file is in your downloads as `signalum-landing.html`.
