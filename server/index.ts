@@ -135,8 +135,8 @@ app.use((req, res, next) => {
         }
       })();
 
-      cron.schedule("0 6 * * *", async () => {
-        log("Daily ambient search triggered by cron", "cron");
+      cron.schedule("0 6 */3 * *", async () => {
+        log("Ambient search triggered by cron (every 3 days)", "cron");
         try {
           const { runAmbientSearchForAllTenants } = await import("./ambientSearch");
           const results = await runAmbientSearchForAllTenants();
@@ -148,7 +148,7 @@ app.use((req, res, next) => {
         timezone: "UTC",
       });
 
-      log("Ambient search cron scheduled for 6:00 AM UTC daily", "cron");
+      log("Ambient search cron scheduled for 6:00 AM UTC every 3 days", "cron");
 
       cron.schedule("0 8 * * 1", async () => {
         log("Weekly digest triggered by cron", "cron");

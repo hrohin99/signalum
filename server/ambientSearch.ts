@@ -383,7 +383,7 @@ export async function runAmbientSearchForUser(
         await perplexityRateLimiter.waitForSlot();
 
         const topicType = (entity.topic_type || "general").toLowerCase();
-        const lookbackDays = 7;
+        const lookbackDays = 3;
         const entityType = entity.entity_type_detected;
         const pricingModel = entity.pricing_model_detected;
         const websiteUrl = entity.website_url;
